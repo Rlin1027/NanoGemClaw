@@ -1,5 +1,5 @@
 /**
- * Container Runner for NanoClaw
+ * Container Runner for NanoGemClaw
  * Spawns agent execution in Apple Container and handles IPC
  */
 import { spawn } from 'child_process';
