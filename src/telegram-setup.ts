@@ -9,6 +9,7 @@
  * 2. Send /newbot and follow the prompts
  * 3. Copy the token and set TELEGRAM_BOT_TOKEN in your .env file
  */
+import 'dotenv/config';
 import TelegramBot from 'node-telegram-bot-api';
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
