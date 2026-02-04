@@ -96,18 +96,28 @@ function buildVolumeMounts(
     }
   }
 
-  // Per-group Claude sessions directory (isolated from other groups)
-  // Each group gets their own .claude/ to prevent cross-group session access
+  // Global Gemini directory for OAuth credentials
+  const hostGeminiDir = path.join(homeDir, '.gemini');
+  if (fs.existsSync(hostGeminiDir)) {
+    mounts.push({
+      hostPath: hostGeminiDir,
+      containerPath: '/home/node/.gemini',
+      readonly: true,
+    });
+  }
+
+  // Per-group Gemini sessions directory (isolated from other groups)
+  // This overrides the global .gemini/tmp for session isolation
   const groupSessionsDir = path.join(
     DATA_DIR,
     'sessions',
     group.folder,
-    '.claude',
+    '.gemini-tmp',
   );
   fs.mkdirSync(groupSessionsDir, { recursive: true });
   mounts.push({
     hostPath: groupSessionsDir,
-    containerPath: '/home/node/.claude',
+    containerPath: '/home/node/.gemini/tmp',
     readonly: false,
   });
 
@@ -129,7 +139,7 @@ function buildVolumeMounts(
   const envFile = path.join(projectRoot, '.env');
   if (fs.existsSync(envFile)) {
     const envContent = fs.readFileSync(envFile, 'utf-8');
-    const allowedVars = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY'];
+    const allowedVars = ['GEMINI_API_KEY', 'GOOGLE_API_KEY'];
     const filteredLines = envContent.split('\n').filter((line) => {
       const trimmed = line.trim();
       if (!trimmed || trimmed.startsWith('#')) return false;

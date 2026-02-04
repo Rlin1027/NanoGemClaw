@@ -45,6 +45,7 @@ npm run build        # Compile TypeScript
 ```
 
 Service management:
+
 ```bash
 launchctl load ~/Library/LaunchAgents/com.nanogemclaw.plist
 launchctl unload ~/Library/LaunchAgents/com.nanogemclaw.plist
@@ -52,7 +53,8 @@ launchctl unload ~/Library/LaunchAgents/com.nanogemclaw.plist
 
 ## Authentication
 
-Gemini CLI supports multiple auth methods:
-1. **Google OAuth** (recommended): Run `gemini` interactively first
-2. **API Key**: Set `GEMINI_API_KEY` environment variable
-3. **Vertex AI**: For enterprise deployments
+NanoGemClaw defaults to **Google OAuth** login for the best experience.
+
+1. **OAuth (Default)**: Run `gemini` on your host machine once to authenticate. NanoGemClaw automatically mounts your host's `~/.gemini` directory into the container, sharing your credentials securely.
+2. **API Key**: If you prefer, set `GEMINI_API_KEY` in your `.env` file. It will be passed to the container automatically.
+3. **Vertex AI**: For GCP users, Application Default Credentials (ADC) are also supported if configured on the host.
