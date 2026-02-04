@@ -25,7 +25,34 @@
 
 Same container isolation. Same architecture. Different AI backend.
 
-## Quick Start
+---
+
+## 🚀 Getting Started (新手教學)
+
+### Prerequisites (事前準備)
+
+在開始之前，請確認您已安裝以下工具：
+
+| 工具 | 用途 | 安裝方式 |
+|------|------|----------|
+| **Node.js 20+** | 執行主程式 | [nodejs.org](https://nodejs.org) |
+| **Gemini CLI** | AI Agent 核心 | `npm install -g @google/gemini-cli` |
+| **Apple Container** 或 **Docker** | 容器執行環境 | 見下方說明 |
+
+**安裝容器執行環境 (擇一)：**
+
+```bash
+# macOS - Apple Container (推薦)
+brew install apple-container
+
+# macOS/Linux - Docker
+brew install --cask docker   # macOS
+# 或從 https://docker.com 下載
+```
+
+---
+
+### Step 1: Clone 專案
 
 ```bash
 git clone https://github.com/Rlin1027/NanoGemClaw.git
@@ -33,33 +60,116 @@ cd NanoGemClaw
 npm install
 ```
 
-### Setup Telegram Bot
+---
 
-1. **Get a Bot Token**: Message [@BotFather](https://t.me/botfather) on Telegram and send `/newbot`
-2. **Configure**: Create `.env` file with your token:
+### Step 2: 建立 Telegram Bot
 
-   ```bash
-   echo "TELEGRAM_BOT_TOKEN=your_bot_token_here" > .env
-   ```
+1. 在 Telegram 搜尋 **@BotFather**
+2. 發送 `/newbot`
+3. 依照指示設定 Bot 名稱
+4. 複製 BotFather 回傳的 **Token**
 
-3. **Verify**: Run `npm run setup:telegram` to confirm the token works
-4. **Build Container**: Run `cd container && ./build.sh`
-5. **Add to Group**: Add your bot to a Telegram group and make it admin
-6. **Run**: Start with `npm run dev`
+```bash
+# 建立 .env 檔案並填入 Token
+echo "TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz" > .env
+```
 
-## Philosophy
+---
 
-**Small enough to understand.** One process, a few source files. No microservices, no message queues, no abstraction layers. Have Gemini CLI walk you through it.
+### Step 3: 驗證 Bot Token
 
-**Secure by isolation.** Agents run in Linux containers (Apple Container on macOS, or Docker). They can only see what's explicitly mounted. Bash access is safe because commands run inside the container, not on your host.
+```bash
+npm run setup:telegram
+```
 
-**Built for one user.** This isn't a framework. It's working software that fits your exact needs. Fork it and have Gemini CLI make it match your exact needs.
+成功會顯示：
 
-**Customization = code changes.** No configuration sprawl. Want different behavior? Modify the code. The codebase is small enough that this is safe.
+```
+✓ Bot token is valid!
+  Bot Username: @YourBotName
+```
 
-**AI-native.** No installation wizard; Gemini CLI guides setup. No monitoring dashboard; ask Gemini what's happening. No debugging tools; describe the problem, Gemini fixes it.
+---
 
-**Free to use.** Gemini CLI offers 60 requests/minute and 1,000 requests/day on the free tier with a personal Google account.
+### Step 4: 登入 Gemini CLI (OAuth)
+
+首次使用需要登入 Google 帳號：
+
+```bash
+gemini
+```
+
+依照終端機指示完成 OAuth 登入。登入後的憑證會自動共享給容器使用。
+
+> 💡 **Tip**: 如果您偏好使用 API Key，可以在 `.env` 加入 `GEMINI_API_KEY=your_key`
+
+---
+
+### Step 5: 建置 Agent 容器
+
+```bash
+cd container
+./build.sh
+cd ..
+```
+
+這會建立 `nanogemclaw-agent:latest` 映像檔，包含 Gemini CLI 和所有必要工具。
+
+---
+
+### Step 6: 設定 Telegram 群組
+
+1. 將您的 Bot 加入一個 Telegram 群組
+2. **將 Bot 設為管理員**（這樣它才能讀取訊息）
+3. 記下群組的 Chat ID（可透過對 Bot 發訊息後查看 log）
+
+---
+
+### Step 7: 啟動服務
+
+```bash
+npm run dev
+```
+
+成功啟動會顯示：
+
+```
+✓ NanoGemClaw running (trigger: @Andy)
+  Bot: @YourBotName
+  Registered groups: 0
+```
+
+---
+
+### Step 8: 註冊群組
+
+首次使用時，在您的私人對話（與 Bot 的 1:1 對話）中發送：
+
+```
+@Andy register this group as main
+```
+
+這會將目前的對話設為「主群組」，獲得完整管理權限。
+
+之後要加入其他群組，從主群組發送：
+
+```
+@Andy join the "My Group Name" group
+```
+
+---
+
+## ✅ 完成
+
+現在您可以在任何已註冊的群組中與 AI 助手對話：
+
+```
+@Andy 你好
+@Andy 幫我查一下今天的天氣
+@Andy 每天早上 9 點提醒我開會
+```
+
+---
 
 ## What It Supports
 
@@ -71,7 +181,7 @@ npm install
 - **Long-term memory** - Automatically loads recent archived conversations into context (utilizing Gemini's 2M token window)
 - **Container isolation** - Agents sandboxed in Apple Container (macOS) or Docker (macOS/Linux)
 
-## Usage
+## Usage Examples
 
 Talk to your assistant with the trigger word (default: `@Andy`):
 
@@ -98,24 +208,15 @@ There are no configuration files to learn. Just tell Gemini CLI what you want:
 - "Add a custom greeting when I say good morning"
 - "Store conversation summaries weekly"
 
-Or run `/customize` for guided changes.
+## Philosophy
 
-## Requirements
+**Small enough to understand.** One process, a few source files. No microservices, no message queues, no abstraction layers.
 
-- macOS or Linux
-- Node.js 20+
-- [Gemini CLI](https://github.com/google-gemini/gemini-cli)
-- [Apple Container](https://github.com/apple/container) (macOS) or [Docker](https://docker.com/products/docker-desktop) (macOS/Linux)
+**Secure by isolation.** Agents run in Linux containers. They can only see what's explicitly mounted.
 
-### Installing Gemini CLI
+**Built for one user.** Fork it and customize it to match your exact needs.
 
-```bash
-# Quick install
-curl -sL https://raw.githubusercontent.com/google-gemini/gemini-cli/main/installer.sh | bash
-
-# Or via npm
-npm install -g @google/gemini-cli
-```
+**Free to use.** Gemini CLI offers 60 requests/minute on the free tier.
 
 ## Architecture
 
@@ -123,7 +224,7 @@ npm install -g @google/gemini-cli
 Telegram Bot API --> SQLite --> Polling loop --> Container (Gemini CLI) --> Response
 ```
 
-Single Node.js process. Agents execute in isolated Linux containers with mounted directories. IPC via filesystem. No daemons, no queues, no complexity.
+Single Node.js process. Agents execute in isolated Linux containers with mounted directories. IPC via filesystem.
 
 Key files:
 
@@ -133,37 +234,32 @@ Key files:
 - `src/db.ts` - SQLite operations
 - `groups/*/GEMINI.md` - Per-group memory
 
-## Authentication
+## Troubleshooting
 
-Gemini CLI supports three authentication methods:
-
-1. **Google OAuth** (recommended): Run `gemini` interactively to authenticate. NanoGemClaw mounts your `~/.gemini` directory into containers.
-2. **API Key**: Set `GEMINI_API_KEY` in your `.env` file
-3. **Vertex AI**: For enterprise deployments with ADC
+| 問題 | 解決方案 |
+|------|----------|
+| `container: command not found` | 安裝 Apple Container 或 Docker |
+| Bot 無回應 | 確認 Bot 是群組管理員、Token 正確 |
+| `Gemini CLI not found` | 執行 `npm install -g @google/gemini-cli` |
+| OAuth 失敗 | 執行 `gemini` 重新登入 |
 
 ## FAQ
 
-**Why fork NanoClaw?**
-
-To use Gemini CLI instead of Claude Agent SDK, which offers a generous free tier and doesn't require a Claude Max subscription.
-
 **Why Telegram instead of WhatsApp?**
 
-Telegram Bot API is more stable, doesn't require QR code scanning, and has better multimedia support. WhatsApp (via Baileys) can have session expiration issues.
+Telegram Bot API is more stable, doesn't require QR code scanning, and has better multimedia support.
 
 **Can I run this on Linux?**
 
-Yes. The container build script automatically uses Docker if Apple Container is not available.
+Yes. The build script automatically uses Docker if Apple Container is not available.
 
 **Is this secure?**
 
-Agents run in containers, not behind application-level permission checks. They can only access explicitly mounted directories. See [docs/SECURITY.md](docs/SECURITY.md) for the full security model.
+Agents run in containers and can only access explicitly mounted directories. See [docs/SECURITY.md](docs/SECURITY.md).
 
 ## Contributing
 
-**Don't add features. Add skills.**
-
-If you want to add a new capability, contribute a skill file (`container/skills/your-skill/SKILL.md`) that teaches Gemini CLI how to implement it.
+**Don't add features. Add skills.** Contribute skill files (`container/skills/your-skill/SKILL.md`) that teach Gemini CLI new capabilities.
 
 ## License
 
