@@ -55,8 +55,9 @@ RUN npm run build
 RUN mkdir -p /workspace/group /workspace/global /workspace/extra /workspace/ipc/messages /workspace/ipc/tasks
 
 # Create Gemini settings directory and config
+# Enable Preview Features for Gemini 3, use Auto model selection
 RUN mkdir -p /home/node/.gemini && \
-    echo '{"general":{"checkpointing":{"enabled":false}}}' > /home/node/.gemini/settings.json
+    echo '{"general":{"checkpointing":{"enabled":false}},"models":{"previewModels":true,"selectedModel":"auto"}}' > /home/node/.gemini/settings.json
 
 # Create entrypoint script
 # Sources env from mounted /workspace/env-dir/env if it exists
