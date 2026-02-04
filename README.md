@@ -27,32 +27,32 @@ Same container isolation. Same architecture. Different AI backend.
 
 ---
 
-## 🚀 Getting Started (新手教學)
+## 🚀 Getting Started
 
-### Prerequisites (事前準備)
+### Prerequisites
 
-在開始之前，請確認您已安裝以下工具：
+Before you start, make sure you have the following tools installed:
 
-| 工具 | 用途 | 安裝方式 |
-|------|------|----------|
-| **Node.js 20+** | 執行主程式 | [nodejs.org](https://nodejs.org) |
-| **Gemini CLI** | AI Agent 核心 | `npm install -g @google/gemini-cli` |
-| **Apple Container** 或 **Docker** | 容器執行環境 | 見下方說明 |
+| Tool | Purpose | Installation |
+|------|---------|--------------|
+| **Node.js 20+** | Runs the main process | [nodejs.org](https://nodejs.org) |
+| **Gemini CLI** | AI Agent Core | `npm install -g @google/gemini-cli` |
+| **Container Runtime** | Sandboxing env | See below |
 
-**安裝容器執行環境 (擇一)：**
+**Install Container Runtime (Choose one):**
 
 ```bash
-# macOS - Apple Container (推薦)
+# macOS - Apple Container (Recommended)
 brew install apple-container
 
 # macOS/Linux - Docker
 brew install --cask docker   # macOS
-# 或從 https://docker.com 下載
+# Or download from https://docker.com
 ```
 
 ---
 
-### Step 1: Clone 專案
+### Step 1: Clone Repository
 
 ```bash
 git clone https://github.com/Rlin1027/NanoGemClaw.git
@@ -62,27 +62,27 @@ npm install
 
 ---
 
-### Step 2: 建立 Telegram Bot
+### Step 2: Create Telegram Bot
 
-1. 在 Telegram 搜尋 **@BotFather**
-2. 發送 `/newbot`
-3. 依照指示設定 Bot 名稱
-4. 複製 BotFather 回傳的 **Token**
+1. Search for **@BotFather** in Telegram
+2. Send `/newbot`
+3. Follow instructions to name your bot
+4. Copy the **Token** provided by BotFather
 
 ```bash
-# 建立 .env 檔案並填入 Token
+# Create .env file with your Token
 echo "TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz" > .env
 ```
 
 ---
 
-### Step 3: 驗證 Bot Token
+### Step 3: Verify Bot Token
 
 ```bash
 npm run setup:telegram
 ```
 
-成功會顯示：
+Success output:
 
 ```
 ✓ Bot token is valid!
@@ -91,21 +91,21 @@ npm run setup:telegram
 
 ---
 
-### Step 4: 登入 Gemini CLI (OAuth)
+### Step 4: Login to Gemini CLI (OAuth)
 
-首次使用需要登入 Google 帳號：
+First time use requires Google login:
 
 ```bash
 gemini
 ```
 
-依照終端機指示完成 OAuth 登入。登入後的憑證會自動共享給容器使用。
+Follow the terminal prompts to complete OAuth login. Authenticated credentials will be automatically shared with the container.
 
-> 💡 **Tip**: 如果您偏好使用 API Key，可以在 `.env` 加入 `GEMINI_API_KEY=your_key`
+> 💡 **Tip**: If you prefer using an API Key, add `GEMINI_API_KEY=your_key` to your `.env` file.
 
 ---
 
-### Step 5: 建置 Agent 容器
+### Step 5: Build Agent Container
 
 ```bash
 cd container
@@ -113,25 +113,25 @@ cd container
 cd ..
 ```
 
-這會建立 `nanogemclaw-agent:latest` 映像檔，包含 Gemini CLI 和所有必要工具。
+This builds the `nanogemclaw-agent:latest` image containing Gemini CLI and all necessary tools.
 
 ---
 
-### Step 6: 設定 Telegram 群組
+### Step 6: Configure Telegram Group
 
-1. 將您的 Bot 加入一個 Telegram 群組
-2. **將 Bot 設為管理員**（這樣它才能讀取訊息）
-3. 記下群組的 Chat ID（可透過對 Bot 發訊息後查看 log）
+1. Add your Bot to a Telegram group
+2. **Promote Bot to Admin** (Required to see messages)
+3. Note the Group ID (You can see it in logs after messaging the bot)
 
 ---
 
-### Step 7: 啟動服務
+### Step 7: Start Service
 
 ```bash
 npm run dev
 ```
 
-成功啟動會顯示：
+Success output:
 
 ```
 ✓ NanoGemClaw running (trigger: @Andy)
@@ -141,17 +141,17 @@ npm run dev
 
 ---
 
-### Step 8: 註冊群組
+### Step 8: Register Group
 
-首次使用時，在您的私人對話（與 Bot 的 1:1 對話）中發送：
+For the first time, send this command in your private chat (1:1 with Bot):
 
 ```
 @Andy register this group as main
 ```
 
-這會將目前的對話設為「主群組」，獲得完整管理權限。
+This sets the current chat as the "Main Group" with full admin rights.
 
-之後要加入其他群組，從主群組發送：
+To add other groups later, send this from the Main Group:
 
 ```
 @Andy join the "My Group Name" group
@@ -159,14 +159,14 @@ npm run dev
 
 ---
 
-## ✅ 完成
+## ✅ All Done
 
-現在您可以在任何已註冊的群組中與 AI 助手對話：
+You can now chat with your AI assistant in any registered group:
 
 ```
-@Andy 你好
-@Andy 幫我查一下今天的天氣
-@Andy 每天早上 9 點提醒我開會
+@Andy Hello
+@Andy check the weather for today
+@Andy remind me to have a meeting every morning at 9am
 ```
 
 ---
@@ -236,12 +236,12 @@ Key files:
 
 ## Troubleshooting
 
-| 問題 | 解決方案 |
-|------|----------|
-| `container: command not found` | 安裝 Apple Container 或 Docker |
-| Bot 無回應 | 確認 Bot 是群組管理員、Token 正確 |
-| `Gemini CLI not found` | 執行 `npm install -g @google/gemini-cli` |
-| OAuth 失敗 | 執行 `gemini` 重新登入 |
+| Issue | Solution |
+|-------|----------|
+| `container: command not found` | Install Apple Container on NanoClaw |
+| Bot not responding | Ensure Bot is Admin and Token is correct |
+| `Gemini CLI not found` | Run `npm install -g @google/gemini-cli` |
+| OAuth failed | Run `gemini` to login again |
 
 ## FAQ
 
