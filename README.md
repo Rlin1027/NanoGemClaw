@@ -112,7 +112,7 @@ Or run `/customize` for guided changes.
 curl -sL https://raw.githubusercontent.com/google-gemini/gemini-cli/main/installer.sh | bash
 
 # Or via npm
-npm install -g @anthropic-ai/gemini-cli
+npm install -g @google/gemini-cli
 ```
 
 ## Architecture
