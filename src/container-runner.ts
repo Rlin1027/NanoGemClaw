@@ -8,6 +8,7 @@ import os from 'os';
 import path from 'path';
 
 import {
+  CONTAINER,
   CONTAINER_IMAGE,
   CONTAINER_MAX_OUTPUT_SIZE,
   CONTAINER_TIMEOUT,
@@ -282,7 +283,6 @@ export async function runContainerAgent(
     // Timeout handling with graceful shutdown
     // First send SIGTERM for graceful exit, then SIGKILL if still running
     let timeoutResolved = false;
-    const gracefulShutdownDelay = 5000; // 5 seconds to gracefully exit
 
     const timeout = setTimeout(() => {
       logger.warn({ group: group.name }, 'Container timeout, attempting graceful shutdown');
@@ -294,7 +294,7 @@ export async function runContainerAgent(
           logger.error({ group: group.name }, 'Container did not exit gracefully, forcing SIGKILL');
           container.kill('SIGKILL');
         }
-      }, gracefulShutdownDelay);
+      }, CONTAINER.GRACEFUL_SHUTDOWN_DELAY_MS);
 
       // Resolve immediately to unblock caller
       timeoutResolved = true;

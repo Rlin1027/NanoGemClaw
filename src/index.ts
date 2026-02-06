@@ -9,10 +9,13 @@ import https from 'https';
 
 import {
   ASSISTANT_NAME,
+  CLEANUP,
+  CONTAINER,
   DATA_DIR,
   IPC_POLL_INTERVAL,
   MAIN_GROUP_FOLDER,
   STORE_DIR,
+  TELEGRAM,
   TELEGRAM_BOT_TOKEN,
   TIMEZONE,
   TRIGGER_PATTERN,
@@ -105,12 +108,9 @@ function registerGroup(chatId: string, group: RegisteredGroup): void {
 // Media Cleanup
 // ============================================================================
 
-const MEDIA_MAX_AGE_DAYS = 7; // Delete media files older than 7 days
-const MEDIA_CLEANUP_INTERVAL = 6 * 60 * 60 * 1000; // Run cleanup every 6 hours
-
 function cleanupOldMedia(): void {
   const now = Date.now();
-  const maxAge = MEDIA_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+  const maxAge = CLEANUP.MEDIA_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
   let deletedCount = 0;
 
   try {
@@ -147,8 +147,8 @@ function startMediaCleanupScheduler(): void {
   // Run immediately on startup
   cleanupOldMedia();
   // Then run periodically
-  setInterval(cleanupOldMedia, MEDIA_CLEANUP_INTERVAL);
-  logger.info({ intervalHours: MEDIA_CLEANUP_INTERVAL / 3600000 }, 'Media cleanup scheduler started');
+  setInterval(cleanupOldMedia, CLEANUP.MEDIA_CLEANUP_INTERVAL_MS);
+  logger.info({ intervalHours: CLEANUP.MEDIA_CLEANUP_INTERVAL_HOURS }, 'Media cleanup scheduler started');
 }
 
 // ============================================================================
@@ -425,8 +425,8 @@ async function setTyping(chatId: string, isTyping: boolean): Promise<void> {
 
 async function sendMessage(chatId: string, text: string): Promise<void> {
   try {
-    // Split long messages (Telegram limit is 4096 chars)
-    const maxLen = 4000;
+    // Split long messages (Telegram limit)
+    const maxLen = TELEGRAM.MAX_MESSAGE_LENGTH - 96; // Leave room for safety margin
     const chunks = [];
     for (let i = 0; i < text.length; i += maxLen) {
       chunks.push(text.slice(i, i + maxLen));
@@ -434,14 +434,14 @@ async function sendMessage(chatId: string, text: string): Promise<void> {
 
     for (let i = 0; i < chunks.length; i++) {
       await bot.sendMessage(parseInt(chatId), chunks[i]);
-      // Rate limiting: add 100ms delay between chunks to avoid Telegram limits
+      // Rate limiting: add delay between chunks to avoid Telegram limits
       if (i < chunks.length - 1) {
-        await new Promise(r => setTimeout(r, 100));
+        await new Promise(r => setTimeout(r, TELEGRAM.RATE_LIMIT_DELAY_MS));
       }
     }
     logger.info({ chatId, length: text.length }, 'Message sent');
   } catch (err) {
-    logger.error({ chatId, err }, 'Failed to send message');
+    logger.error({ chatId, err: formatError(err) }, 'Failed to send message');
   }
 }
 
@@ -473,7 +473,6 @@ function startIpcWatcher(): void {
   // Debounce mechanism to batch file system events
   let pendingProcess = false;
   let debounceTimer: NodeJS.Timeout | null = null;
-  const DEBOUNCE_MS = 100; // Wait 100ms after last event before processing
 
   const scheduleProcess = () => {
     if (debounceTimer) clearTimeout(debounceTimer);
@@ -484,7 +483,7 @@ function startIpcWatcher(): void {
           pendingProcess = false;
         });
       }
-    }, DEBOUNCE_MS);
+    }, CONTAINER.IPC_DEBOUNCE_MS);
   };
 
   const processIpcFiles = async () => {
@@ -638,7 +637,7 @@ function startIpcWatcher(): void {
     if (!pendingProcess) {
       processIpcFiles();
     }
-  }, IPC_POLL_INTERVAL * 5); // Poll every 5 seconds as fallback instead of 1 second
+  }, IPC_POLL_INTERVAL * CONTAINER.IPC_FALLBACK_POLLING_MULTIPLIER);
 
   logger.info('IPC watcher started (using fs.watch with polling fallback)');
 }

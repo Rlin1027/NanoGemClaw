@@ -60,3 +60,54 @@ export const TRIGGER_PATTERN = new RegExp(
 // Uses system timezone by default
 export const TIMEZONE =
   process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+// ============================================================================
+// Organized Constants (for better discoverability)
+// ============================================================================
+
+/**
+ * Media cleanup configuration
+ */
+export const CLEANUP = {
+  /** Delete media files older than this many days */
+  MEDIA_MAX_AGE_DAYS: 7,
+  /** Run cleanup every N hours */
+  MEDIA_CLEANUP_INTERVAL_HOURS: 6,
+  /** Cleanup interval in milliseconds */
+  get MEDIA_CLEANUP_INTERVAL_MS() {
+    return this.MEDIA_CLEANUP_INTERVAL_HOURS * 60 * 60 * 1000;
+  },
+} as const;
+
+/**
+ * Telegram API configuration
+ */
+export const TELEGRAM = {
+  /** Delay between message chunks to avoid rate limits (ms) */
+  RATE_LIMIT_DELAY_MS: 100,
+  /** Maximum message length before splitting */
+  MAX_MESSAGE_LENGTH: 4096,
+} as const;
+
+/**
+ * Container execution configuration
+ */
+export const CONTAINER = {
+  /** Graceful shutdown delay before SIGKILL (ms) */
+  GRACEFUL_SHUTDOWN_DELAY_MS: 5000,
+  /** IPC debounce delay (ms) */
+  IPC_DEBOUNCE_MS: 100,
+  /** Fallback polling multiplier (use polling_interval * this) */
+  IPC_FALLBACK_POLLING_MULTIPLIER: 5,
+} as const;
+
+/**
+ * Allowed environment variables to pass to containers
+ */
+export const ALLOWED_CONTAINER_ENV_KEYS = [
+  'GEMINI_API_KEY',
+  'GOOGLE_API_KEY',
+  'TZ',
+  'NODE_ENV',
+  'LOG_LEVEL',
+] as const;
