@@ -100,6 +100,18 @@ export const TELEGRAM = {
 } as const;
 
 /**
+ * Error alerting configuration
+ */
+export const ALERTS = {
+  /** Number of consecutive failures before sending alert */
+  FAILURE_THRESHOLD: 3,
+  /** Cooldown between alert messages (minutes) */
+  ALERT_COOLDOWN_MINUTES: 30,
+  /** Enable error alerts to main group */
+  ENABLED: process.env.ALERTS_ENABLED !== 'false',
+} as const;
+
+/**
  * Container execution configuration
  */
 export const CONTAINER = {

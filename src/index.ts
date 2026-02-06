@@ -258,13 +258,14 @@ const ADMIN_COMMANDS = {
   groups: 'List all registered groups',
   tasks: 'List all scheduled tasks',
   help: 'Show available admin commands',
+  errors: 'Show groups with recent errors',
 } as const;
 
 async function handleAdminCommand(
   command: string,
   args: string[],
 ): Promise<string> {
-  const { getAllTasks, getUsageStats } = await import('./db.js');
+  const { getAllTasks, getUsageStats, getAllErrorStates } = await import('./db.js');
 
   switch (command) {
     case 'stats': {
@@ -331,6 +332,28 @@ Legend: 🔍=Search 💬=Custom Prompt`;
       return `📅 **Scheduled Tasks** (${tasks.length})
 
 ${taskList}${moreText}`;
+    }
+
+    case 'errors': {
+      const errorStates = getAllErrorStates();
+
+      if (errorStates.length === 0) {
+        return '✅ **No Errors**\n\nAll groups are running without recent errors.';
+      }
+
+      const errorList = errorStates
+        .filter(e => e.state.consecutiveFailures > 0)
+        .map(e => {
+          const group = registeredGroups[Object.keys(registeredGroups).find(
+            k => registeredGroups[k].folder === e.group
+          ) || ''];
+          return `• **${group?.name || e.group}**: ${e.state.consecutiveFailures} failures\n  Last: ${e.state.lastError?.slice(0, 80)}...`;
+        })
+        .join('\n');
+
+      return errorList
+        ? `⚠️ **Groups with Errors**\n\n${errorList}`
+        : '✅ **No Active Errors**';
     }
 
     case 'help':

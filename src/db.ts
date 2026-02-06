@@ -575,3 +575,55 @@ export function deleteOldMessages(chatJid: string, beforeTimestamp: string): num
     .run(chatJid, beforeTimestamp);
   return result.changes;
 }
+
+// ============================================================================
+// Error Tracking
+// ============================================================================
+
+interface ErrorState {
+  consecutiveFailures: number;
+  lastAlertSent: string | null;
+  lastError: string | null;
+}
+
+const errorStates = new Map<string, ErrorState>();
+
+export function recordError(groupFolder: string, error: string): ErrorState {
+  const state = errorStates.get(groupFolder) || {
+    consecutiveFailures: 0,
+    lastAlertSent: null,
+    lastError: null,
+  };
+
+  state.consecutiveFailures++;
+  state.lastError = error;
+  errorStates.set(groupFolder, state);
+
+  return state;
+}
+
+export function resetErrors(groupFolder: string): void {
+  const state = errorStates.get(groupFolder);
+  if (state) {
+    state.consecutiveFailures = 0;
+    state.lastError = null;
+  }
+}
+
+export function getErrorState(groupFolder: string): ErrorState | null {
+  return errorStates.get(groupFolder) || null;
+}
+
+export function markAlertSent(groupFolder: string): void {
+  const state = errorStates.get(groupFolder);
+  if (state) {
+    state.lastAlertSent = new Date().toISOString();
+  }
+}
+
+export function getAllErrorStates(): { group: string; state: ErrorState }[] {
+  return Array.from(errorStates.entries()).map(([group, state]) => ({
+    group,
+    state,
+  }));
+}

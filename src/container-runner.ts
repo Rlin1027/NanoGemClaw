@@ -284,15 +284,22 @@ export async function runContainerAgent(
     const result = await runContainerAgentInternal(group, input);
     const durationMs = Date.now() - startTime;
 
-    // Log usage statistics (async, don't block)
+    // Log usage statistics and track errors
     try {
-      const { logUsage } = await import('./db.js');
+      const { logUsage, resetErrors, recordError } = await import('./db.js');
       logUsage({
         group_folder: input.groupFolder,
         timestamp: new Date().toISOString(),
         duration_ms: durationMs,
         is_scheduled_task: input.isScheduledTask,
       });
+
+      // Track errors/success
+      if (result.status === 'error') {
+        recordError(input.groupFolder, result.error || 'Unknown error');
+      } else {
+        resetErrors(input.groupFolder);
+      }
     } catch (err) {
       logger.warn({ err }, 'Failed to log usage stats');
     }
