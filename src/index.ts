@@ -259,6 +259,7 @@ const ADMIN_COMMANDS = {
   tasks: 'List all scheduled tasks',
   help: 'Show available admin commands',
   errors: 'Show groups with recent errors',
+  report: 'Generate daily usage report',
 } as const;
 
 async function handleAdminCommand(
@@ -354,6 +355,11 @@ ${taskList}${moreText}`;
       return errorList
         ? `⚠️ **Groups with Errors**\n\n${errorList}`
         : '✅ **No Active Errors**';
+    }
+
+    case 'report': {
+      const { getDailyReportMessage } = await import('./daily-report.js');
+      return getDailyReportMessage();
     }
 
     case 'help':
