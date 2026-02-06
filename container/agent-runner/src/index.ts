@@ -363,6 +363,21 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  // Validate required input fields
+  const missingFields: string[] = [];
+  if (!input.prompt) missingFields.push('prompt');
+  if (!input.groupFolder) missingFields.push('groupFolder');
+  if (!input.chatJid) missingFields.push('chatJid');
+
+  if (missingFields.length > 0) {
+    writeOutput({
+      status: 'error',
+      result: null,
+      error: `Missing required input fields: ${missingFields.join(', ')}`
+    });
+    process.exit(1);
+  }
+
   // Ensure IPC directories exist
   fs.mkdirSync(MESSAGES_DIR, { recursive: true });
   fs.mkdirSync(TASKS_DIR, { recursive: true });

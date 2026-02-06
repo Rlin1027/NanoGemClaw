@@ -134,7 +134,7 @@ function cleanupOldMedia(): void {
       logger.info({ deletedCount }, 'Old media files cleaned up');
     }
   } catch (err) {
-    logger.error({ err }, 'Error during media cleanup');
+    logger.error({ err: formatError(err) }, 'Error during media cleanup');
   }
 }
 
@@ -470,7 +470,7 @@ function startIpcWatcher(): void {
         }
       });
     } catch (err) {
-      logger.error({ err }, 'Error reading IPC base directory');
+      logger.error({ err: formatError(err) }, 'Error reading IPC base directory');
       return;
     }
 

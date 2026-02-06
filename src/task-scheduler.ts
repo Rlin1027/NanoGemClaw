@@ -158,7 +158,15 @@ export function startSchedulerLoop(deps: SchedulerDependencies): void {
           continue;
         }
 
-        await runTask(currentTask, deps);
+        // Isolate each task - one failure shouldn't block others
+        try {
+          await runTask(currentTask, deps);
+        } catch (taskErr) {
+          logger.error(
+            { taskId: task.id, err: taskErr instanceof Error ? taskErr.message : String(taskErr) },
+            'Task execution failed (isolated)',
+          );
+        }
       }
     } catch (err) {
       logger.error({ err }, 'Error in scheduler loop');
