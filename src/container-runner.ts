@@ -105,6 +105,8 @@ export interface ContainerInput {
   isScheduledTask?: boolean;
   /** Custom system prompt for group persona */
   systemPrompt?: string;
+  /** Pre-defined persona key */
+  persona?: string;
   /** Enable Google Search grounding (default: true) */
   enableWebSearch?: boolean;
   /** Path to media file (image/voice/document) for multi-modal input */
@@ -332,7 +334,29 @@ async function runContainerAgentInternal(
   fs.mkdirSync(groupDir, { recursive: true });
 
   const mounts = buildVolumeMounts(group, input.isMain);
-  const containerArgs = buildContainerArgs(mounts);
+
+  // Resolve system prompt with persona
+  const { getEffectiveSystemPrompt } = await import('./personas.js');
+  const systemPrompt = getEffectiveSystemPrompt(input.systemPrompt, input.persona);
+
+  // Build base args including mounts
+  const baseArgs = buildContainerArgs(mounts);
+
+  // Extract image (last argument)
+  const image = baseArgs.pop();
+
+  // Inject environment variables before the image argument
+  baseArgs.push(
+    '-e', `GEMINI_API_KEY=${process.env.GEMINI_API_KEY || ''}`,
+    '-e', `GEMINI_SYSTEM_PROMPT=${systemPrompt}`,
+    '-e', `GEMINI_ENABLE_SEARCH=${input.enableWebSearch !== false ? 'true' : 'false'}`,
+    '-e', `CONTAINER_TIMEOUT=${CONTAINER_TIMEOUT}`,
+  );
+
+  // Re-append image
+  if (image) baseArgs.push(image);
+
+  const containerArgs = baseArgs;
 
   logger.debug(
     {

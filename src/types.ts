@@ -41,6 +41,8 @@ export interface RegisteredGroup {
   containerConfig?: ContainerConfig;
   /** Custom system prompt for this group's persona */
   systemPrompt?: string;
+  /** Pre-defined persona key (e.g. 'coder', 'assistant', 'translator') */
+  persona?: string;
   /** Enable Google Search grounding for up-to-date information (default: true) */
   enableWebSearch?: boolean;
 }

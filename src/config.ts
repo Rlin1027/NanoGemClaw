@@ -150,6 +150,16 @@ export const WEBHOOK = {
 } as const;
 
 /**
+ * Multi-turn Task Tracking configuration
+ */
+export const TASK_TRACKING = {
+  /** Maximum number of auto-follow-up turns for complex tasks */
+  MAX_TURNS: 5,
+  /** Timeout for a single task step (ms) */
+  STEP_TIMEOUT_MS: 300000, // 5 minutes
+} as const;
+
+/**
  * Memory/conversation summary configuration
  */
 export const MEMORY = {

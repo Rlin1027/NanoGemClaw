@@ -261,6 +261,7 @@ const ADMIN_COMMANDS = {
   errors: 'Show groups with recent errors',
   report: 'Generate daily usage report',
   language: 'Switch language (zh-TW/en)',
+  persona: 'Set persona for a group (list/set)',
 } as const;
 
 async function handleAdminCommand(
@@ -270,8 +271,49 @@ async function handleAdminCommand(
   const { getAllTasks, getUsageStats, getAllErrorStates } = await import('./db.js');
   const { t, setLanguage, availableLanguages, getLanguage } = await import('./i18n.js');
   type Language = import('./i18n.js').Language;
+  const { PERSONAS } = await import('./personas.js');
 
   switch (command) {
+    // ... cases ...
+
+    case 'persona': {
+      const subCmd = args[0];
+
+      if (subCmd === 'list') {
+        return `🎭 **Available Personas**\n\n${Object.entries(PERSONAS)
+          .map(([key, p]) => `• \`${key}\`: ${p.name} - ${p.description}`)
+          .join('\n')}`;
+      }
+
+      if (subCmd === 'set' && args[1] && args[2]) {
+        const targetGroup = args[1]; // folder name or 'main'
+        const key = args[2];
+
+        let targetId: string | undefined;
+        // Resolve group folder
+        for (const [id, g] of Object.entries(registeredGroups)) {
+          if (g.folder === targetGroup || g.name === targetGroup) {
+            targetId = id;
+            break;
+          }
+        }
+
+        if (!targetId) {
+          return `❌ Group not found: ${targetGroup}`;
+        }
+
+        if (!PERSONAS[key]) {
+          return `❌ Invalid persona key: ${key}. Use \`/admin persona list\``;
+        }
+
+        registeredGroups[targetId].persona = key;
+        saveState();
+        return `✅ Persona for **${registeredGroups[targetId].name}** set to **${PERSONAS[key].name}**`;
+      }
+
+      return 'Usage: `/admin persona list` or `/admin persona set <group_folder> <persona_key>`';
+    }
+
     case 'stats': {
       const groupCount = Object.keys(registeredGroups).length;
       const uptime = process.uptime();
@@ -550,6 +592,7 @@ async function runAgent(
       chatJid: chatId, // Using chatId as chatJid for compatibility
       isMain,
       systemPrompt: group.systemPrompt,
+      persona: group.persona,
       enableWebSearch: group.enableWebSearch ?? true, // Default: enabled
       mediaPath: mediaPath ? `/workspace/group/media/${path.basename(mediaPath)}` : undefined,
       memoryContext: memoryContext ?? undefined,
@@ -1179,12 +1222,19 @@ async function connectTelegram(): Promise<void> {
 
     // Store message if registered group
     if (registeredGroups[chatId] && content) {
+      // Feature #23: Intelligent Classification Tags
+      const tags: string[] = [];
+      if (content.includes('?')) tags.push('#question');
+      if (content.startsWith('/')) tags.push('#command');
+      if (content.match(/bug|error|fail|錯誤|失敗/i)) tags.push('#alert');
+      if (content.match(/good|great|thanks|讚|謝謝/i)) tags.push('#feedback');
+
       storeMessage(
         msg.message_id.toString(),
         chatId,
         senderId,
         senderName,
-        content,
+        content + (tags.length > 0 ? `\n\nTags: ${tags.join(' ')}` : ''),
         timestamp,
         false,
       );
