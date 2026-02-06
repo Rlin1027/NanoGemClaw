@@ -25,6 +25,8 @@ interface ContainerInput {
   systemPrompt?: string;
   /** Enable Google Search grounding (default: true) */
   enableWebSearch?: boolean;
+  /** Path to media file (image/voice/document) for multi-modal input */
+  mediaPath?: string;
 }
 
 interface ContainerOutput {

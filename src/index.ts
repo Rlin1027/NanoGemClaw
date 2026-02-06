@@ -424,7 +424,7 @@ async function processMessage(msg: TelegramBot.Message): Promise<void> {
   );
 
   await setTyping(chatId, true);
-  const response = await runAgent(group, prompt, chatId);
+  const response = await runAgent(group, prompt, chatId, mediaPath);
   await setTyping(chatId, false);
 
   if (response) {
@@ -438,6 +438,7 @@ async function runAgent(
   group: RegisteredGroup,
   prompt: string,
   chatId: string,
+  mediaPath: string | null = null,
 ): Promise<string | null> {
   const isMain = group.folder === MAIN_GROUP_FOLDER;
   const sessionId = sessions[group.folder];
@@ -476,6 +477,7 @@ async function runAgent(
       isMain,
       systemPrompt: group.systemPrompt,
       enableWebSearch: group.enableWebSearch ?? true, // Default: enabled
+      mediaPath: mediaPath ? `/workspace/group/media/${path.basename(mediaPath)}` : undefined,
     });
 
     if (output.newSessionId) {
