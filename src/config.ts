@@ -112,6 +112,20 @@ export const ALERTS = {
 } as const;
 
 /**
+ * Rate limiting configuration
+ */
+export const RATE_LIMIT = {
+  /** Maximum requests per window per group/user */
+  MAX_REQUESTS: parseInt(process.env.RATE_LIMIT_MAX || '20', 10),
+  /** Window duration in minutes */
+  WINDOW_MINUTES: parseInt(process.env.RATE_LIMIT_WINDOW || '5', 10),
+  /** Enable rate limiting */
+  ENABLED: process.env.RATE_LIMIT_ENABLED !== 'false',
+  /** Message to show when rate limited */
+  MESSAGE: '⏳ 請求過於頻繁，請稍後再試。',
+} as const;
+
+/**
  * Container execution configuration
  */
 export const CONTAINER = {

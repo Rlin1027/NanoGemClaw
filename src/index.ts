@@ -407,6 +407,23 @@ async function processMessage(msg: TelegramBot.Message): Promise<void> {
   // Main group responds to all messages; other groups require trigger prefix
   if (!isMainGroup && !TRIGGER_PATTERN.test(content)) return;
 
+  // Rate limiting check
+  const { checkRateLimit } = await import('./db.js');
+  const { RATE_LIMIT } = await import('./config.js');
+
+  if (RATE_LIMIT.ENABLED) {
+    const rateLimitKey = `group:${chatId}`;
+    const windowMs = RATE_LIMIT.WINDOW_MINUTES * 60 * 1000;
+    const result = checkRateLimit(rateLimitKey, RATE_LIMIT.MAX_REQUESTS, windowMs);
+
+    if (!result.allowed) {
+      const waitMinutes = Math.ceil(result.resetInMs / 60000);
+      logger.warn({ chatId, remaining: result.remaining, waitMinutes }, 'Rate limited');
+      await sendMessage(chatId, `${RATE_LIMIT.MESSAGE} (${waitMinutes} 分鐘後重試)`);
+      return;
+    }
+  }
+
   // Handle media if present
   const mediaInfo = extractMediaInfo(msg);
   let mediaPath: string | null = null;

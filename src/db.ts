@@ -627,3 +627,84 @@ export function getAllErrorStates(): { group: string; state: ErrorState }[] {
     state,
   }));
 }
+
+// ============================================================================
+// Rate Limiting (Sliding Window)
+// ============================================================================
+
+interface RateLimitWindow {
+  timestamps: number[];
+}
+
+const rateLimitWindows = new Map<string, RateLimitWindow>();
+
+/**
+ * Check if a request is rate limited using sliding window algorithm.
+ * Returns { allowed: boolean, remaining: number, resetIn: number }
+ */
+export function checkRateLimit(
+  key: string,
+  maxRequests: number,
+  windowMs: number,
+): { allowed: boolean; remaining: number; resetInMs: number } {
+  const now = Date.now();
+  const windowStart = now - windowMs;
+
+  let window = rateLimitWindows.get(key);
+  if (!window) {
+    window = { timestamps: [] };
+    rateLimitWindows.set(key, window);
+  }
+
+  // Remove timestamps outside the window
+  window.timestamps = window.timestamps.filter((ts) => ts > windowStart);
+
+  // Check if limit exceeded
+  if (window.timestamps.length >= maxRequests) {
+    const oldestInWindow = window.timestamps[0];
+    const resetInMs = oldestInWindow + windowMs - now;
+    return {
+      allowed: false,
+      remaining: 0,
+      resetInMs: Math.max(0, resetInMs),
+    };
+  }
+
+  // Add current timestamp and allow
+  window.timestamps.push(now);
+  return {
+    allowed: true,
+    remaining: maxRequests - window.timestamps.length,
+    resetInMs: windowMs,
+  };
+}
+
+/**
+ * Get rate limit status for a key without incrementing
+ */
+export function getRateLimitStatus(
+  key: string,
+  maxRequests: number,
+  windowMs: number,
+): { count: number; remaining: number; resetInMs: number } {
+  const now = Date.now();
+  const windowStart = now - windowMs;
+
+  const window = rateLimitWindows.get(key);
+  if (!window) {
+    return { count: 0, remaining: maxRequests, resetInMs: windowMs };
+  }
+
+  const activeTimestamps = window.timestamps.filter((ts) => ts > windowStart);
+  const count = activeTimestamps.length;
+
+  const resetInMs = activeTimestamps.length > 0
+    ? activeTimestamps[0] + windowMs - now
+    : windowMs;
+
+  return {
+    count,
+    remaining: Math.max(0, maxRequests - count),
+    resetInMs: Math.max(0, resetInMs),
+  };
+}
