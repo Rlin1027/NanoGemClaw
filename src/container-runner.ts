@@ -23,6 +23,69 @@ import { RegisteredGroup } from './types.js';
 const OUTPUT_START_MARKER = '---NANOCLAW_OUTPUT_START---';
 const OUTPUT_END_MARKER = '---NANOCLAW_OUTPUT_END---';
 
+// ============================================================================
+// Group Lock Manager - Centralized per-group concurrency control
+// ============================================================================
+
+/**
+ * Manages per-group locks to prevent concurrent container execution.
+ * Ensures only one container runs per group at a time, whether triggered by
+ * user messages, scheduled tasks, or IPC commands.
+ * 
+ * Memory is automatically cleaned up when a group's queue becomes empty.
+ */
+class GroupLockManager {
+  private locks: Map<string, Promise<void>> = new Map();
+  private activeCount: Map<string, number> = new Map();
+
+  /**
+   * Acquire a lock for the given group and execute the task.
+   * Tasks are queued and executed serially per group.
+   */
+  async withLock<T>(groupFolder: string, task: () => Promise<T>): Promise<T> {
+    // Increment active count
+    const currentCount = this.activeCount.get(groupFolder) || 0;
+    this.activeCount.set(groupFolder, currentCount + 1);
+
+    // Chain this task to the group's queue
+    const currentLock = this.locks.get(groupFolder) || Promise.resolve();
+
+    let taskResolve: () => void;
+    const taskPromise = new Promise<void>((resolve) => {
+      taskResolve = resolve;
+    });
+
+    // Update the lock to include this task
+    this.locks.set(groupFolder, currentLock.then(() => taskPromise));
+
+    // Wait for our turn
+    await currentLock;
+
+    try {
+      return await task();
+    } finally {
+      // Decrement active count and cleanup if empty
+      const newCount = (this.activeCount.get(groupFolder) || 1) - 1;
+      if (newCount <= 0) {
+        this.activeCount.delete(groupFolder);
+        this.locks.delete(groupFolder);
+      } else {
+        this.activeCount.set(groupFolder, newCount);
+      }
+      // Signal next task can proceed
+      taskResolve!();
+    }
+  }
+
+  /** Check if a group currently has pending tasks */
+  hasPending(groupFolder: string): boolean {
+    return (this.activeCount.get(groupFolder) || 0) > 0;
+  }
+}
+
+// Singleton instance for the application
+const groupLockManager = new GroupLockManager();
+
 function getHomeDir(): string {
   const home = process.env.HOME || os.homedir();
   if (!home) {
@@ -195,7 +258,29 @@ function buildContainerArgs(mounts: VolumeMount[]): string[] {
   return args;
 }
 
+/**
+ * Run a container agent for a group with per-group concurrency control.
+ * Only one container can run per group at a time (messages, tasks, IPC all queue).
+ */
 export async function runContainerAgent(
+  group: RegisteredGroup,
+  input: ContainerInput,
+): Promise<ContainerOutput> {
+  logger.debug(
+    { group: group.name, hasPending: groupLockManager.hasPending(group.folder) },
+    'Acquiring group lock for container execution',
+  );
+
+  return groupLockManager.withLock(group.folder, () =>
+    runContainerAgentInternal(group, input),
+  );
+}
+
+/**
+ * Internal implementation of container agent execution.
+ * Should only be called through runContainerAgent which handles locking.
+ */
+async function runContainerAgentInternal(
   group: RegisteredGroup,
   input: ContainerInput,
 ): Promise<ContainerOutput> {

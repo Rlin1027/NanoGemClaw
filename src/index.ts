@@ -53,11 +53,6 @@ let sessions: Session = {};
 let registeredGroups: Record<string, RegisteredGroup> = {};
 let lastAgentTimestamp: Record<string, string> = {};
 
-// Message queue per group to prevent concurrent processing of same group
-// This avoids container resource conflicts and ensures ordered processing
-const groupMessageQueues: Map<string, Promise<void>> = new Map();
-const processingGroups: Set<string> = new Set();
-
 // ============================================================================
 // State Management
 // ============================================================================
@@ -259,33 +254,10 @@ async function downloadMedia(
 // ============================================================================
 
 /**
- * Queue a message for processing with per-group concurrency control.
- * Ensures only one message per group is processed at a time.
+ * Process an incoming message.
+ * Concurrency is handled at the container level (container-runner.ts).
  */
-async function queueMessage(msg: TelegramBot.Message): Promise<void> {
-  const chatId = msg.chat.id.toString();
-  const group = registeredGroups[chatId];
-  if (!group) return;
-
-  // Chain this message to the group's queue
-  const currentQueue = groupMessageQueues.get(chatId) || Promise.resolve();
-  const newQueue = currentQueue
-    .then(() => processMessageInternal(msg))
-    .catch((err) => {
-      logger.error({ chatId, err }, 'Error in message queue');
-    })
-    .finally(() => {
-      processingGroups.delete(chatId);
-    });
-
-  groupMessageQueues.set(chatId, newQueue);
-  processingGroups.add(chatId);
-}
-
-/**
- * Internal message processor - called from queue, handles single message.
- */
-async function processMessageInternal(msg: TelegramBot.Message): Promise<void> {
+async function processMessage(msg: TelegramBot.Message): Promise<void> {
   const chatId = msg.chat.id.toString();
   const group = registeredGroups[chatId];
   if (!group) return;
@@ -883,10 +855,10 @@ async function connectTelegram(): Promise<void> {
       );
     }
 
-    // Process if registered (with queue for concurrency control)
+    // Process if registered (concurrency handled in container-runner)
     if (registeredGroups[chatId]) {
       try {
-        await queueMessage(msg);
+        await processMessage(msg);
         saveState();
       } catch (err) {
         logger.error({ err, chatId }, 'Error processing message');
