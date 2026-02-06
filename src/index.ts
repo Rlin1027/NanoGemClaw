@@ -40,7 +40,7 @@ import {
 } from './db.js';
 import { startSchedulerLoop } from './task-scheduler.js';
 import { NewMessage, RegisteredGroup, Session } from './types.js';
-import { loadJson, saveJson } from './utils.js';
+import { loadJson, saveJson, formatError } from './utils.js';
 
 import { logger } from './logger.js';
 
@@ -467,16 +467,39 @@ function startIpcWatcher(): void {
   const ipcBaseDir = path.join(DATA_DIR, 'ipc');
   fs.mkdirSync(ipcBaseDir, { recursive: true });
 
+  // Track active watchers for cleanup
+  const watchers: fs.FSWatcher[] = [];
+
+  // Debounce mechanism to batch file system events
+  let pendingProcess = false;
+  let debounceTimer: NodeJS.Timeout | null = null;
+  const DEBOUNCE_MS = 100; // Wait 100ms after last event before processing
+
+  const scheduleProcess = () => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      if (!pendingProcess) {
+        pendingProcess = true;
+        processIpcFiles().finally(() => {
+          pendingProcess = false;
+        });
+      }
+    }, DEBOUNCE_MS);
+  };
+
   const processIpcFiles = async () => {
     let groupFolders: string[];
     try {
       groupFolders = fs.readdirSync(ipcBaseDir).filter((f) => {
-        const stat = fs.statSync(path.join(ipcBaseDir, f));
-        return stat.isDirectory() && f !== 'errors';
+        try {
+          const stat = fs.statSync(path.join(ipcBaseDir, f));
+          return stat.isDirectory() && f !== 'errors';
+        } catch {
+          return false;
+        }
       });
     } catch (err) {
       logger.error({ err }, 'Error reading IPC base directory');
-      setTimeout(processIpcFiles, IPC_POLL_INTERVAL);
       return;
     }
 
@@ -484,6 +507,12 @@ function startIpcWatcher(): void {
       const isMain = sourceGroup === MAIN_GROUP_FOLDER;
       const messagesDir = path.join(ipcBaseDir, sourceGroup, 'messages');
       const tasksDir = path.join(ipcBaseDir, sourceGroup, 'tasks');
+
+      // Ensure directories exist and watch them
+      for (const dir of [messagesDir, tasksDir]) {
+        fs.mkdirSync(dir, { recursive: true });
+        setupWatcher(dir);
+      }
 
       // Process messages
       try {
@@ -519,7 +548,7 @@ function startIpcWatcher(): void {
               fs.unlinkSync(filePath);
             } catch (err) {
               logger.error(
-                { file, sourceGroup, err },
+                { file, sourceGroup, err: formatError(err) },
                 'Error processing IPC message',
               );
               const errorDir = path.join(ipcBaseDir, 'errors');
@@ -533,7 +562,7 @@ function startIpcWatcher(): void {
         }
       } catch (err) {
         logger.error(
-          { err, sourceGroup },
+          { err: formatError(err), sourceGroup },
           'Error reading IPC messages directory',
         );
       }
@@ -552,7 +581,7 @@ function startIpcWatcher(): void {
               fs.unlinkSync(filePath);
             } catch (err) {
               logger.error(
-                { file, sourceGroup, err },
+                { file, sourceGroup, err: formatError(err) },
                 'Error processing IPC task',
               );
               const errorDir = path.join(ipcBaseDir, 'errors');
@@ -565,15 +594,53 @@ function startIpcWatcher(): void {
           }
         }
       } catch (err) {
-        logger.error({ err, sourceGroup }, 'Error reading IPC tasks directory');
+        logger.error({ err: formatError(err), sourceGroup }, 'Error reading IPC tasks directory');
       }
     }
-
-    setTimeout(processIpcFiles, IPC_POLL_INTERVAL);
   };
 
+  // Set up fs.watch for a directory
+  const watchedDirs = new Set<string>();
+  const setupWatcher = (dir: string) => {
+    if (watchedDirs.has(dir)) return;
+
+    try {
+      const watcher = fs.watch(dir, { persistent: false }, (eventType, filename) => {
+        if (filename && filename.endsWith('.json')) {
+          scheduleProcess();
+        }
+      });
+
+      watcher.on('error', (err) => {
+        logger.debug({ dir, err: formatError(err) }, 'Watch error, will use polling fallback');
+      });
+
+      watchers.push(watcher);
+      watchedDirs.add(dir);
+    } catch (err) {
+      logger.debug({ dir, err: formatError(err) }, 'Failed to set up watcher');
+    }
+  };
+
+  // Watch base directory for new group folders
+  try {
+    const baseWatcher = fs.watch(ipcBaseDir, { persistent: false }, () => {
+      scheduleProcess();
+    });
+    watchers.push(baseWatcher);
+  } catch (err) {
+    logger.warn({ err: formatError(err) }, 'Failed to watch IPC base directory');
+  }
+
+  // Initial process and fallback polling (slower interval as safety net)
   processIpcFiles();
-  logger.info('IPC watcher started');
+  setInterval(() => {
+    if (!pendingProcess) {
+      processIpcFiles();
+    }
+  }, IPC_POLL_INTERVAL * 5); // Poll every 5 seconds as fallback instead of 1 second
+
+  logger.info('IPC watcher started (using fs.watch with polling fallback)');
 }
 
 async function processTaskIpc(
