@@ -141,6 +141,17 @@ export async function transcribeAudio(audioPath: string): Promise<string> {
 }
 
 /**
+ * Check if ffmpeg is available on the system
+ */
+export async function checkFFmpegAvailability(): Promise<boolean> {
+    return new Promise((resolve) => {
+        const check = spawn('ffmpeg', ['-version']);
+        check.on('error', () => resolve(false));
+        check.on('close', (code) => resolve(code === 0));
+    });
+}
+
+/**
  * Check if STT is available
  */
 export function isSTTAvailable(): boolean {

@@ -1395,6 +1395,19 @@ async function main(): Promise<void> {
   });
   startHealthCheckServer();
 
+  // Check system dependencies
+  const { checkFFmpegAvailability, isSTTAvailable } = await import('./stt.js');
+  if (isSTTAvailable()) {
+    const hasFFmpeg = await checkFFmpegAvailability();
+    if (!hasFFmpeg) {
+      console.warn('╔══════════════════════════════════════════════════════════════╗');
+      console.warn('║  WARNING: ffmpeg not found on host system                    ║');
+      console.warn('║  STT audio conversion may fail.                              ║');
+      console.warn('║  Please install: brew install ffmpeg                         ║');
+      console.warn('╚══════════════════════════════════════════════════════════════╝');
+    }
+  }
+
   // Connect to Telegram
   await connectTelegram();
 }
