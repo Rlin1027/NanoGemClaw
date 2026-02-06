@@ -32,6 +32,7 @@ import {
   getNewMessages,
   getTaskById,
   initDatabase,
+  closeDatabase,
   setLastGroupSync,
   storeChatMetadata,
   storeMessage,
@@ -48,6 +49,11 @@ let lastTimestamp = '';
 let sessions: Session = {};
 let registeredGroups: Record<string, RegisteredGroup> = {};
 let lastAgentTimestamp: Record<string, string> = {};
+
+// Message queue per group to prevent concurrent processing of same group
+// This avoids container resource conflicts and ensures ordered processing
+const groupMessageQueues: Map<string, Promise<void>> = new Map();
+const processingGroups: Set<string> = new Set();
 
 // ============================================================================
 // State Management
@@ -252,7 +258,34 @@ async function downloadMedia(
 // Message Processing
 // ============================================================================
 
-async function processMessage(msg: TelegramBot.Message): Promise<void> {
+/**
+ * Queue a message for processing with per-group concurrency control.
+ * Ensures only one message per group is processed at a time.
+ */
+async function queueMessage(msg: TelegramBot.Message): Promise<void> {
+  const chatId = msg.chat.id.toString();
+  const group = registeredGroups[chatId];
+  if (!group) return;
+
+  // Chain this message to the group's queue
+  const currentQueue = groupMessageQueues.get(chatId) || Promise.resolve();
+  const newQueue = currentQueue
+    .then(() => processMessageInternal(msg))
+    .catch((err) => {
+      logger.error({ chatId, err }, 'Error in message queue');
+    })
+    .finally(() => {
+      processingGroups.delete(chatId);
+    });
+
+  groupMessageQueues.set(chatId, newQueue);
+  processingGroups.add(chatId);
+}
+
+/**
+ * Internal message processor - called from queue, handles single message.
+ */
+async function processMessageInternal(msg: TelegramBot.Message): Promise<void> {
   const chatId = msg.chat.id.toString();
   const group = registeredGroups[chatId];
   if (!group) return;
@@ -784,10 +817,10 @@ async function connectTelegram(): Promise<void> {
       );
     }
 
-    // Process if registered
+    // Process if registered (with queue for concurrency control)
     if (registeredGroups[chatId]) {
       try {
-        await processMessage(msg);
+        await queueMessage(msg);
         saveState();
       } catch (err) {
         logger.error({ err, chatId }, 'Error processing message');
@@ -848,7 +881,8 @@ process.on('SIGINT', async () => {
   try {
     await bot?.stopPolling();
     saveState();
-    console.log('State saved. Goodbye!');
+    closeDatabase();
+    console.log('State saved & database closed. Goodbye!');
   } catch (err) {
     console.error('Error during shutdown:', err);
   }
@@ -860,6 +894,7 @@ process.on('SIGTERM', async () => {
   try {
     await bot?.stopPolling();
     saveState();
+    closeDatabase();
   } catch (err) {
     console.error('Error during shutdown:', err);
   }

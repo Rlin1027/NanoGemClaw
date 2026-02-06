@@ -78,6 +78,16 @@ export function initDatabase(): void {
 }
 
 /**
+ * Close the database connection gracefully.
+ * Should be called during application shutdown.
+ */
+export function closeDatabase(): void {
+  if (db) {
+    db.close();
+  }
+}
+
+/**
  * Store chat metadata only (no message content).
  * Used for all chats to enable group discovery without storing sensitive content.
  */

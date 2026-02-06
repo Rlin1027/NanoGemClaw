@@ -279,9 +279,25 @@ export async function runContainerAgent(
       }
     });
 
+    // Timeout handling with graceful shutdown
+    // First send SIGTERM for graceful exit, then SIGKILL if still running
+    let timeoutResolved = false;
+    const gracefulShutdownDelay = 5000; // 5 seconds to gracefully exit
+
     const timeout = setTimeout(() => {
-      logger.error({ group: group.name }, 'Container timeout, killing');
-      container.kill('SIGKILL');
+      logger.warn({ group: group.name }, 'Container timeout, attempting graceful shutdown');
+      container.kill('SIGTERM');
+
+      // If still running after grace period, force kill
+      setTimeout(() => {
+        if (!container.killed && !timeoutResolved) {
+          logger.error({ group: group.name }, 'Container did not exit gracefully, forcing SIGKILL');
+          container.kill('SIGKILL');
+        }
+      }, gracefulShutdownDelay);
+
+      // Resolve immediately to unblock caller
+      timeoutResolved = true;
       resolve({
         status: 'error',
         result: null,
@@ -291,6 +307,13 @@ export async function runContainerAgent(
 
     container.on('close', (code) => {
       clearTimeout(timeout);
+
+      // Skip if timeout already resolved this promise
+      if (timeoutResolved) {
+        logger.debug({ group: group.name, code }, 'Container closed after timeout (ignored)');
+        return;
+      }
+
       const duration = Date.now() - startTime;
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
