@@ -264,7 +264,7 @@ async function handleAdminCommand(
   command: string,
   args: string[],
 ): Promise<string> {
-  const { getAllTasks } = await import('./db.js');
+  const { getAllTasks, getUsageStats } = await import('./db.js');
 
   switch (command) {
     case 'stats': {
@@ -273,12 +273,22 @@ async function handleAdminCommand(
       const uptimeHours = Math.floor(uptime / 3600);
       const uptimeMinutes = Math.floor((uptime % 3600) / 60);
 
+      // Get usage stats
+      const usage = getUsageStats();
+      const avgDuration = usage.total_requests > 0
+        ? Math.round(usage.avg_duration_ms / 1000)
+        : 0;
+
       return `📊 **NanoGemClaw Stats**
 
 • Registered Groups: ${groupCount}
 • Uptime: ${uptimeHours}h ${uptimeMinutes}m
 • Memory: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB
-• Node Version: ${process.version}`;
+
+📈 **Usage Analytics**
+• Total Requests: ${usage.total_requests}
+• Avg Response Time: ${avgDuration}s
+• Total Tokens: ${usage.total_prompt_tokens + usage.total_response_tokens}`;
     }
 
     case 'groups': {

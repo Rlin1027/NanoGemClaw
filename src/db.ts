@@ -58,6 +58,19 @@ export function initDatabase(): void {
       FOREIGN KEY (task_id) REFERENCES scheduled_tasks(id)
     );
     CREATE INDEX IF NOT EXISTS idx_task_run_logs ON task_run_logs(task_id, run_at);
+
+    CREATE TABLE IF NOT EXISTS usage_stats (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      group_folder TEXT NOT NULL,
+      timestamp TEXT NOT NULL,
+      prompt_tokens INTEGER,
+      response_tokens INTEGER,
+      duration_ms INTEGER NOT NULL,
+      model TEXT,
+      is_scheduled_task INTEGER DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_usage_stats_group ON usage_stats(group_folder);
+    CREATE INDEX IF NOT EXISTS idx_usage_stats_timestamp ON usage_stats(timestamp);
   `);
 
   // Add sender_name column if it doesn't exist (migration for existing DBs)
@@ -391,4 +404,80 @@ export function getTaskRunLogs(taskId: string, limit = 10): TaskRunLog[] {
   `,
     )
     .all(taskId, limit) as TaskRunLog[];
+}
+
+// ============================================================================
+// Usage Analytics
+// ============================================================================
+
+export interface UsageEntry {
+  group_folder: string;
+  timestamp: string;
+  prompt_tokens?: number;
+  response_tokens?: number;
+  duration_ms: number;
+  model?: string;
+  is_scheduled_task?: boolean;
+}
+
+export function logUsage(entry: UsageEntry): void {
+  db.prepare(
+    `INSERT INTO usage_stats (group_folder, timestamp, prompt_tokens, response_tokens, duration_ms, model, is_scheduled_task)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    entry.group_folder,
+    entry.timestamp,
+    entry.prompt_tokens ?? null,
+    entry.response_tokens ?? null,
+    entry.duration_ms,
+    entry.model ?? null,
+    entry.is_scheduled_task ? 1 : 0,
+  );
+}
+
+export interface UsageStats {
+  total_requests: number;
+  total_duration_ms: number;
+  avg_duration_ms: number;
+  total_prompt_tokens: number;
+  total_response_tokens: number;
+}
+
+export function getUsageStats(
+  groupFolder?: string,
+  since?: string,
+): UsageStats {
+  let query = `
+    SELECT 
+      COUNT(*) as total_requests,
+      COALESCE(SUM(duration_ms), 0) as total_duration_ms,
+      COALESCE(AVG(duration_ms), 0) as avg_duration_ms,
+      COALESCE(SUM(prompt_tokens), 0) as total_prompt_tokens,
+      COALESCE(SUM(response_tokens), 0) as total_response_tokens
+    FROM usage_stats
+    WHERE 1=1
+  `;
+
+  const params: (string | undefined)[] = [];
+
+  if (groupFolder) {
+    query += ' AND group_folder = ?';
+    params.push(groupFolder);
+  }
+
+  if (since) {
+    query += ' AND timestamp > ?';
+    params.push(since);
+  }
+
+  return db.prepare(query).get(...params) as UsageStats;
+}
+
+export function getRecentUsage(limit = 20): UsageEntry[] {
+  return db
+    .prepare(
+      `SELECT group_folder, timestamp, prompt_tokens, response_tokens, duration_ms, model, is_scheduled_task
+       FROM usage_stats ORDER BY timestamp DESC LIMIT ?`,
+    )
+    .all(limit) as UsageEntry[];
 }

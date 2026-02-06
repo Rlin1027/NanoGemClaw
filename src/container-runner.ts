@@ -275,9 +275,26 @@ export async function runContainerAgent(
     'Acquiring group lock for container execution',
   );
 
-  return groupLockManager.withLock(group.folder, () =>
-    runContainerAgentInternal(group, input),
-  );
+  return groupLockManager.withLock(group.folder, async () => {
+    const startTime = Date.now();
+    const result = await runContainerAgentInternal(group, input);
+    const durationMs = Date.now() - startTime;
+
+    // Log usage statistics (async, don't block)
+    try {
+      const { logUsage } = await import('./db.js');
+      logUsage({
+        group_folder: input.groupFolder,
+        timestamp: new Date().toISOString(),
+        duration_ms: durationMs,
+        is_scheduled_task: input.isScheduledTask,
+      });
+    } catch (err) {
+      logger.warn({ err }, 'Failed to log usage stats');
+    }
+
+    return result;
+  });
 }
 
 /**
