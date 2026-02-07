@@ -27,6 +27,12 @@ export async function sendWebhookNotification(
         return;
     }
 
+    // Validate webhook URL format
+    if (!WEBHOOK.URL.startsWith('http://') && !WEBHOOK.URL.startsWith('https://')) {
+        logger.warn({ url: WEBHOOK.URL }, 'Invalid webhook URL scheme, skipping');
+        return;
+    }
+
     // Check if event is enabled
     if (!WEBHOOK.EVENTS.includes(event) && !WEBHOOK.EVENTS.includes('*')) {
         return;

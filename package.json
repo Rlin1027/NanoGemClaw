@@ -16,13 +16,18 @@
   "dependencies": {
     "@google-cloud/speech": "^7.2.1",
     "better-sqlite3": "^11.8.1",
+    "cors": "^2.8.6",
     "cron-parser": "^5.5.0",
     "dotenv": "^17.2.3",
+    "express": "^5.2.1",
     "node-telegram-bot-api": "^0.67.0",
+    "socket.io": "^4.8.3",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "@types/node": "^22.10.0",
     "@types/node-telegram-bot-api": "^0.64.0",
     "prettier": "^3.8.1",

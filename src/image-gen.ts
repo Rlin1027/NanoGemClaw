@@ -51,12 +51,18 @@ export async function generateImage(
 
     const startTime = Date.now();
 
+    // Set up fetch timeout using AbortController
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+
     try {
-        const response = await fetch(`${IMAGEN_API_URL}?key=${GEMINI_API_KEY}`, {
+        const response = await fetch(IMAGEN_API_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'x-goog-api-key': GEMINI_API_KEY,
             },
+            signal: controller.signal,
             body: JSON.stringify({
                 prompt: { text: prompt },
                 config: {
@@ -118,6 +124,8 @@ export async function generateImage(
             success: false,
             error: errorMessage,
         };
+    } finally {
+        clearTimeout(timeoutId);
     }
 }
 

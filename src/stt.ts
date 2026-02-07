@@ -62,31 +62,40 @@ async function transcribeWithGCP(audioPath: string): Promise<string> {
         wavPath = await convertToWav(audioPath);
     }
 
-    const audioBytes = fs.readFileSync(wavPath).toString('base64');
+    try {
+        // Check file size before reading into memory
+        const MAX_AUDIO_SIZE = 25 * 1024 * 1024; // 25MB limit
+        const fileStats = fs.statSync(wavPath);
+        if (fileStats.size > MAX_AUDIO_SIZE) {
+            throw new Error(`Audio file too large (${Math.round(fileStats.size / 1024 / 1024)}MB). Maximum supported size is ${MAX_AUDIO_SIZE / 1024 / 1024}MB.`);
+        }
 
-    const [response] = await client.recognize({
-        config: {
-            encoding: 'LINEAR16' as const,
-            sampleRateHertz: 16000,
-            languageCode: 'zh-TW',
-            alternativeLanguageCodes: ['en-US', 'ja-JP'],
-        },
-        audio: {
-            content: audioBytes,
-        },
-    });
+        const audioBytes = fs.readFileSync(wavPath).toString('base64');
 
-    // Cleanup temp wav file
-    if (wavPath !== audioPath && fs.existsSync(wavPath)) {
-        fs.unlinkSync(wavPath);
+        const [response] = await client.recognize({
+            config: {
+                encoding: 'LINEAR16' as const,
+                sampleRateHertz: 16000,
+                languageCode: 'zh-TW',
+                alternativeLanguageCodes: ['en-US', 'ja-JP'],
+            },
+            audio: {
+                content: audioBytes,
+            },
+        });
+
+        const transcription = response.results
+            ?.map((result) => result.alternatives?.[0]?.transcript)
+            .filter(Boolean)
+            .join(' ');
+
+        return transcription || '';
+    } finally {
+        // Always clean up temp WAV file
+        if (wavPath !== audioPath && fs.existsSync(wavPath)) {
+            fs.unlinkSync(wavPath);
+        }
     }
-
-    const transcription = response.results
-        ?.map((result) => result.alternatives?.[0]?.transcript)
-        .filter(Boolean)
-        .join(' ');
-
-    return transcription || '';
 }
 
 /**

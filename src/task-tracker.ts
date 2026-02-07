@@ -26,6 +26,16 @@ const activeTasks = new Map<string, TaskState>();
  * Create a new specific task tracking session
  */
 export function createTask(chatId: string, description: string): TaskState {
+    // Check for existing active task
+    const existing = activeTasks.get(chatId);
+    if (existing && existing.status === 'active') {
+        // Fail the existing task before creating a new one
+        existing.status = 'failed';
+        existing.history.push(`${new Date().toISOString()}: Superseded by new task`);
+        existing.updatedAt = new Date().toISOString();
+        logger.warn({ chatId, oldTaskId: existing.id }, 'Existing task superseded by new task');
+    }
+
     const id = `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
     const task: TaskState = {
@@ -122,8 +132,9 @@ export function cleanupStaleTasks(): void {
 /**
  * Start task cleanup scheduler
  */
-export function startTaskCleanupScheduler(): void {
+export function startTaskCleanupScheduler(): NodeJS.Timeout {
     // Check every 10 minutes
-    setInterval(cleanupStaleTasks, 10 * 60 * 1000);
+    const intervalId = setInterval(cleanupStaleTasks, 10 * 60 * 1000);
     logger.info({}, 'Task cleanup scheduler started');
+    return intervalId;
 }

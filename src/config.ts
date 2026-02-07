@@ -35,16 +35,15 @@ export const GROUPS_DIR = path.resolve(PROJECT_ROOT, 'groups');
 export const DATA_DIR = path.resolve(PROJECT_ROOT, 'data');
 export const MAIN_GROUP_FOLDER = 'main';
 
+function safeParseInt(value: string | undefined, defaultValue: number): number {
+  const parsed = parseInt(value || String(defaultValue), 10);
+  return Number.isNaN(parsed) ? defaultValue : parsed;
+}
+
 export const CONTAINER_IMAGE =
   process.env.CONTAINER_IMAGE || 'nanogemclaw-agent:latest';
-export const CONTAINER_TIMEOUT = parseInt(
-  process.env.CONTAINER_TIMEOUT || '300000',
-  10,
-);
-export const CONTAINER_MAX_OUTPUT_SIZE = parseInt(
-  process.env.CONTAINER_MAX_OUTPUT_SIZE || '10485760',
-  10,
-); // 10MB default
+export const CONTAINER_TIMEOUT = safeParseInt(process.env.CONTAINER_TIMEOUT, 300000);
+export const CONTAINER_MAX_OUTPUT_SIZE = safeParseInt(process.env.CONTAINER_MAX_OUTPUT_SIZE, 10485760); // 10MB default
 export const IPC_POLL_INTERVAL = 1000;
 
 /**
@@ -54,7 +53,7 @@ export const HEALTH_CHECK = {
   /** Enable health check HTTP server */
   ENABLED: process.env.HEALTH_CHECK_ENABLED !== 'false',
   /** Port for health check server */
-  PORT: parseInt(process.env.HEALTH_CHECK_PORT || '8080', 10),
+  PORT: safeParseInt(process.env.HEALTH_CHECK_PORT, 8080),
 } as const;
 
 function escapeRegex(str: string): string {
@@ -116,9 +115,9 @@ export const ALERTS = {
  */
 export const RATE_LIMIT = {
   /** Maximum requests per window per group/user */
-  MAX_REQUESTS: parseInt(process.env.RATE_LIMIT_MAX || '20', 10),
+  MAX_REQUESTS: safeParseInt(process.env.RATE_LIMIT_MAX, 20),
   /** Window duration in minutes */
-  WINDOW_MINUTES: parseInt(process.env.RATE_LIMIT_WINDOW || '5', 10),
+  WINDOW_MINUTES: safeParseInt(process.env.RATE_LIMIT_WINDOW, 5),
   /** Enable rate limiting */
   ENABLED: process.env.RATE_LIMIT_ENABLED !== 'false',
   /** Message to show when rate limited */
@@ -185,6 +184,9 @@ Keep the summary under 500 words. Output in the same language as the conversatio
 export const ALLOWED_CONTAINER_ENV_KEYS = [
   'GEMINI_API_KEY',
   'GOOGLE_API_KEY',
+  'GEMINI_SYSTEM_PROMPT',
+  'GEMINI_ENABLE_SEARCH',
+  'CONTAINER_TIMEOUT',
   'TZ',
   'NODE_ENV',
   'LOG_LEVEL',

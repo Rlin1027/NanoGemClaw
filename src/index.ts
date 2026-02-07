@@ -97,6 +97,10 @@ async function saveState(): Promise<void> {
 }
 
 function registerGroup(chatId: string, group: RegisteredGroup): void {
+  if (!/^[a-zA-Z0-9_-]+$/.test(group.folder)) {
+    logger.warn({ folder: group.folder }, 'Invalid folder name rejected');
+    return;
+  }
   registeredGroups[chatId] = group;
   saveJson(path.join(DATA_DIR, 'registered_groups.json'), registeredGroups);
 
@@ -227,8 +231,13 @@ async function downloadMedia(
     fs.mkdirSync(mediaDir, { recursive: true });
 
     const ext = path.extname(fileInfo.file_path) || '.bin';
-    const finalName = fileName || `${Date.now()}${ext}`;
+    const sanitizedName = path.basename(fileName || '').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const finalName = sanitizedName || `${Date.now()}${ext}`;
     const localPath = path.join(mediaDir, finalName);
+    // Security: verify path is within mediaDir
+    if (!path.resolve(localPath).startsWith(path.resolve(mediaDir))) {
+      throw new Error('Invalid file path detected');
+    }
 
     // Download file
     const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${fileInfo.file_path}`;
@@ -509,18 +518,33 @@ async function processMessage(msg: TelegramBot.Message): Promise<void> {
     logger.info({ chatId, replyToId: replyMsg.message_id }, 'Processing reply context');
   }
 
-  // Handle media if present
+  // Handle media with progress updates
   const mediaInfo = extractMediaInfo(msg);
   let mediaPath: string | null = null;
+  let statusMsg: TelegramBot.Message | null = null;
+
+  // Send status message for processing requests
+  statusMsg = await bot.sendMessage(chatId, `⏳ ${t().processing}...`, {
+    reply_to_message_id: msg.message_id,
+  });
 
   if (mediaInfo) {
+    await bot.editMessageText(`📥 ${t().downloadingMedia}...`, {
+      chat_id: chatId,
+      message_id: statusMsg.message_id,
+    });
+
     mediaPath = await downloadMedia(mediaInfo.fileId, group.folder, mediaInfo.fileName);
+
     if (mediaPath) {
-      // Add media reference to content for the agent
       const containerMediaPath = `/workspace/group/media/${path.basename(mediaPath)}`;
 
-      // Transcribe voice messages using STT
       if (mediaInfo.type === 'voice') {
+        await bot.editMessageText(`🧠 ${t().transcribing}...`, {
+          chat_id: chatId,
+          message_id: statusMsg.message_id,
+        });
+
         const { transcribeAudio } = await import('./stt.js');
         const transcription = await transcribeAudio(mediaPath);
         content = `[Voice message transcription: "${transcription}"]\n[Audio file: ${containerMediaPath}]\n${content}`;
@@ -530,6 +554,11 @@ async function processMessage(msg: TelegramBot.Message): Promise<void> {
       }
     }
   }
+
+  await bot.editMessageText(`🤖 ${t().thinking}...`, {
+    chat_id: chatId,
+    message_id: statusMsg.message_id,
+  });
 
   // Get all messages since last agent interaction
   const sinceTimestamp = lastAgentTimestamp[chatId] || '';
@@ -564,7 +593,27 @@ async function processMessage(msg: TelegramBot.Message): Promise<void> {
   if (response) {
     const timestamp = new Date(msg.date * 1000).toISOString();
     lastAgentTimestamp[chatId] = timestamp;
-    await sendMessage(chatId, `${ASSISTANT_NAME}: ${response}`);
+
+    // Clean up status message
+    if (statusMsg) {
+      await bot.deleteMessage(parseInt(chatId), statusMsg.message_id).catch(() => { });
+    }
+
+    // Send final response with retry button
+    const buttons: QuickReplyButton[][] = [
+      [
+        { text: `🔄 ${t().retry}`, callbackData: `retry:${msg.message_id}` },
+        { text: `💬 ${t().feedback}`, callbackData: `feedback_menu:${msg.message_id}` }
+      ]
+    ];
+
+    await sendMessageWithButtons(chatId, `${ASSISTANT_NAME}: ${response}`, buttons);
+  } else if (statusMsg) {
+    // If no response, update status message to error
+    await bot.editMessageText(`❌ ${t().errorOccurred}`, {
+      chat_id: parseInt(chatId),
+      message_id: statusMsg.message_id,
+    }).catch(() => { });
   }
 }
 
@@ -1195,6 +1244,10 @@ async function processTaskIpc(
         break;
       }
       if (data.jid && data.name && data.folder && data.trigger) {
+        if (!/^[a-zA-Z0-9_-]+$/.test(data.folder)) {
+          logger.warn({ folder: data.folder }, 'Invalid folder name in register_group IPC');
+          break;
+        }
         registerGroup(data.jid, {
           name: data.name,
           folder: data.folder,
@@ -1332,10 +1385,54 @@ async function connectTelegram(): Promise<void> {
         case 'cancel':
           await sendMessage(chatId, t().cancelled);
           break;
-        case 'retry':
-          // Re-trigger the last prompt (if stored)
-          await sendMessage(chatId, t().retrying);
+        case 'retry': {
+          const originalMsgId = params[0];
+
+          // Validate originalMsgId is numeric
+          if (!/^\d+$/.test(originalMsgId)) {
+            await bot.answerCallbackQuery(query.id, { text: 'Invalid message ID' });
+            return;
+          }
+
+          // Rate limit check
+          const { getMessageById, checkRateLimit } = await import('./db.js');
+          const rateCheck = checkRateLimit(`retry:${chatId}`, 5, 60000);
+          if (!rateCheck.allowed) {
+            await bot.answerCallbackQuery(query.id, { text: 'Rate limited. Please wait.' });
+            return;
+          }
+
+          const originalMsg = getMessageById(chatId, originalMsgId);
+
+          if (originalMsg) {
+            // Re-trigger the processing logic
+            await sendMessage(chatId, `🔄 ${t().retrying}`);
+
+            // Construct a skeletal Telegram message for processMessage
+            const fakeMsg: TelegramBot.Message = {
+              message_id: parseInt(originalMsgId),
+              chat: { id: parseInt(chatId), type: 'group' },
+              date: Math.floor(new Date(originalMsg.timestamp).getTime() / 1000),
+              text: originalMsg.content,
+              from: { id: parseInt(originalMsg.sender), is_bot: false, first_name: originalMsg.sender_name },
+            };
+
+            await processMessage(fakeMsg);
+          } else {
+            await sendMessage(chatId, `❌ ${t().retrying}失敗：找不到原始訊息`);
+          }
           break;
+        }
+        case 'feedback_menu': {
+          const buttons: QuickReplyButton[][] = [
+            [
+              { text: '👍', callbackData: `feedback:up:${params[0]}` },
+              { text: '👎', callbackData: `feedback:down:${params[0]}` }
+            ]
+          ];
+          await sendMessageWithButtons(chatId, '您對這個回覆滿意嗎？', buttons);
+          break;
+        }
         case 'feedback':
           const rating = params[0];
           logger.info({ chatId, rating }, 'User feedback received');
@@ -1356,6 +1453,15 @@ async function connectTelegram(): Promise<void> {
   // Get bot info
   const me = await bot.getMe();
   logger.info({ username: me.username, id: me.id }, 'Telegram bot connected');
+
+  // Set bot commands for the "Menu" button
+  await bot.setMyCommands([
+    { command: 'start', description: 'Start the bot and see instructions' },
+    { command: 'tasks', description: 'List and manage active tasks' },
+    { command: 'persona', description: 'Change the assistant personality' },
+    { command: 'report', description: 'Get a summary of recent activity' },
+    { command: 'help', description: 'Show available commands' },
+  ]);
 
   // Start background services
   startSchedulerLoop({
@@ -1407,6 +1513,34 @@ async function main(): Promise<void> {
       console.warn('╚══════════════════════════════════════════════════════════════╝');
     }
   }
+
+  // Start Dashboard Server (Phase 2)
+  const { startDashboardServer, setGroupsProvider } = await import('./server.js');
+  const { getTaskById, getTasksForGroup, getAllTasks, getErrorState } = await import('./db.js');
+
+  startDashboardServer();
+
+  // Inject data provider
+  setGroupsProvider(() => {
+    return Object.values(registeredGroups).map(group => {
+      const tasks = getTasksForGroup(group.folder);
+      const activeTasks = tasks.filter(t => t.status === 'active').length;
+      const errorState = getErrorState(group.folder);
+
+      // Determine status
+      let status = 'idle';
+      if (errorState && errorState.consecutiveFailures > 0) status = 'error';
+      // TODO: Track 'thinking' state via container events
+
+      return {
+        id: group.folder,
+        name: group.name,
+        status,
+        messageCount: 0, // Performance optimization: fetch async or cache
+        activeTasks
+      };
+    });
+  });
 
   // Connect to Telegram
   await connectTelegram();

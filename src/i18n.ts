@@ -36,6 +36,15 @@ interface Translations {
     retrying: string;
     thanksFeedback: string;
     willImprove: string;
+
+    // UI Phase 1
+    processing: string;
+    downloadingMedia: string;
+    transcribing: string;
+    thinking: string;
+    retry: string;
+    feedback: string;
+    errorOccurred: string;
 }
 
 // ============================================================================
@@ -66,6 +75,14 @@ const translations: Record<Language, Translations> = {
         retrying: '🔄 重試中...',
         thanksFeedback: '👍 感謝反饋！',
         willImprove: '👎 收到，我會改進的！',
+
+        processing: '處理中',
+        downloadingMedia: '下載媒體中',
+        transcribing: '轉錄語音中',
+        thinking: '思考中',
+        retry: '重試',
+        feedback: '反饋',
+        errorOccurred: '發生錯誤，請稍後再試。',
     },
     'en': {
         rateLimited: '⏳ Too many requests, please try again later.',
@@ -90,6 +107,14 @@ const translations: Record<Language, Translations> = {
         retrying: '🔄 Retrying...',
         thanksFeedback: '👍 Thanks for the feedback!',
         willImprove: '👎 Got it, I\'ll improve!',
+
+        processing: 'Processing',
+        downloadingMedia: 'Downloading media',
+        transcribing: 'Transcribing audio',
+        thinking: 'Thinking',
+        retry: 'Retry',
+        feedback: 'Feedback',
+        errorOccurred: 'An error occurred. Please try again.',
     },
 };
 

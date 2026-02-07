@@ -15,9 +15,21 @@ function shouldLog(level: string): boolean {
   return levels[level] >= levels[LOG_LEVEL];
 }
 
+const SENSITIVE_KEYS = /key|token|secret|password|credential|auth/i;
+
+function maskSensitiveData(obj: unknown): unknown {
+  if (typeof obj !== 'object' || obj === null) return obj;
+  if (Array.isArray(obj)) return obj.map(maskSensitiveData);
+  const masked: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+    masked[k] = SENSITIVE_KEYS.test(k) && typeof v === 'string' ? '[REDACTED]' : v;
+  }
+  return masked;
+}
+
 function formatData(data: unknown): string {
   if (typeof data === 'string') return data;
-  if (typeof data === 'object') return JSON.stringify(data);
+  if (typeof data === 'object') return JSON.stringify(maskSensitiveData(data));
   return String(data);
 }
 

@@ -12,6 +12,8 @@ export function initDatabase(): void {
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 
   db = new Database(dbPath);
+  db.exec('PRAGMA journal_mode = WAL');
+  db.exec('PRAGMA busy_timeout = 5000');
   db.exec(`
     CREATE TABLE IF NOT EXISTS chats (
       jid TEXT PRIMARY KEY,
@@ -270,6 +272,18 @@ export function getMessagesSince(
     .all(chatJid, sinceTimestamp, `${botPrefix}:%`) as NewMessage[];
 }
 
+/**
+ * Get a specific message by ID and chat JID.
+ */
+export function getMessageById(
+  chatId: string,
+  msgId: string,
+): NewMessage | undefined {
+  return db
+    .prepare('SELECT * FROM messages WHERE chat_jid = ? AND id = ?')
+    .get(chatId, msgId) as NewMessage | undefined;
+}
+
 export function createTask(
   task: Omit<ScheduledTask, 'last_run' | 'last_result'>,
 ): void {
@@ -355,8 +369,11 @@ export function updateTask(
 
 export function deleteTask(id: string): void {
   // Delete child records first (FK constraint)
-  db.prepare('DELETE FROM task_run_logs WHERE task_id = ?').run(id);
-  db.prepare('DELETE FROM scheduled_tasks WHERE id = ?').run(id);
+  const deleteTx = db.transaction((taskId: string) => {
+    db.prepare('DELETE FROM task_run_logs WHERE task_id = ?').run(taskId);
+    db.prepare('DELETE FROM scheduled_tasks WHERE id = ?').run(taskId);
+  });
+  deleteTx(id);
 }
 
 export function getDueTasks(): ScheduledTask[] {
@@ -658,6 +675,12 @@ export function checkRateLimit(
 
   // Remove timestamps outside the window
   window.timestamps = window.timestamps.filter((ts) => ts > windowStart);
+
+  // Clean up inactive keys with no recent timestamps
+  if (window.timestamps.length === 0) {
+    rateLimitWindows.delete(key);
+    return { allowed: true, remaining: maxRequests, resetInMs: 0 };
+  }
 
   // Check if limit exceeded
   if (window.timestamps.length >= maxRequests) {

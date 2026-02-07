@@ -49,13 +49,23 @@ export function setHealthCheckDependencies(deps: {
 
 function getHealthStatus(): HealthStatus {
     const memUsage = process.memoryUsage();
+    const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+    const heapTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024);
+    const heapUsedPercent = memUsage.heapUsed / memUsage.heapTotal;
+
+    let status: 'healthy' | 'degraded' | 'unhealthy' = 'healthy';
+    if (heapUsedPercent > 0.95) {
+        status = 'unhealthy';
+    } else if (heapUsedPercent > 0.85) {
+        status = 'degraded';
+    }
 
     return {
-        status: 'healthy',
+        status,
         uptime: process.uptime(),
         memory: {
-            heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
-            heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+            heapUsed: heapUsedMB,
+            heapTotal: heapTotalMB,
             rss: Math.round(memUsage.rss / 1024 / 1024),
         },
         groups: getGroupCount(),

@@ -6,15 +6,17 @@ export function loadJson<T>(filePath: string, defaultValue: T): T {
     if (fs.existsSync(filePath)) {
       return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
     }
-  } catch {
-    // Return default on error
+  } catch (err) {
+    console.warn(`[utils] Failed to load JSON from ${filePath}:`, err instanceof Error ? err.message : err);
   }
   return defaultValue;
 }
 
 export function saveJson(filePath: string, data: unknown): void {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+  const tmpPath = filePath + '.tmp';
+  fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2));
+  fs.renameSync(tmpPath, filePath);
 }
 
 /**

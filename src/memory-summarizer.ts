@@ -50,20 +50,35 @@ export function needsSummarization(chatJid: string): boolean {
 async function generateSummary(
     messages: { sender_name: string; content: string; timestamp: string }[],
 ): Promise<string> {
+    // C7: Sanitize sender names to prevent control character injection
     const conversationText = messages
-        .map((m) => `[${m.sender_name}]: ${m.content}`)
+        .map((m) => {
+            const safeSenderName = m.sender_name.replace(/[\n\r\0\x08]/g, '').slice(0, 50);
+            return `[${safeSenderName}]: ${m.content}`;
+        })
         .join('\n');
+
+    // C7: Truncate prompt to prevent ARG_MAX issues (safe CLI arg limit ~100KB)
+    const MAX_PROMPT_LENGTH = 100000;
+    const truncatedConversation = conversationText.length > MAX_PROMPT_LENGTH
+        ? conversationText.slice(0, MAX_PROMPT_LENGTH) + '\n[...truncated...]'
+        : conversationText;
 
     const prompt = `${MEMORY.SUMMARY_PROMPT}
 
 ---
 Conversation:
-${conversationText}
+${truncatedConversation}
 ---
 
 Summary:`;
 
     return new Promise((resolve, reject) => {
+        // H9: Use settled flag to prevent double-resolve
+        let settled = false;
+        let stdout = '';
+        let stderr = '';
+
         const gemini = spawn('gemini', ['-p', prompt, '--output-format', 'text'], {
             env: {
                 ...process.env,
@@ -71,8 +86,13 @@ Summary:`;
             },
         });
 
-        let stdout = '';
-        let stderr = '';
+        // H9: Store timeout ID for proper cleanup
+        const timeoutId = setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            gemini.kill('SIGKILL');
+            reject(new Error('Summary generation timed out'));
+        }, 60000);
 
         gemini.stdout.on('data', (data) => {
             stdout += data.toString();
@@ -83,22 +103,22 @@ Summary:`;
         });
 
         gemini.on('close', (code) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timeoutId);
             if (code === 0) {
                 resolve(stdout.trim());
             } else {
-                reject(new Error(`Gemini CLI failed: ${stderr || stdout}`));
+                reject(new Error(`Gemini CLI failed (code ${code}): ${stderr || stdout}`));
             }
         });
 
         gemini.on('error', (err) => {
-            reject(err);
+            if (settled) return;
+            settled = true;
+            clearTimeout(timeoutId);
+            reject(new Error(`Gemini CLI spawn error: ${err.message}`));
         });
-
-        // Timeout after 60 seconds
-        setTimeout(() => {
-            gemini.kill('SIGKILL');
-            reject(new Error('Summary generation timed out'));
-        }, 60000);
     });
 }
 

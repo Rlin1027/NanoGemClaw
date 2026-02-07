@@ -31,15 +31,15 @@ export class NotionService {
     public async syncConversation(chatId: string, summary: string): Promise<boolean> {
         if (!this.isConfigured()) return false;
 
-        logger.info({ chatId }, 'Notion sync not fully implemented');
-        return true; // Simulate success
+        logger.warn({ chatId }, 'Notion sync not fully implemented');
+        return false;
     }
 
     public async createTask(title: string, status: string = 'To Do'): Promise<string | null> {
         if (!this.isConfigured()) return null;
 
-        logger.info({ title, status }, 'Notion task creation not fully implemented');
-        return 'fake-page-id';
+        logger.warn({ title, status }, 'Notion task creation not fully implemented');
+        return null;
     }
 }
 

@@ -143,10 +143,15 @@ async function runTask(
   updateTaskAfterRun(task.id, nextRun, resultSummary);
 }
 
-export function startSchedulerLoop(deps: SchedulerDependencies): void {
+export function startSchedulerLoop(deps: SchedulerDependencies): { stop: () => void } {
   logger.info('Scheduler loop started');
 
+  let stopped = false;
+  let currentTimeout: NodeJS.Timeout | null = null;
+
   const loop = async () => {
+    if (stopped) return;
+
     try {
       const dueTasks = getDueTasks();
       if (dueTasks.length > 0) {
@@ -154,6 +159,8 @@ export function startSchedulerLoop(deps: SchedulerDependencies): void {
       }
 
       for (const task of dueTasks) {
+        if (stopped) break;
+
         // Re-check task status in case it was paused/cancelled
         const currentTask = getTaskById(task.id);
         if (!currentTask || currentTask.status !== 'active') {
@@ -174,8 +181,17 @@ export function startSchedulerLoop(deps: SchedulerDependencies): void {
       logger.error({ err }, 'Error in scheduler loop');
     }
 
-    setTimeout(loop, SCHEDULER_POLL_INTERVAL);
+    if (!stopped) {
+      currentTimeout = setTimeout(loop, SCHEDULER_POLL_INTERVAL);
+    }
   };
 
   loop();
+
+  return {
+    stop: () => {
+      stopped = true;
+      if (currentTimeout) clearTimeout(currentTimeout);
+    },
+  };
 }

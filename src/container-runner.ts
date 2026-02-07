@@ -132,15 +132,24 @@ function buildVolumeMounts(
   group: RegisteredGroup,
   isMain: boolean,
 ): VolumeMount[] {
+  if (!/^[a-zA-Z0-9_-]+$/.test(group.folder)) {
+    throw new Error(`Invalid group folder name: ${group.folder}`);
+  }
   const mounts: VolumeMount[] = [];
   const homeDir = getHomeDir();
   const projectRoot = process.cwd();
 
   if (isMain) {
-    // Main gets the entire project root mounted
+    // Main gets the project root mounted read-only to prevent code tampering
     mounts.push({
       hostPath: projectRoot,
       containerPath: '/workspace/project',
+      readonly: true,  // Security: prevent code tampering
+    });
+    // Allow writing only to the main group's own directory
+    mounts.push({
+      hostPath: path.join(GROUPS_DIR, group.folder),
+      containerPath: '/workspace/project/groups/' + group.folder,
       readonly: false,
     });
 
@@ -171,14 +180,13 @@ function buildVolumeMounts(
   }
 
   // Global Gemini directory for OAuth credentials and session data
-  // Note: Must be writable because Apple Container doesn't support sub-directory
-  // overlay mounts, and Gemini CLI needs to write to ~/.gemini/tmp for sessions
+  // Read-only: per-group session dir (mounted below) handles writes to ~/.gemini/tmp
   const hostGeminiDir = path.join(homeDir, '.gemini');
   if (fs.existsSync(hostGeminiDir)) {
     mounts.push({
       hostPath: hostGeminiDir,
       containerPath: '/home/node/.gemini',
-      readonly: false,  // Gemini CLI needs write access for tmp/sessions
+      readonly: true,  // Security: prevent credential tampering
     });
   }
 
@@ -210,7 +218,7 @@ function buildVolumeMounts(
 
   // Environment file directory (workaround for Apple Container -i env var bug)
   // Only expose specific auth variables needed by Gemini CLI, not the entire .env
-  const envDir = path.join(DATA_DIR, 'env');
+  const envDir = path.join(DATA_DIR, 'env', group.folder);  // per-group isolation
   fs.mkdirSync(envDir, { recursive: true });
   const envFile = path.join(projectRoot, '.env');
   if (fs.existsSync(envFile)) {
@@ -345,10 +353,13 @@ async function runContainerAgentInternal(
   // Extract image (last argument)
   const image = baseArgs.pop();
 
+  // Sanitize system prompt - remove newlines and control characters that could affect env var parsing
+  const sanitizedPrompt = (systemPrompt || '').replace(/[\n\r\0]/g, ' ').trim();
+
   // Inject environment variables before the image argument
   baseArgs.push(
     '-e', `GEMINI_API_KEY=${process.env.GEMINI_API_KEY || ''}`,
-    '-e', `GEMINI_SYSTEM_PROMPT=${systemPrompt}`,
+    '-e', `GEMINI_SYSTEM_PROMPT=${sanitizedPrompt}`,
     '-e', `GEMINI_ENABLE_SEARCH=${input.enableWebSearch !== false ? 'true' : 'false'}`,
     '-e', `CONTAINER_TIMEOUT=${CONTAINER_TIMEOUT}`,
   );
@@ -599,6 +610,7 @@ async function runContainerAgentInternal(
     });
 
     container.on('error', (err) => {
+      if (timeoutResolved) return;  // Already handled by timeout
       clearTimeout(timeout);
       logger.error({ group: group.name, error: err }, 'Container spawn error');
       resolve({
