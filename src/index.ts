@@ -55,6 +55,8 @@ let lastTimestamp = '';
 let sessions: Session = {};
 let registeredGroups: Record<string, RegisteredGroup> = {};
 let lastAgentTimestamp: Record<string, string> = {};
+/** Track chatIds that received IPC messages during a container run */
+const ipcMessageSentChats = new Set<string>();
 
 // ============================================================================
 // State Management
@@ -625,10 +627,15 @@ async function processMessage(msg: TelegramBot.Message): Promise<void> {
   );
 
   await setTyping(chatId, true);
+  ipcMessageSentChats.delete(chatId); // Reset before agent run
   const response = await runAgent(group, prompt, chatId, mediaPath);
   await setTyping(chatId, false);
 
-  if (response) {
+  // Skip container output if agent already sent response via IPC
+  const ipcAlreadySent = ipcMessageSentChats.has(chatId);
+  ipcMessageSentChats.delete(chatId); // Clean up
+
+  if (response && !ipcAlreadySent) {
     const timestamp = new Date(msg.date * 1000).toISOString();
     lastAgentTimestamp[chatId] = timestamp;
 
@@ -646,6 +653,9 @@ async function processMessage(msg: TelegramBot.Message): Promise<void> {
     ];
 
     await sendMessageWithButtons(chatId, `${ASSISTANT_NAME}: ${response}`, buttons);
+  } else if (ipcAlreadySent && statusMsg) {
+    // IPC handled the response; just clean up status message
+    await bot.deleteMessage(parseInt(chatId), statusMsg.message_id).catch(() => { });
   } else if (statusMsg) {
     // If no response, update status message to error
     await bot.editMessageText(`❌ ${t().errorOccurred}`, {
@@ -1023,6 +1033,7 @@ function startIpcWatcher(): void {
                     data.chatJid,
                     `${ASSISTANT_NAME}: ${data.text}`,
                   );
+                  ipcMessageSentChats.add(data.chatJid);
                   logger.info(
                     { chatId: data.chatJid, sourceGroup },
                     'IPC message sent',
