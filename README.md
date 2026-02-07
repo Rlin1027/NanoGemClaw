@@ -29,7 +29,7 @@
 | **Cost** | Claude Max ($100/mo) | Free tier (60 req/min) |
 | **Media Support** | Text only | Photo, Voice, Audio, Video, Document |
 | **Web Browsing** | Search only | Full `agent-browser` (Playwright) |
-| **Advanced Tools** | - | STT, Image Gen, Webhooks |
+| **Advanced Tools** | - | STT, Image Gen, Webhooks, Web Dashboard |
 
 ---
 
@@ -43,6 +43,7 @@
 - **Persona Customization** - Define your bot's personality and behavior via `/admin persona`.
 - **i18n Support** - Full interface support for English, Chinese, Japanese, and Spanish.
 - **Container Isolation** - Every group runs in its own sandbox (Apple Container or Docker).
+- **Web Dashboard** - Real-time monitoring command center with log streaming, prompt editor, and configuration management. Accessible via LAN.
 
 ---
 
@@ -77,6 +78,18 @@
    cd container && ./build.sh && cd ..
    npm run dev
    ```
+
+---
+
+## 🔧 Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `TELEGRAM_BOT_TOKEN` | Yes | Bot token from @BotFather |
+| `GEMINI_API_KEY` | No | API key (if not using OAuth) |
+| `DASHBOARD_HOST` | No | Dashboard bind address (default: `127.0.0.1`, use `0.0.0.0` for LAN) |
+| `DASHBOARD_API_KEY` | No | API key to protect dashboard access |
+| `WEBHOOK_URL` | No | External webhook for error notifications (Slack/Discord) |
 
 ---
 
@@ -115,11 +128,47 @@ graph LR
     Main --> IPC[FS IPC]
     IPC --> Container[Gemini Agent]
     Container --> Browser[agent-browser]
+    Main --> Dashboard[Web Dashboard]
+    Dashboard --> WS[Socket.io]
 ```
 
 - **Host (Node.js)**: Handles Telegram API, STT conversion, and container lifecycle.
 - **Container (Alpine)**: Runs Gemini CLI. Accesses internet via `agent-browser`. Isolated from host.
 - **Persistence**: SQLite for turns/tasks; JSON for sessions/state.
+- **Dashboard (React)**: Real-time monitoring SPA with log streaming, prompt editing, and system configuration. Communicates via REST API and Socket.io.
+
+---
+
+## 🖥️ Web Dashboard
+
+NanoGemClaw includes a built-in web dashboard for real-time monitoring and management.
+
+### Access
+
+```bash
+# Local access (default)
+open http://localhost:3000
+
+# LAN access
+DASHBOARD_HOST=0.0.0.0 npm run dev
+```
+
+### Features
+
+| Module | Description |
+|--------|-------------|
+| **Overview** | Group status cards with real-time agent activity |
+| **Logs** | Live log streaming with level filtering and search |
+| **Memory Studio** | Edit system prompts (GEMINI.md) and view conversation summaries |
+| **Settings** | Toggle maintenance mode, debug logging, view secrets status |
+
+### Build for Production
+
+```bash
+npm run build:dashboard    # Build frontend
+npm run build              # Build backend
+npm start                  # Serves dashboard at :3000
+```
 
 ---
 

@@ -29,7 +29,7 @@
 | **费用** | Claude Max ($100/月) | 免费方案 (60 次/分钟) |
 | **多媒体支持** | 仅文字 | 图片、语音、音频、视频、文档 |
 | **网页浏览** | 仅搜索 | 完整 `agent-browser` (Playwright) |
-| **进阶工具** | - | STT (语音转文字), 图片生成, Webhooks |
+| **进阶工具** | - | STT, 图片生成, Webhooks, Web 监控面板 |
 
 ---
 
@@ -43,6 +43,7 @@
 - **人格定义 (Persona)** - 通过 `/admin persona` 定义机器人的个性和行为。
 - **多语言支持 (i18n)** - 界面完整支持繁中、简中、英文、日文及西班牙文。
 - **容器隔离** - 每个群组在各自的沙盒（Apple Container 或 Docker）中运行。
+- **Web 监控面板** - 实时监控指挥中心，内置 Log 流式传输、Prompt 编辑器及系统配置管理。支持局域网访问。
 
 ---
 
@@ -77,6 +78,18 @@
    cd container && ./build.sh && cd ..
    npm run dev
    ```
+
+---
+
+## 🔧 环境变量
+
+| 变量 | 必填 | 说明 |
+|------|------|------|
+| `TELEGRAM_BOT_TOKEN` | 是 | 从 @BotFather 获取的 Bot Token |
+| `GEMINI_API_KEY` | 否 | API 密钥（若未使用 OAuth） |
+| `DASHBOARD_HOST` | 否 | 面板绑定地址（默认：`127.0.0.1`，局域网使用 `0.0.0.0`） |
+| `DASHBOARD_API_KEY` | 否 | 保护面板访问的 API 密钥 |
+| `WEBHOOK_URL` | 否 | 外部错误通知 Webhook（Slack/Discord） |
 
 ---
 
@@ -115,11 +128,47 @@ graph LR
     Main --> IPC[FS IPC]
     IPC --> Container[Gemini Agent]
     Container --> Browser[agent-browser]
+    Main --> Dashboard[Web Dashboard]
+    Dashboard --> WS[Socket.io]
 ```
 
 - **宿主机 (Node.js)**：处理 Telegram API、STT 转换及容器生命周期。
 - **容器 (Alpine)**：运行 Gemini CLI。通过 `agent-browser` 访问网络。与宿主机隔离。
 - **持久化**：使用 SQLite 存储任务；JSON 存储 Session 与状态。
+- **监控面板 (React)**：实时监控 SPA，内置 Log 流式传输、Prompt 编辑及系统配置。通过 REST API 及 Socket.io 通信。
+
+---
+
+## 🖥️ Web 监控面板
+
+NanoGemClaw 内置实时 Web 监控面板，用于监控与管理系统。
+
+### 访问方式
+
+```bash
+# 本地访问（默认）
+open http://localhost:3000
+
+# 局域网访问
+DASHBOARD_HOST=0.0.0.0 npm run dev
+```
+
+### 功能模块
+
+| 模块 | 说明 |
+|------|------|
+| **总览** | 群组状态卡片，显示实时 Agent 活动 |
+| **日志** | 实时 Log 流式传输，支持级别筛选与搜索 |
+| **记忆工作室** | 编辑系统提示词 (GEMINI.md)，查看对话摘要 |
+| **设置** | 切换维护模式、Debug 日志、查看密钥状态 |
+
+### 生产环境构建
+
+```bash
+npm run build:dashboard    # 构建前端
+npm run build              # 构建后端
+npm start                  # 在 :3000 提供面板服务
+```
 
 ---
 
