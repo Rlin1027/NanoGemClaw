@@ -439,7 +439,7 @@ export function startDashboardServer() {
     if (fs.existsSync(dashboardDist)) {
         app.use(express.static(dashboardDist));
         // SPA fallback: serve index.html for all non-API routes
-        app.get('*', (_req, res) => {
+        app.get('{*path}', (_req, res) => {
             res.sendFile(path.join(dashboardDist, 'index.html'));
         });
         logger.info({ path: dashboardDist }, 'Serving dashboard static files');
