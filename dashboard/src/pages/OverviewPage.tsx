@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Loader2, Plus } from 'lucide-react';
+import { Search, Loader2, Plus, Eye, EyeOff } from 'lucide-react';
 import { StatusCard } from '../components/StatusCard';
 import { GroupDiscoveryModal } from '../components/GroupDiscoveryModal';
 import { GroupData } from '../hooks/useSocket';
@@ -19,13 +19,22 @@ export function OverviewPage({ groups, isConnected }: OverviewPageProps) {
         } catch { return []; }
     });
     const [showDiscovery, setShowDiscovery] = useState(false);
+    const [showHidden, setShowHidden] = useState(false);
 
     const filteredGroups = groups
         .filter(g => !hiddenGroups.includes(g.id))
         .filter(g => !filter || g.name.toLowerCase().includes(filter.toLowerCase()));
 
+    const hiddenGroupsList = groups.filter(g => hiddenGroups.includes(g.id));
+
     const hideGroup = (id: string) => {
         const updated = [...hiddenGroups, id];
+        setHiddenGroups(updated);
+        localStorage.setItem('hiddenGroups', JSON.stringify(updated));
+    };
+
+    const unhideGroup = (id: string) => {
+        const updated = hiddenGroups.filter(gid => gid !== id);
         setHiddenGroups(updated);
         localStorage.setItem('hiddenGroups', JSON.stringify(updated));
     };
@@ -51,6 +60,20 @@ export function OverviewPage({ groups, isConnected }: OverviewPageProps) {
                 >
                     <Plus size={16} /> Discover
                 </button>
+
+                {hiddenGroupsList.length > 0 && (
+                    <button
+                        onClick={() => setShowHidden(!showHidden)}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                            showHidden
+                                ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'
+                                : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-300'
+                        }`}
+                    >
+                        <EyeOff size={16} />
+                        {hiddenGroupsList.length} Hidden
+                    </button>
+                )}
 
                 {/* Connection Status Indicator */}
                 <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium ${isConnected ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
@@ -98,6 +121,35 @@ export function OverviewPage({ groups, isConnected }: OverviewPageProps) {
                         </div>
                         <span className="font-medium">Discover Group</span>
                     </button>
+                </div>
+            )}
+
+            {/* Hidden Groups Section */}
+            {showHidden && hiddenGroupsList.length > 0 && (
+                <div className="mt-8">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="h-px flex-1 bg-slate-800" />
+                        <span className="text-sm text-slate-500 font-medium">Hidden Groups</span>
+                        <div className="h-px flex-1 bg-slate-800" />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 opacity-60">
+                        {hiddenGroupsList.map(group => (
+                            <div key={group.id} className="relative">
+                                <StatusCard
+                                    {...group}
+                                    onOpenTerminal={() => navigate(`/logs?group=${group.id}`)}
+                                    onViewMemory={() => navigate(`/memory?group=${group.id}`)}
+                                />
+                                <button
+                                    onClick={() => unhideGroup(group.id)}
+                                    className="absolute top-3 right-3 p-1.5 rounded-lg bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 transition-colors"
+                                    title="Show group"
+                                >
+                                    <Eye size={16} />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             )}
 
