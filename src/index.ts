@@ -362,7 +362,7 @@ async function handleAdminCommand(
       }
 
       registeredGroups[targetId].requireTrigger = mode === 'on';
-      saveState();
+      saveJson(path.join(DATA_DIR, 'registered_groups.json'), registeredGroups);
       const status = mode === 'on' ? '需要 @trigger 前綴' : '回應所有訊息';
       return `✅ **${registeredGroups[targetId].name}** trigger mode: **${mode}** (${status})`;
     }
