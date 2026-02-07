@@ -684,6 +684,37 @@ async function runAgent(
     }
 
     if (output.status === 'error') {
+      // Auto-retry without session if resume failed
+      if (sessionId && output.error?.includes('No previous sessions found')) {
+        logger.warn({ group: group.name }, 'Session resume failed, retrying without session');
+        delete sessions[group.folder];
+        saveJson(path.join(DATA_DIR, 'sessions.json'), sessions);
+
+        const retryOutput = await runContainerAgent(group, {
+          prompt,
+          sessionId: undefined,
+          groupFolder: group.folder,
+          chatJid: chatId,
+          isMain,
+          systemPrompt: group.systemPrompt,
+          persona: group.persona,
+          enableWebSearch: group.enableWebSearch ?? true,
+          mediaPath: mediaPath ? `/workspace/group/media/${path.basename(mediaPath)}` : undefined,
+          memoryContext: memoryContext ?? undefined,
+        });
+
+        if (retryOutput.newSessionId) {
+          sessions[group.folder] = retryOutput.newSessionId;
+          saveJson(path.join(DATA_DIR, 'sessions.json'), sessions);
+        }
+
+        if (retryOutput.status === 'error') {
+          logger.error({ group: group.name, error: retryOutput.error }, 'Container agent error (retry)');
+          return null;
+        }
+        return retryOutput.result;
+      }
+
       logger.error(
         { group: group.name, error: output.error },
         'Container agent error',
