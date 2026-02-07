@@ -161,20 +161,20 @@ async function runGeminiAgent(input: ContainerInput): Promise<ContainerOutput> {
             log(`Session: ${sessionId}`);
           }
 
-          // Capture assistant response - accumulate all message chunks
+          // Reset response on tool_use — discard pre-tool "thinking" text
+          // (e.g. "I will check the logs...") so only the final reply is kept
+          if (event.type === 'tool_use') {
+            lastResponse = null;
+            log(`Tool: ${event.tool_name}`);
+          }
+
+          // Capture assistant response - accumulate chunks after last tool call
           if (event.type === 'message' && event.role === 'assistant' && event.content) {
-            // Gemini CLI may send multiple message events for a single response
-            // Append instead of overwrite to capture the full response
             if (lastResponse === null) {
               lastResponse = event.content;
             } else {
               lastResponse += event.content;
             }
-          }
-
-          // Log tool usage
-          if (event.type === 'tool_use') {
-            log(`Tool: ${event.tool_name}`);
           }
         } catch {
           // Not JSON, skip
