@@ -147,14 +147,10 @@ function buildVolumeMounts(
       containerPath: '/workspace/project',
       readonly: true,  // Security: prevent code tampering
     });
-    // Allow writing only to the main group's own directory
-    mounts.push({
-      hostPath: path.join(GROUPS_DIR, group.folder),
-      containerPath: '/workspace/project/groups/' + group.folder,
-      readonly: false,
-    });
 
-    // Main also gets its group folder as the working directory
+    // Main gets its group folder as the working directory (writable)
+    // Note: Apple Container doesn't allow duplicate host paths in mounts,
+    // so we only mount groups/main once at /workspace/group
     mounts.push({
       hostPath: path.join(GROUPS_DIR, group.folder),
       containerPath: '/workspace/group',
