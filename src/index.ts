@@ -286,6 +286,7 @@ const ADMIN_COMMANDS = {
   report: 'Generate daily usage report',
   language: 'Switch language (zh-TW/en)',
   persona: 'Set persona for a group (list/set)',
+  trigger: 'Toggle @trigger requirement for a group (on/off)',
 } as const;
 
 async function handleAdminCommand(
@@ -338,6 +339,32 @@ async function handleAdminCommand(
       return 'Usage: `/admin persona list` or `/admin persona set <group_folder> <persona_key>`';
     }
 
+    case 'trigger': {
+      const targetGroup = args[0];
+      const mode = args[1]?.toLowerCase();
+
+      if (!targetGroup || !mode || !['on', 'off'].includes(mode)) {
+        return 'Usage: `/admin trigger <group_folder> on|off`\n\n`on` = require @trigger prefix\n`off` = respond to all messages';
+      }
+
+      let targetId: string | undefined;
+      for (const [id, g] of Object.entries(registeredGroups)) {
+        if (g.folder === targetGroup || g.name === targetGroup) {
+          targetId = id;
+          break;
+        }
+      }
+
+      if (!targetId) {
+        return `❌ Group not found: ${targetGroup}`;
+      }
+
+      registeredGroups[targetId].requireTrigger = mode === 'on';
+      saveState();
+      const status = mode === 'on' ? '需要 @trigger 前綴' : '回應所有訊息';
+      return `✅ **${registeredGroups[targetId].name}** trigger mode: **${mode}** (${status})`;
+    }
+
     case 'stats': {
       const groupCount = Object.keys(registeredGroups).length;
       const uptime = process.uptime();
@@ -372,7 +399,8 @@ ${t().usageAnalytics}
         const isMain = g.folder === MAIN_GROUP_FOLDER;
         const searchStatus = g.enableWebSearch !== false ? '🔍' : '';
         const hasPrompt = g.systemPrompt ? '💬' : '';
-        return `${i + 1}. **${g.name}** ${isMain ? '(main)' : ''} ${searchStatus}${hasPrompt}
+        const triggerStatus = isMain || g.requireTrigger === false ? '📢' : '';
+        return `${i + 1}. **${g.name}** ${isMain ? '(main)' : ''} ${searchStatus}${hasPrompt}${triggerStatus}
    📁 ${g.folder} | 🎯 ${g.trigger}`;
       }).join('\n');
 
@@ -380,7 +408,7 @@ ${t().usageAnalytics}
 
 ${groupList}
 
-Legend: 🔍=Search 💬=Custom Prompt`;
+Legend: 🔍=Search 💬=Custom Prompt 📢=All Messages`;
     }
 
     case 'tasks': {
@@ -495,8 +523,9 @@ async function processMessage(msg: TelegramBot.Message): Promise<void> {
     return;
   }
 
-  // Main group responds to all messages; other groups require trigger prefix
-  if (!isMainGroup && !TRIGGER_PATTERN.test(content)) return;
+  // Check if trigger prefix is required (main group always responds; others check requireTrigger setting)
+  const needsTrigger = !isMainGroup && (group.requireTrigger !== false);
+  if (needsTrigger && !TRIGGER_PATTERN.test(content)) return;
 
   // Rate limiting check
   const { checkRateLimit } = await import('./db.js');

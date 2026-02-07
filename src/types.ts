@@ -45,6 +45,8 @@ export interface RegisteredGroup {
   persona?: string;
   /** Enable Google Search grounding for up-to-date information (default: true) */
   enableWebSearch?: boolean;
+  /** Require @trigger prefix to respond (default: true for non-main groups) */
+  requireTrigger?: boolean;
 }
 
 export interface Session {
