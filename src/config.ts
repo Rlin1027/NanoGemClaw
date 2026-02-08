@@ -3,20 +3,35 @@ import path from 'path';
 export const ASSISTANT_NAME = process.env.ASSISTANT_NAME || 'Andy';
 export const POLL_INTERVAL = 2000;
 export const SCHEDULER_POLL_INTERVAL = 60000;
-export const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3-flash-preview';
+export const GEMINI_MODEL =
+  process.env.GEMINI_MODEL || 'gemini-3-flash-preview';
 
 // Telegram Bot Configuration
 export const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 
 // Validate required environment variables at import time
 if (!TELEGRAM_BOT_TOKEN) {
-  console.error('╔══════════════════════════════════════════════════════════════╗');
-  console.error('║  ERROR: TELEGRAM_BOT_TOKEN is required                       ║');
-  console.error('╟──────────────────────────────────────────────────────────────╢');
-  console.error('║  1. Get a token from @BotFather on Telegram                  ║');
-  console.error('║  2. Create .env: echo "TELEGRAM_BOT_TOKEN=xxx" > .env        ║');
-  console.error('║  3. Run: npm run setup:telegram                              ║');
-  console.error('╚══════════════════════════════════════════════════════════════╝');
+  console.error(
+    '╔══════════════════════════════════════════════════════════════╗',
+  );
+  console.error(
+    '║  ERROR: TELEGRAM_BOT_TOKEN is required                       ║',
+  );
+  console.error(
+    '╟──────────────────────────────────────────────────────────────╢',
+  );
+  console.error(
+    '║  1. Get a token from @BotFather on Telegram                  ║',
+  );
+  console.error(
+    '║  2. Create .env: echo "TELEGRAM_BOT_TOKEN=xxx" > .env        ║',
+  );
+  console.error(
+    '║  3. Run: npm run setup:telegram                              ║',
+  );
+  console.error(
+    '╚══════════════════════════════════════════════════════════════╝',
+  );
   process.exit(1);
 }
 
@@ -43,8 +58,14 @@ function safeParseInt(value: string | undefined, defaultValue: number): number {
 
 export const CONTAINER_IMAGE =
   process.env.CONTAINER_IMAGE || 'nanogemclaw-agent:latest';
-export const CONTAINER_TIMEOUT = safeParseInt(process.env.CONTAINER_TIMEOUT, 300000);
-export const CONTAINER_MAX_OUTPUT_SIZE = safeParseInt(process.env.CONTAINER_MAX_OUTPUT_SIZE, 10485760); // 10MB default
+export const CONTAINER_TIMEOUT = safeParseInt(
+  process.env.CONTAINER_TIMEOUT,
+  300000,
+);
+export const CONTAINER_MAX_OUTPUT_SIZE = safeParseInt(
+  process.env.CONTAINER_MAX_OUTPUT_SIZE,
+  10485760,
+); // 10MB default
 export const IPC_POLL_INTERVAL = 1000;
 
 /**

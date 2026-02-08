@@ -69,7 +69,10 @@ vi.mock('fs', () => ({
 }));
 
 import type { RegisteredGroup, ScheduledTask } from '../types.js';
-import { startSchedulerLoop, type SchedulerDependencies } from '../task-scheduler.js';
+import {
+  startSchedulerLoop,
+  type SchedulerDependencies,
+} from '../task-scheduler.js';
 
 describe('task-scheduler', () => {
   let mockDeps: SchedulerDependencies;
@@ -80,7 +83,7 @@ describe('task-scheduler', () => {
     mockDeps = {
       sendMessage: vi.fn(),
       registeredGroups: vi.fn().mockReturnValue({
-        'group1': {
+        group1: {
           name: 'Test Group',
           jid: 'group1@g.us',
           folder: 'test-group',
@@ -89,7 +92,7 @@ describe('task-scheduler', () => {
           systemPrompt: 'Test prompt',
           enableWebSearch: true,
         } as RegisteredGroup,
-        'main': {
+        main: {
           name: 'Main Group',
           jid: 'main@g.us',
           folder: 'main',
@@ -101,7 +104,7 @@ describe('task-scheduler', () => {
       }),
       getSessions: vi.fn().mockReturnValue({
         'test-group': 'session-123',
-        'main': 'session-main',
+        main: 'session-main',
       }),
     };
 
@@ -153,7 +156,7 @@ describe('task-scheduler', () => {
       expect(mockIsMaintenanceMode).toHaveBeenCalled();
       expect(mockGetDueTasks).not.toHaveBeenCalled();
       expect(mockLogger.debug).toHaveBeenCalledWith(
-        'Scheduler skipping: maintenance mode active'
+        'Scheduler skipping: maintenance mode active',
       );
 
       scheduler.stop();
@@ -202,7 +205,7 @@ describe('task-scheduler', () => {
       expect(mockRunContainerAgent).not.toHaveBeenCalled();
       expect(mockLogger.info).not.toHaveBeenCalledWith(
         expect.objectContaining({ count: expect.any(Number) }),
-        'Found due tasks'
+        'Found due tasks',
       );
 
       scheduler.stop();
@@ -234,11 +237,11 @@ describe('task-scheduler', () => {
 
       expect(mockLogger.info).toHaveBeenCalledWith(
         { count: 1 },
-        'Found due tasks'
+        'Found due tasks',
       );
       expect(mockMkdirSync).toHaveBeenCalledWith(
         '/tmp/test-groups/test-group',
-        { recursive: true }
+        { recursive: true },
       );
       expect(mockRunContainerAgent).toHaveBeenCalled();
 
@@ -270,14 +273,14 @@ describe('task-scheduler', () => {
 
       expect(mockLogger.error).toHaveBeenCalledWith(
         { taskId: 'task-1', groupFolder: 'nonexistent-group' },
-        'Group not found for task'
+        'Group not found for task',
       );
       expect(mockLogTaskRun).toHaveBeenCalledWith(
         expect.objectContaining({
           task_id: 'task-1',
           status: 'error',
           error: 'Group not found: nonexistent-group',
-        })
+        }),
       );
       expect(mockRunContainerAgent).not.toHaveBeenCalled();
 
@@ -365,7 +368,7 @@ describe('task-scheduler', () => {
 
       mockGetDueTasks.mockReturnValue([task1, task2]);
       mockGetTaskById.mockImplementation((id) =>
-        id === 'task-1' ? task1 : task2
+        id === 'task-1' ? task1 : task2,
       );
       mockGetAllTasks.mockReturnValue([task1, task2]);
 
@@ -384,7 +387,7 @@ describe('task-scheduler', () => {
           taskId: 'task-1',
           error: 'Task 1 failed',
         }),
-        'Task failed'
+        'Task failed',
       );
 
       scheduler.stop();
@@ -417,7 +420,7 @@ describe('task-scheduler', () => {
       expect(mockUpdateTaskAfterRun).toHaveBeenCalledWith(
         'task-1',
         expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/),
-        expect.any(String)
+        expect.any(String),
       );
 
       const nextRun = mockUpdateTaskAfterRun.mock.calls[0][1];
@@ -453,7 +456,7 @@ describe('task-scheduler', () => {
       expect(mockUpdateTaskAfterRun).toHaveBeenCalledWith(
         'task-1',
         expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/),
-        expect.any(String)
+        expect.any(String),
       );
 
       const nextRun = mockUpdateTaskAfterRun.mock.calls[0][1];
@@ -489,7 +492,7 @@ describe('task-scheduler', () => {
       expect(mockUpdateTaskAfterRun).toHaveBeenCalledWith(
         'task-1',
         null,
-        expect.any(String)
+        expect.any(String),
       );
 
       scheduler.stop();
@@ -528,7 +531,7 @@ describe('task-scheduler', () => {
           task_id: 'task-1',
           status: 'error',
           error: 'Container execution failed',
-        })
+        }),
       );
 
       scheduler.stop();
@@ -562,7 +565,7 @@ describe('task-scheduler', () => {
         expect.anything(),
         expect.objectContaining({
           sessionId: 'session-123',
-        })
+        }),
       );
 
       scheduler.stop();
@@ -596,7 +599,7 @@ describe('task-scheduler', () => {
         expect.anything(),
         expect.objectContaining({
           sessionId: undefined,
-        })
+        }),
       );
 
       scheduler.stop();
@@ -634,13 +637,15 @@ describe('task-scheduler', () => {
             id: 'task-1',
             groupFolder: 'test-group',
             prompt: 'Test task',
-          })
-        ])
+          }),
+        ]),
       );
 
       // Verify snapshot was written before container agent runs
-      const snapshotCallOrder = mockWriteTasksSnapshot.mock.invocationCallOrder[0];
-      const containerCallOrder = mockRunContainerAgent.mock.invocationCallOrder[0];
+      const snapshotCallOrder =
+        mockWriteTasksSnapshot.mock.invocationCallOrder[0];
+      const containerCallOrder =
+        mockRunContainerAgent.mock.invocationCallOrder[0];
       expect(snapshotCallOrder).toBeLessThan(containerCallOrder);
 
       scheduler.stop();
@@ -673,7 +678,7 @@ describe('task-scheduler', () => {
       expect(mockWriteTasksSnapshot).toHaveBeenCalledWith(
         'main',
         true, // isMain should be true
-        expect.any(Array)
+        expect.any(Array),
       );
 
       scheduler.stop();

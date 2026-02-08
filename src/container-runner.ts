@@ -32,7 +32,7 @@ const OUTPUT_END_MARKER = '---NANOCLAW_OUTPUT_END---';
  * Manages per-group locks to prevent concurrent container execution.
  * Ensures only one container runs per group at a time, whether triggered by
  * user messages, scheduled tasks, or IPC commands.
- * 
+ *
  * Memory is automatically cleaned up when a group's queue becomes empty.
  */
 class GroupLockManager {
@@ -57,7 +57,10 @@ class GroupLockManager {
     });
 
     // Update the lock to include this task
-    this.locks.set(groupFolder, currentLock.then(() => taskPromise));
+    this.locks.set(
+      groupFolder,
+      currentLock.then(() => taskPromise),
+    );
 
     // Wait for our turn
     await currentLock;
@@ -145,7 +148,7 @@ function buildVolumeMounts(
     mounts.push({
       hostPath: projectRoot,
       containerPath: '/workspace/project',
-      readonly: true,  // Security: prevent code tampering
+      readonly: true, // Security: prevent code tampering
     });
 
     // Main gets its group folder as the working directory (writable)
@@ -217,7 +220,7 @@ function buildVolumeMounts(
 
   // Environment file directory (workaround for Apple Container -i env var bug)
   // Only expose specific auth variables needed by Gemini CLI, not the entire .env
-  const envDir = path.join(DATA_DIR, 'env', group.folder);  // per-group isolation
+  const envDir = path.join(DATA_DIR, 'env', group.folder); // per-group isolation
   fs.mkdirSync(envDir, { recursive: true });
   const envFile = path.join(projectRoot, '.env');
   if (fs.existsSync(envFile)) {
@@ -284,13 +287,19 @@ export async function runContainerAgent(
   input: ContainerInput,
 ): Promise<ContainerOutput> {
   logger.debug(
-    { group: group.name, hasPending: groupLockManager.hasPending(group.folder) },
+    {
+      group: group.name,
+      hasPending: groupLockManager.hasPending(group.folder),
+    },
     'Acquiring group lock for container execution',
   );
 
   return groupLockManager.withLock(group.folder, async () => {
     // Notify dashboard: agent is thinking
-    emitDashboardEvent('agent:status', { groupFolder: group.folder, status: 'thinking' });
+    emitDashboardEvent('agent:status', {
+      groupFolder: group.folder,
+      status: 'thinking',
+    });
 
     const startTime = Date.now();
     const result = await runContainerAgentInternal(group, input);
@@ -308,15 +317,25 @@ export async function runContainerAgent(
 
       // Track errors/success
       if (result.status === 'error') {
-        const errorState = recordError(input.groupFolder, result.error || 'Unknown error');
+        const errorState = recordError(
+          input.groupFolder,
+          result.error || 'Unknown error',
+        );
 
         // Send webhook if new error or threshold reached
-        if (errorState.consecutiveFailures === 1 || errorState.consecutiveFailures % 3 === 0) {
+        if (
+          errorState.consecutiveFailures === 1 ||
+          errorState.consecutiveFailures % 3 === 0
+        ) {
           const { sendWebhookNotification } = await import('./webhook.js');
           await sendWebhookNotification(
             'error',
             `Container error in group ${group.name}`,
-            { group: input.groupFolder, error: result.error, failures: errorState.consecutiveFailures }
+            {
+              group: input.groupFolder,
+              error: result.error,
+              failures: errorState.consecutiveFailures,
+            },
           );
         }
       } else {
@@ -354,7 +373,10 @@ async function runContainerAgentInternal(
 
   // Resolve system prompt with persona
   const { getEffectiveSystemPrompt } = await import('./personas.js');
-  const systemPrompt = getEffectiveSystemPrompt(input.systemPrompt, input.persona);
+  const systemPrompt = getEffectiveSystemPrompt(
+    input.systemPrompt,
+    input.persona,
+  );
 
   // Build base args including mounts
   const baseArgs = buildContainerArgs(mounts);
@@ -367,11 +389,16 @@ async function runContainerAgentInternal(
 
   // Inject environment variables before the image argument
   baseArgs.push(
-    '-e', `GEMINI_API_KEY=${process.env.GEMINI_API_KEY || ''}`,
-    '-e', `GEMINI_SYSTEM_PROMPT=${sanitizedPrompt}`,
-    '-e', `GEMINI_ENABLE_SEARCH=${input.enableWebSearch !== false ? 'true' : 'false'}`,
-    '-e', `GEMINI_MODEL=${process.env.GEMINI_MODEL || 'gemini-3-flash-preview'}`,
-    '-e', `CONTAINER_TIMEOUT=${CONTAINER_TIMEOUT}`,
+    '-e',
+    `GEMINI_API_KEY=${process.env.GEMINI_API_KEY || ''}`,
+    '-e',
+    `GEMINI_SYSTEM_PROMPT=${sanitizedPrompt}`,
+    '-e',
+    `GEMINI_ENABLE_SEARCH=${input.enableWebSearch !== false ? 'true' : 'false'}`,
+    '-e',
+    `GEMINI_MODEL=${process.env.GEMINI_MODEL || 'gemini-3-flash-preview'}`,
+    '-e',
+    `CONTAINER_TIMEOUT=${CONTAINER_TIMEOUT}`,
   );
 
   // Re-append image
@@ -457,13 +484,19 @@ async function runContainerAgentInternal(
     let timeoutResolved = false;
 
     const timeout = setTimeout(() => {
-      logger.warn({ group: group.name }, 'Container timeout, attempting graceful shutdown');
+      logger.warn(
+        { group: group.name },
+        'Container timeout, attempting graceful shutdown',
+      );
       container.kill('SIGTERM');
 
       // If still running after grace period, force kill
       setTimeout(() => {
         if (!container.killed && !timeoutResolved) {
-          logger.error({ group: group.name }, 'Container did not exit gracefully, forcing SIGKILL');
+          logger.error(
+            { group: group.name },
+            'Container did not exit gracefully, forcing SIGKILL',
+          );
           container.kill('SIGKILL');
         }
       }, CONTAINER.GRACEFUL_SHUTDOWN_DELAY_MS);
@@ -482,7 +515,10 @@ async function runContainerAgentInternal(
 
       // Skip if timeout already resolved this promise
       if (timeoutResolved) {
-        logger.debug({ group: group.name, code }, 'Container closed after timeout (ignored)');
+        logger.debug(
+          { group: group.name, code },
+          'Container closed after timeout (ignored)',
+        );
         return;
       }
 
@@ -620,7 +656,7 @@ async function runContainerAgentInternal(
     });
 
     container.on('error', (err) => {
-      if (timeoutResolved) return;  // Already handled by timeout
+      if (timeoutResolved) return; // Already handled by timeout
       clearTimeout(timeout);
       logger.error({ group: group.name, error: err }, 'Container spawn error');
       resolve({

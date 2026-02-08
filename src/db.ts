@@ -606,7 +606,8 @@ export function upsertMemorySummary(
   charsArchived: number,
 ): void {
   const now = new Date().toISOString();
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO memory_summaries (group_folder, summary, messages_archived, chars_archived, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT(group_folder) DO UPDATE SET
@@ -614,7 +615,8 @@ export function upsertMemorySummary(
       messages_archived = memory_summaries.messages_archived + excluded.messages_archived,
       chars_archived = memory_summaries.chars_archived + excluded.chars_archived,
       updated_at = excluded.updated_at
-  `).run(groupFolder, summary, messagesArchived, charsArchived, now, now);
+  `,
+  ).run(groupFolder, summary, messagesArchived, charsArchived, now, now);
 }
 
 export interface GroupMessageStats {
@@ -625,9 +627,12 @@ export interface GroupMessageStats {
   newest_timestamp: string;
 }
 
-export function getGroupMessageStats(chatJid: string): GroupMessageStats | null {
+export function getGroupMessageStats(
+  chatJid: string,
+): GroupMessageStats | null {
   return db
-    .prepare(`
+    .prepare(
+      `
       SELECT 
         chat_jid,
         COUNT(*) as message_count,
@@ -637,7 +642,8 @@ export function getGroupMessageStats(chatJid: string): GroupMessageStats | null 
       FROM messages
       WHERE chat_jid = ?
       GROUP BY chat_jid
-    `)
+    `,
+    )
     .get(chatJid) as GroupMessageStats | null;
 }
 
@@ -646,17 +652,26 @@ export function getMessagesForSummary(
   limit: number = 100,
 ): { sender_name: string; content: string; timestamp: string }[] {
   return db
-    .prepare(`
+    .prepare(
+      `
       SELECT sender_name, content, timestamp
       FROM messages
       WHERE chat_jid = ?
       ORDER BY timestamp ASC
       LIMIT ?
-    `)
-    .all(chatJid, limit) as { sender_name: string; content: string; timestamp: string }[];
+    `,
+    )
+    .all(chatJid, limit) as {
+    sender_name: string;
+    content: string;
+    timestamp: string;
+  }[];
 }
 
-export function deleteOldMessages(chatJid: string, beforeTimestamp: string): number {
+export function deleteOldMessages(
+  chatJid: string,
+  beforeTimestamp: string,
+): number {
   const result = db
     .prepare('DELETE FROM messages WHERE chat_jid = ? AND timestamp < ?')
     .run(chatJid, beforeTimestamp);
@@ -791,9 +806,10 @@ export function getRateLimitStatus(
   const activeTimestamps = window.timestamps.filter((ts) => ts > windowStart);
   const count = activeTimestamps.length;
 
-  const resetInMs = activeTimestamps.length > 0
-    ? activeTimestamps[0] + windowMs - now
-    : windowMs;
+  const resetInMs =
+    activeTimestamps.length > 0
+      ? activeTimestamps[0] + windowMs - now
+      : windowMs;
 
   return {
     count,

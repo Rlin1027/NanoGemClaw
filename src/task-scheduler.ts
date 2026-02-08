@@ -151,7 +151,9 @@ async function runTask(
   updateTaskAfterRun(task.id, nextRun, resultSummary);
 }
 
-export function startSchedulerLoop(deps: SchedulerDependencies): { stop: () => void } {
+export function startSchedulerLoop(deps: SchedulerDependencies): {
+  stop: () => void;
+} {
   logger.info('Scheduler loop started');
 
   let stopped = false;
@@ -189,7 +191,10 @@ export function startSchedulerLoop(deps: SchedulerDependencies): { stop: () => v
           await runTask(currentTask, deps);
         } catch (taskErr) {
           logger.error(
-            { taskId: task.id, err: taskErr instanceof Error ? taskErr.message : String(taskErr) },
+            {
+              taskId: task.id,
+              err: taskErr instanceof Error ? taskErr.message : String(taskErr),
+            },
             'Task execution failed (isolated)',
           );
         }

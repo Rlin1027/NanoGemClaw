@@ -38,7 +38,8 @@ function maskSensitiveData(obj: unknown): unknown {
   if (Array.isArray(obj)) return obj.map(maskSensitiveData);
   const masked: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
-    masked[k] = SENSITIVE_KEYS.test(k) && typeof v === 'string' ? '[REDACTED]' : v;
+    masked[k] =
+      SENSITIVE_KEYS.test(k) && typeof v === 'string' ? '[REDACTED]' : v;
   }
   return masked;
 }

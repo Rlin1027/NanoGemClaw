@@ -20,5 +20,11 @@ logs/
 .idea/
 .vscode/
 
+# Test coverage
+coverage/
+
+# OMC state
+.omc/
+
 agents-sdk-docs
 docs/learnfromproject.md

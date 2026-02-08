@@ -7,7 +7,10 @@ export function loadJson<T>(filePath: string, defaultValue: T): T {
       return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
     }
   } catch (err) {
-    console.warn(`[utils] Failed to load JSON from ${filePath}:`, err instanceof Error ? err.message : err);
+    console.warn(
+      `[utils] Failed to load JSON from ${filePath}:`,
+      err instanceof Error ? err.message : err,
+    );
   }
   return defaultValue;
 }
@@ -23,7 +26,11 @@ export function saveJson(filePath: string, data: unknown): void {
  * Format an error for structured logging.
  * Extracts message, stack, and name from Error objects.
  */
-export function formatError(err: unknown): { message: string; stack?: string; name?: string } {
+export function formatError(err: unknown): {
+  message: string;
+  stack?: string;
+  name?: string;
+} {
   if (err instanceof Error) {
     return {
       message: err.message,

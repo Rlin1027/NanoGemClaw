@@ -245,7 +245,9 @@ describe('config.ts', () => {
     it('should be an array of strings', () => {
       expect(Array.isArray(ALLOWED_CONTAINER_ENV_KEYS)).toBe(true);
       expect(ALLOWED_CONTAINER_ENV_KEYS.length).toBeGreaterThan(0);
-      expect(ALLOWED_CONTAINER_ENV_KEYS.every((k) => typeof k === 'string')).toBe(true);
+      expect(
+        ALLOWED_CONTAINER_ENV_KEYS.every((k) => typeof k === 'string'),
+      ).toBe(true);
     });
 
     it('should include critical environment variables', () => {

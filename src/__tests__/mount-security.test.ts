@@ -66,14 +66,14 @@ describe('mount-security', () => {
       const result = loadMountAllowlist();
 
       expect(result).toBeNull();
-      expect(mockFs.existsSync).toHaveBeenCalledWith('/test/config/mount-allowlist.json');
+      expect(mockFs.existsSync).toHaveBeenCalledWith(
+        '/test/config/mount-allowlist.json',
+      );
     });
 
     it('should load and parse valid allowlist file', () => {
       const validAllowlist: MountAllowlist = {
-        allowedRoots: [
-          { path: '~/projects', allowReadWrite: true },
-        ],
+        allowedRoots: [{ path: '~/projects', allowReadWrite: true }],
         blockedPatterns: ['secret'],
         nonMainReadOnly: true,
       };

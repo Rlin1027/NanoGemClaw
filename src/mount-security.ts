@@ -61,7 +61,7 @@ export function loadMountAllowlist(): MountAllowlist | null {
       logger.warn(
         { path: MOUNT_ALLOWLIST_PATH },
         'Mount allowlist not found - additional mounts will be BLOCKED. ' +
-        'Create the file to enable additional mounts.',
+          'Create the file to enable additional mounts.',
       );
       return null;
     }
