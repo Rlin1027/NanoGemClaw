@@ -412,6 +412,7 @@ async function main(): Promise<void> {
   try {
     const output = await runGeminiAgent(input);
     writeOutput(output);
+    process.exit(0);
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     log(`Agent error: ${errorMessage}`);
