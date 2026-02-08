@@ -41,9 +41,16 @@ async function runTask(
   );
 
   const groups = deps.registeredGroups();
-  const group = Object.values(groups).find(
-    (g) => g.folder === task.group_folder,
-  );
+  let chatJid = task.chat_jid;
+  const group = (() => {
+    for (const [key, g] of Object.entries(groups)) {
+      if (g.folder === task.group_folder) {
+        if (!chatJid) chatJid = key;
+        return g;
+      }
+    }
+    return undefined;
+  })();
 
   if (!group) {
     logger.error(
@@ -91,7 +98,7 @@ async function runTask(
       prompt: task.prompt,
       sessionId,
       groupFolder: task.group_folder,
-      chatJid: task.chat_jid,
+      chatJid: chatJid || task.chat_jid,
       isMain,
       isScheduledTask: true,
       systemPrompt: group.systemPrompt,
