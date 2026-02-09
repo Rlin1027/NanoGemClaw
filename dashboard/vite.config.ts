@@ -10,6 +10,18 @@ export default defineConfig({
             "@": path.resolve(__dirname, "./src"),
         },
     },
+    build: {
+        rollupOptions: {
+            output: {
+                manualChunks: {
+                    'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+                    'vendor-monaco': ['@monaco-editor/react'],
+                    'vendor-charts': ['recharts'],
+                    'vendor-terminal': ['xterm', 'xterm-addon-fit', 'xterm-addon-web-links'],
+                },
+            },
+        },
+    },
     server: {
         proxy: {
             '/api': 'http://localhost:3000',
