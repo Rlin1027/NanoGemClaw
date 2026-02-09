@@ -23,8 +23,8 @@ export function PersonaSelector({ value, onChange, disabled }: PersonaSelectorPr
     const [deleting, setDeleting] = useState<string | null>(null);
 
     const fetchPersonas = () => {
-        apiFetch<{ data: Record<string, Persona> }>('/api/personas')
-            .then(res => setPersonas(res.data))
+        apiFetch<Record<string, Persona>>('/api/personas')
+            .then(res => setPersonas(res))
             .catch(() => {});
     };
 

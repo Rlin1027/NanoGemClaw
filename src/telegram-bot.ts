@@ -117,8 +117,8 @@ export async function connectTelegram(): Promise<void> {
         // Check if this is a media message
         const isMedia = !!(msg.photo || msg.voice || msg.audio || msg.video || msg.document);
 
-        // Get debounce setting (default 2000ms, per-group config via consolidateMs)
-        const debounceMs = (group as any)?.consolidateMs ?? 2000;
+        // Get debounce setting (default 500ms, per-group config via consolidateMs)
+        const debounceMs = (group as any)?.consolidateMs ?? 500;
 
         // Try to buffer the message
         const buffered = messageConsolidator.addMessage(chatId, content, {

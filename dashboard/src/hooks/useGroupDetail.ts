@@ -35,8 +35,8 @@ export function useGroupDetail(folder: string | undefined) {
         setLoading(true);
         setError(null);
         try {
-            const result = await apiFetch<{ data: GroupDetail }>(`/api/groups/${folder}/detail`);
-            setGroup(result.data);
+            const result = await apiFetch<GroupDetail>(`/api/groups/${folder}/detail`);
+            setGroup(result);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Unknown error');
         } finally {
