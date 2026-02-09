@@ -29,33 +29,41 @@
 | **Cost** | Claude Max ($100/mo) | Free tier (60 req/min) |
 | **Media Support** | Text only | Photo, Voice, Audio, Video, Document |
 | **Web Browsing** | Search only | Full `agent-browser` (Playwright) |
-| **Advanced Tools** | - | STT, Image Gen, Webhooks, Web Dashboard |
+| **Knowledge Base** | - | FTS5 full-text search per group |
+| **Scheduling** | - | Natural language + cron, iCal calendar |
+| **Dashboard** | - | 9-module real-time management SPA |
+| **Advanced Tools** | - | STT, Image Gen, Personas, Skills, Multi-model |
 
 ---
 
-## 🚀 Key Features
+## Key Features
 
 - **Multi-modal I/O** - Send photos, voice messages, videos, or documents. Gemini processes them natively.
-- **Speech-to-Text (STT)** - Voice messages are automatically transcribed and analyzed.
-- **Image Generation** - Ask the agent to create images using **Imagen 3**.
+- **Speech-to-Text (STT)** - Voice messages are automatically transcribed (Gemini multimodal or Google Cloud Speech).
+- **Image Generation** - Create images using **Imagen 3** via natural language.
 - **Browser Automation** - Agents use `agent-browser` for complex web tasks (interaction, screenshots).
-- **Multi-turn Task Tracking** - Track and manage complex, multi-step background tasks.
-- **Persona Customization** - Define your bot's personality and behavior via `/admin persona`.
-- **i18n Support** - Full interface support for English, Chinese, Japanese, and Spanish.
+- **Knowledge Base** - Per-group document store with SQLite FTS5 full-text search. Upload and query documents from the dashboard.
+- **Scheduled Tasks** - Natural language scheduling ("every day at 8am", "每天早上8點") with cron, interval, and one-time support.
+- **Calendar Integration** - Subscribe to iCal feeds (Google Calendar, Apple Calendar, etc.) and query upcoming events.
+- **Skills System** - Assign Markdown-based skill files to groups. Agents gain specialized capabilities (e.g. `agent-browser`, `long-memory`).
+- **Personas** - Pre-defined personalities (coder, translator, writer, analyst) or create custom personas per group.
+- **Multi-model Support** - Choose Gemini model per group (`gemini-3-flash-preview`, `gemini-3-pro-preview`, etc.).
+- **Multi-turn Task Tracking** - Track and manage complex, multi-step background tasks with auto follow-up.
 - **Container Isolation** - Every group runs in its own sandbox (Apple Container or Docker).
-- **Web Dashboard** - Real-time monitoring command center with log streaming, prompt editor, and configuration management. Accessible via LAN.
+- **Web Dashboard** - 9-module real-time command center with log streaming, memory editor, analytics, knowledge management, and more.
+- **i18n Support** - Full interface support for English, Chinese, Japanese, and Spanish.
 
 ---
 
-## 🛠️ Installation
+## Installation
 
 ### Prerequisites
 
 | Tool | Purpose | Installation |
 |------|---------|--------------|
-| **Node.js 20+** | Logic engine | [nodejs.org](https://nodejs.org) |
-| **Gemini CLI** | AI Agent Core | `npm install -g @google/gemini-cli` |
-| **FFmpeg** | Audio processing | `brew install ffmpeg` (Required for STT) |
+| **Node.js 20+** | Runtime | [nodejs.org](https://nodejs.org) |
+| **Gemini CLI** | AI Agent | `npm install -g @google/gemini-cli` |
+| **FFmpeg** | Audio processing (STT) | `brew install ffmpeg` |
 
 ### Quick Start
 
@@ -95,19 +103,57 @@
 
 ---
 
-## 🔧 Environment Variables
+## Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `TELEGRAM_BOT_TOKEN` | Yes | Bot token from @BotFather |
-| `GEMINI_API_KEY` | No | API key (if not using OAuth) |
-| `DASHBOARD_HOST` | No | Dashboard bind address (default: `127.0.0.1`, use `0.0.0.0` for LAN) |
-| `DASHBOARD_API_KEY` | No | API key to protect dashboard access |
-| `WEBHOOK_URL` | No | External webhook for error notifications (Slack/Discord) |
+### Required
+
+| Variable | Description |
+|----------|-------------|
+| `TELEGRAM_BOT_TOKEN` | Bot token from @BotFather |
+
+### Optional - AI & Media
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GEMINI_API_KEY` | - | API key (if not using OAuth). Required for image generation. |
+| `GEMINI_MODEL` | `gemini-3-flash-preview` | Default Gemini model for all groups |
+| `ASSISTANT_NAME` | `Andy` | Bot trigger name (used for `@Andy` mentions) |
+| `STT_PROVIDER` | `gemini` | Speech-to-text: `gemini` (free) or `gcp` (paid) |
+| `GOOGLE_APPLICATION_CREDENTIALS` | - | GCP service account JSON path (if `STT_PROVIDER=gcp`) |
+
+### Optional - Dashboard & Security
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DASHBOARD_HOST` | `127.0.0.1` | Bind address (`0.0.0.0` for LAN access) |
+| `DASHBOARD_API_KEY` | - | API key to protect dashboard access |
+| `DASHBOARD_ORIGINS` | auto | Comma-separated allowed CORS origins |
+
+### Optional - Rate Limiting & Alerts
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RATE_LIMIT_ENABLED` | `true` | Enable request rate limiting |
+| `RATE_LIMIT_MAX` | `20` | Max requests per window per group |
+| `RATE_LIMIT_WINDOW` | `5` | Rate limit window in minutes |
+| `ALERTS_ENABLED` | `true` | Send error alerts to main group |
+
+### Optional - Infrastructure
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CONTAINER_TIMEOUT` | `300000` | Container execution timeout (ms) |
+| `CONTAINER_IMAGE` | `nanogemclaw-agent:latest` | Container image name |
+| `HEALTH_CHECK_ENABLED` | `true` | Enable health check HTTP server |
+| `HEALTH_CHECK_PORT` | `8080` | Health check server port |
+| `WEBHOOK_URL` | - | External webhook for notifications (Slack/Discord) |
+| `WEBHOOK_EVENTS` | `error,alert` | Events to trigger webhook |
+| `TZ` | system | Timezone for scheduled tasks |
+| `LOG_LEVEL` | `info` | Logging level |
 
 ---
 
-## 📖 Usage Examples
+## Usage Examples
 
 ### Messaging & Productivity
 
@@ -115,47 +161,89 @@
 - `@Andy generate a 16:9 image of a futuristic cyberpunk city`
 - `@Andy browse https://news.google.com and give me the top headlines`
 
-### Task Automation
+### Task Scheduling
 
 - `@Andy every morning at 8am, check the weather and suggest what to wear`
-- `@Andy monitor my website and send a webhook notification if it goes down`
+- `@Andy 每天下午3點提醒我喝水`
+- `@Andy monitor my website every 30 minutes and alert me if it goes down`
+
+### Knowledge Base
+
+- Upload documents via the dashboard, then ask: `@Andy search the knowledge base for deployment guide`
 
 ---
 
-## ⚙️ Administration
+## Administration
 
 Send these commands directly to the bot:
 
 - `/admin language <lang>` - Switch bot interface language.
-- `/admin persona <name>` - Change bot personality.
+- `/admin persona <name>` - Change bot personality (default, coder, translator, writer, analyst).
 - `/admin report` - Get a daily activity summary.
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```mermaid
 graph LR
-    TG[Telegram] --> DB[(SQLite)]
-    DB --> Main[Node.js Host]
-    Main --> STT[ffmpeg/STT]
-    Main --> IPC[FS IPC]
-    IPC --> Container[Gemini Agent]
+    TG[Telegram] --> Bot[Node.js Host]
+    Bot --> DB[(SQLite + FTS5)]
+    Bot --> STT[FFmpeg / STT]
+    Bot --> IPC[IPC Handlers]
+    IPC --> Container[Gemini Agent Container]
     Container --> Browser[agent-browser]
-    Main --> Dashboard[Web Dashboard]
-    Dashboard --> WS[Socket.io]
+    Container --> Skills[Skills]
+    Bot --> Dashboard[Web Dashboard]
+    Dashboard --> WS[Socket.IO]
+    Bot --> Scheduler[Task Scheduler]
+    Bot --> Calendar[iCal Integration]
+    Bot --> Knowledge[Knowledge Base]
 ```
 
-- **Host (Node.js)**: Handles Telegram API, STT conversion, and container lifecycle.
-- **Container (Alpine)**: Runs Gemini CLI. Accesses internet via `agent-browser`. Isolated from host.
-- **Persistence**: SQLite for turns/tasks; JSON for sessions/state.
-- **Dashboard (React)**: Real-time monitoring SPA with log streaming, prompt editing, and system configuration. Communicates via REST API and Socket.io.
+### Backend (`src/`)
+
+| Module | Purpose |
+|--------|---------|
+| `index.ts` | Telegram bot entry, state management, IPC dispatch |
+| `server.ts` | Express REST API + Socket.IO server |
+| `routes/` | Modular API routes (auth, groups, tasks, knowledge, calendar, skills, config, analytics) |
+| `db/` | Split SQLite modules (connection, messages, tasks, stats, preferences) |
+| `ipc-handlers/` | Plugin-based IPC handlers (schedule, image gen, register, preferences, suggest actions) |
+| `container-runner.ts` | Container lifecycle, streaming output |
+| `message-handler.ts` | Message processing, multi-modal input |
+| `knowledge.ts` | FTS5 knowledge base engine |
+| `google-calendar.ts` | iCal feed parser |
+| `skills.ts` | Skill file discovery and assignment |
+| `natural-schedule.ts` | Natural language to cron parser (EN/ZH) |
+| `personas.ts` | Persona definitions and custom persona management |
+| `task-scheduler.ts` | Cron/interval/one-time task execution |
+
+### Frontend (`dashboard/`)
+
+React + Vite + TailwindCSS SPA with 9 modules:
+
+| Page | Description |
+|------|-------------|
+| **Overview** | Group status cards with real-time agent activity |
+| **Logs** | Universal log stream with level filtering |
+| **Memory Studio** | Monaco editor for system prompts (GEMINI.md) and conversation summaries |
+| **Group Detail** | Per-group settings: persona, model, trigger, web search toggle |
+| **Tasks** | Scheduled task CRUD with execution history |
+| **Analytics** | Usage charts, container logs, message statistics |
+| **Knowledge** | Document upload, FTS5 search, per-group document management |
+| **Calendar** | iCal feed subscription and upcoming event viewer |
+| **Settings** | Maintenance mode, debug logging, secrets status, preferences |
+
+### Persistence
+
+- **SQLite** (`store/messages.db`): Messages, tasks, stats, preferences, knowledge (FTS5)
+- **JSON** (`data/`): Sessions, registered groups, custom personas, calendar configs, group skills
+- **Filesystem** (`groups/`): Per-group workspace (GEMINI.md, logs, media, IPC)
 
 ---
 
-## 🖥️ Web Dashboard
-
-NanoGemClaw includes a built-in web dashboard for real-time monitoring and management.
+## Web Dashboard
 
 ### Access
 
@@ -167,14 +255,7 @@ open http://localhost:3000
 DASHBOARD_HOST=0.0.0.0 npm run dev
 ```
 
-### Features
-
-| Module | Description |
-|--------|-------------|
-| **Overview** | Group status cards with real-time agent activity |
-| **Logs** | Live log streaming with level filtering and search |
-| **Memory Studio** | Edit system prompts (GEMINI.md) and view conversation summaries |
-| **Settings** | Toggle maintenance mode, debug logging, view secrets status |
+Supports `Cmd+K` / `Ctrl+K` global search overlay.
 
 ### Build for Production
 
@@ -186,16 +267,28 @@ npm start                  # Serves dashboard at :3000
 
 ---
 
-## 🛠️ Troubleshooting
+## Testing
 
-- **Bot not responding?** Check `npm run logs` and ensure the bot is an Admin in the group.
-- **STT failing?** Ensure `ffmpeg` is installed on your host system (`brew install ffmpeg`).
-- **Media not processing?** Verify your `GEMINI_API_KEY` is set in `.env`.
-- **Container issues?** Run `./container/build.sh` to ensure the latest image is ready.
-- **Dashboard blank page?** Ensure you ran `cd dashboard && npm install` before building. The dashboard has its own `package.json`.
-- **CORS errors on dashboard?** The dashboard origin must be in the allowed list. Check `DASHBOARD_ORIGINS` env var or update `src/server.ts`.
+```bash
+npm test                  # Run all tests (Vitest)
+npm run test:watch        # Watch mode
+npm run test:coverage     # Coverage report
+npm run typecheck         # TypeScript type check
+```
+
+---
+
+## Troubleshooting
+
+- **Bot not responding?** Check `npm run dev` logs and ensure the bot is an Admin in the group.
+- **STT failing?** Ensure `ffmpeg` is installed (`brew install ffmpeg`).
+- **Media not processing?** Verify `GEMINI_API_KEY` is set in `.env`.
+- **Container issues?** Run `bash container/build.sh` to rebuild the image.
+- **Dashboard blank page?** Run `cd dashboard && npm install` before building. The dashboard has its own `package.json`.
+- **CORS errors?** Check `DASHBOARD_ORIGINS` env var or ensure your origin is in the allowed list.
 - **Container EROFS error?** Apple Container doesn't support nested overlapping bind mounts. Ensure `~/.gemini` is mounted as read-write.
-- **Session resume failed?** Clear stale sessions with `echo "{}" > data/sessions.json` and restart.
+- **Rate limited?** Adjust `RATE_LIMIT_MAX` and `RATE_LIMIT_WINDOW` in `.env`.
+- **Health check port conflict?** Change `HEALTH_CHECK_PORT` or disable with `HEALTH_CHECK_ENABLED=false`.
 
 ---
 
