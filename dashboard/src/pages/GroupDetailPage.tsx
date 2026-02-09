@@ -7,6 +7,61 @@ import { ToggleSwitch } from '../components/ToggleSwitch';
 import { StatsCards } from '../components/StatsCards';
 import { TaskList } from '../components/TaskList';
 import { TaskFormModal } from '../components/TaskFormModal';
+import { useAvailableSkills, useGroupSkills, useToggleSkill } from '../hooks/useSkills';
+
+function SkillsPanel({ groupFolder }: { groupFolder: string }) {
+    const { data: allSkills, isLoading: loadingAll } = useAvailableSkills();
+    const { data: enabledSkills, isLoading: loadingEnabled, refetch } = useGroupSkills(groupFolder);
+    const { mutate: toggleSkill } = useToggleSkill(groupFolder);
+
+    if (loadingAll || loadingEnabled) {
+        return <div className="text-slate-500 text-sm">Loading skills...</div>;
+    }
+
+    if (!allSkills || allSkills.length === 0) {
+        return <div className="text-slate-500 text-sm">No skills available</div>;
+    }
+
+    const enabledSet = new Set(enabledSkills || []);
+
+    const handleToggle = async (skillId: string, currentlyEnabled: boolean) => {
+        await toggleSkill({ skillId, enabled: !currentlyEnabled });
+        refetch();
+    };
+
+    return (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {allSkills.map(skill => {
+                const isEnabled = enabledSet.has(skill.id);
+                return (
+                    <div
+                        key={skill.id}
+                        className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                            isEnabled
+                                ? 'bg-blue-500/10 border-blue-500/30'
+                                : 'bg-slate-800/50 border-slate-700/50'
+                        }`}
+                    >
+                        <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-white truncate">{skill.name}</div>
+                            <div className="text-xs text-slate-400 truncate">{skill.description}</div>
+                        </div>
+                        <button
+                            onClick={() => handleToggle(skill.id, isEnabled)}
+                            className={`ml-3 px-2.5 py-1 text-xs rounded-md font-medium transition-colors ${
+                                isEnabled
+                                    ? 'bg-blue-600 text-white hover:bg-blue-500'
+                                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                            }`}
+                        >
+                            {isEnabled ? 'Enabled' : 'Disabled'}
+                        </button>
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
 
 export function GroupDetailPage() {
     const { folder } = useParams<{ folder: string }>();
@@ -79,7 +134,7 @@ export function GroupDetailPage() {
             {/* Settings */}
             <div className="space-y-2">
                 <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider">Settings</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                     <PersonaSelector
                         value={group.persona}
                         onChange={persona => handleSettingChange({ persona })}
@@ -99,7 +154,28 @@ export function GroupDetailPage() {
                         onChange={val => handleSettingChange({ enableWebSearch: val })}
                         disabled={saving}
                     />
+                    {/* Model Selector */}
+                    <div className="p-3 bg-slate-800/50 rounded-lg">
+                        <label className="block text-xs font-medium text-slate-400 mb-1">AI Model</label>
+                        <select
+                            value={(group as any).geminiModel || 'gemini-3-flash-preview'}
+                            onChange={e => handleSettingChange({ geminiModel: e.target.value })}
+                            disabled={saving}
+                            className="w-full bg-slate-900 text-white text-sm rounded-md border border-slate-700 px-2 py-1.5 focus:border-blue-500 focus:outline-none"
+                        >
+                            <option value="gemini-3-flash-preview">Gemini 3 Flash (Fast)</option>
+                            <option value="gemini-3-pro-preview">Gemini 3 Pro (Smart)</option>
+                            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                            <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                        </select>
+                    </div>
                 </div>
+            </div>
+
+            {/* Skills */}
+            <div className="space-y-2">
+                <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider">Skills</h3>
+                <SkillsPanel groupFolder={folder!} />
             </div>
 
             {/* Scheduled Tasks */}

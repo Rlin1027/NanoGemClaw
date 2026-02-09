@@ -408,7 +408,7 @@ async function runContainerAgentInternal(
     '-e',
     `GEMINI_ENABLE_SEARCH=${input.enableWebSearch !== false ? 'true' : 'false'}`,
     '-e',
-    `GEMINI_MODEL=${process.env.GEMINI_MODEL || 'gemini-3-flash-preview'}`,
+    `GEMINI_MODEL=${group.geminiModel || process.env.GEMINI_MODEL || 'gemini-3-flash-preview'}`,
     '-e',
     `CONTAINER_TIMEOUT=${CONTAINER_TIMEOUT}`,
   );

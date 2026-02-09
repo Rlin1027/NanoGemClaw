@@ -255,7 +255,7 @@ export function startDashboardServer() {
       return;
     }
 
-    const { persona, enableWebSearch, requireTrigger, name } = req.body;
+    const { persona, enableWebSearch, requireTrigger, name, geminiModel } = req.body;
 
     // Validate persona if provided
     if (persona !== undefined) {
@@ -266,12 +266,22 @@ export function startDashboardServer() {
       }
     }
 
+    // Validate geminiModel if provided
+    if (geminiModel !== undefined) {
+      const validModels = ['gemini-3-flash-preview', 'gemini-3-pro-preview', 'gemini-2.5-flash', 'gemini-2.5-pro'];
+      if (!validModels.includes(geminiModel)) {
+        res.status(400).json({ error: `Invalid model: ${geminiModel}` });
+        return;
+      }
+    }
+
     const updates: Record<string, any> = {};
     if (persona !== undefined) updates.persona = persona;
     if (enableWebSearch !== undefined)
       updates.enableWebSearch = enableWebSearch;
     if (requireTrigger !== undefined) updates.requireTrigger = requireTrigger;
     if (name !== undefined) updates.name = name;
+    if (geminiModel !== undefined) updates.geminiModel = geminiModel;
 
     try {
       const result = groupUpdater(folder, updates);
@@ -378,9 +388,25 @@ export function startDashboardServer() {
         schedule_type,
         schedule_value,
         context_mode,
+        natural_schedule,
       } = req.body;
 
-      if (!group_folder || !prompt || !schedule_type || !schedule_value) {
+      // Parse natural schedule if provided
+      let effectiveScheduleType = schedule_type;
+      let effectiveScheduleValue = schedule_value;
+
+      if (!schedule_type && !schedule_value && natural_schedule) {
+        const { parseNaturalSchedule } = await import('./natural-schedule.js');
+        const parsed = parseNaturalSchedule(natural_schedule);
+        if (!parsed) {
+          res.status(400).json({ error: 'Could not parse natural schedule text' });
+          return;
+        }
+        effectiveScheduleType = parsed.schedule_type;
+        effectiveScheduleValue = parsed.schedule_value;
+      }
+
+      if (!group_folder || !prompt || !effectiveScheduleType || !effectiveScheduleValue) {
         res.status(400).json({
           error:
             'Missing required fields: group_folder, prompt, schedule_type, schedule_value',
@@ -395,23 +421,23 @@ export function startDashboardServer() {
 
       // Calculate next_run
       let next_run: string | null = null;
-      if (schedule_type === 'cron') {
+      if (effectiveScheduleType === 'cron') {
         try {
-          const interval = CronExpressionParser.parse(schedule_value);
+          const interval = CronExpressionParser.parse(effectiveScheduleValue);
           next_run = interval.next().toISOString();
         } catch {
           res.status(400).json({ error: 'Invalid cron expression' });
           return;
         }
-      } else if (schedule_type === 'interval') {
-        const ms = parseInt(schedule_value, 10);
+      } else if (effectiveScheduleType === 'interval') {
+        const ms = parseInt(effectiveScheduleValue, 10);
         if (isNaN(ms) || ms <= 0) {
           res.status(400).json({ error: 'Invalid interval value' });
           return;
         }
         next_run = new Date(Date.now() + ms).toISOString();
-      } else if (schedule_type === 'once') {
-        const scheduled = new Date(schedule_value);
+      } else if (effectiveScheduleType === 'once') {
+        const scheduled = new Date(effectiveScheduleValue);
         if (isNaN(scheduled.getTime())) {
           res.status(400).json({ error: 'Invalid date' });
           return;
@@ -431,8 +457,8 @@ export function startDashboardServer() {
         group_folder,
         chat_jid: '', // Will be resolved by scheduler
         prompt,
-        schedule_type,
-        schedule_value,
+        schedule_type: effectiveScheduleType,
+        schedule_value: effectiveScheduleValue,
         context_mode: context_mode || 'isolated',
         next_run,
         status: 'active',
@@ -890,6 +916,127 @@ export function startDashboardServer() {
         return;
       }
       deleteKnowledgeDoc(db, parseInt(docId, 10));
+      res.json({ data: { success: true } });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ================================================================
+  // REST API: Calendar
+  // ================================================================
+  app.get('/api/calendar/configs', async (_req, res) => {
+    try {
+      const { getCalendarConfigs } = await import('./google-calendar.js');
+      const configs = getCalendarConfigs();
+      res.json({ data: configs });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/calendar/configs', async (req, res) => {
+    try {
+      const { url, name } = req.body;
+      if (!url || !name || typeof url !== 'string' || typeof name !== 'string') {
+        res.status(400).json({ error: 'Missing or invalid fields: url and name required' });
+        return;
+      }
+      const { saveCalendarConfig } = await import('./google-calendar.js');
+      saveCalendarConfig({ url, name });
+      res.json({ data: { success: true } });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete('/api/calendar/configs', async (req, res) => {
+    try {
+      const { url } = req.body;
+      if (!url || typeof url !== 'string') {
+        res.status(400).json({ error: 'Missing or invalid field: url required' });
+        return;
+      }
+      const { removeCalendarConfig } = await import('./google-calendar.js');
+      const removed = removeCalendarConfig(url);
+      res.json({ data: { removed } });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get('/api/calendar/events', async (req, res) => {
+    try {
+      const { getCalendarConfigs, fetchCalendarEvents } = await import('./google-calendar.js');
+      const days = parseInt(req.query.days as string) || 7;
+      const configs = getCalendarConfigs();
+
+      const allEvents = [];
+      for (const config of configs) {
+        try {
+          const events = await fetchCalendarEvents(config, days);
+          allEvents.push(...events);
+        } catch (err) {
+          logger.warn({ config: config.name, err }, 'Failed to fetch calendar events');
+        }
+      }
+
+      // Sort by start time
+      allEvents.sort((a, b) => a.start.getTime() - b.start.getTime());
+
+      res.json({ data: allEvents });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ================================================================
+  // REST API: Skills
+  // ================================================================
+  app.get('/api/skills', async (_req, res) => {
+    try {
+      const { scanAvailableSkills } = await import('./skills.js');
+      const skillsDir = path.join(GROUPS_DIR, '..', 'container', 'skills');
+      const skills = scanAvailableSkills(skillsDir);
+      res.json({ data: skills });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get('/api/groups/:folder/skills', async (req, res) => {
+    const { folder } = req.params;
+    if (!validateFolder(folder)) {
+      res.status(400).json({ error: 'Invalid folder' });
+      return;
+    }
+    try {
+      const { getGroupSkills } = await import('./skills.js');
+      const skillIds = getGroupSkills(folder);
+      res.json({ data: skillIds });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/groups/:folder/skills', async (req, res) => {
+    const { folder } = req.params;
+    if (!validateFolder(folder)) {
+      res.status(400).json({ error: 'Invalid folder' });
+      return;
+    }
+    const { skillId, enabled } = req.body;
+    if (!skillId || typeof skillId !== 'string' || typeof enabled !== 'boolean') {
+      res.status(400).json({ error: 'Missing or invalid fields: skillId (string) and enabled (boolean) required' });
+      return;
+    }
+    try {
+      const { enableGroupSkill, disableGroupSkill } = await import('./skills.js');
+      if (enabled) {
+        enableGroupSkill(folder, skillId);
+      } else {
+        disableGroupSkill(folder, skillId);
+      }
       res.json({ data: { success: true } });
     } catch (err: any) {
       res.status(500).json({ error: err.message });

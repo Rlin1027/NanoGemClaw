@@ -47,6 +47,8 @@ export interface RegisteredGroup {
   enableWebSearch?: boolean;
   /** Require @trigger prefix to respond (default: true for non-main groups) */
   requireTrigger?: boolean;
+  /** Gemini model to use for this group (e.g. 'gemini-3-flash-preview', 'gemini-3-pro-preview') */
+  geminiModel?: string;
 }
 
 export interface Session {
