@@ -213,6 +213,15 @@ export async function connectTelegram(): Promise<void> {
         return;
       }
 
+      // Handle onboarding callbacks
+      if (data.startsWith('onboard_')) {
+        const { handleOnboardingCallback } = await import('./onboarding.js');
+        const group = registeredGroups[chatId];
+        const groupFolder = group?.folder || 'main';
+        const handled = await handleOnboardingCallback(chatId, groupFolder, data);
+        if (handled) return;
+      }
+
       // Legacy format: route callback actions
       const [action, ...params] = data.split(':');
 

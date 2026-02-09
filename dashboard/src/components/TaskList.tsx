@@ -45,8 +45,8 @@ export function TaskList({ tasks, onRefresh, showGroup = true }: TaskListProps) 
         setExpandedTask(taskId);
         if (!runLogs[taskId]) {
             try {
-                const res = await apiFetch<{ data: TaskRunLog[] }>(`/api/tasks/${taskId}/runs`);
-                setRunLogs(prev => ({ ...prev, [taskId]: res.data }));
+                const res = await apiFetch<TaskRunLog[]>(`/api/tasks/${taskId}/runs`);
+                setRunLogs(prev => ({ ...prev, [taskId]: res }));
             } catch (err) {
                 showToast(err instanceof Error ? err.message : 'Failed to load run logs');
             }
