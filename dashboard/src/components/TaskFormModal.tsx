@@ -3,20 +3,32 @@ import { X } from 'lucide-react';
 import { apiFetch } from '../hooks/useApi';
 import { cn } from '@/lib/utils';
 
+interface TaskData {
+    id: string;
+    group_folder: string;
+    prompt: string;
+    schedule_type: string;
+    schedule_value: string;
+    context_mode: string;
+}
+
 interface TaskFormModalProps {
     groups: { id: string; name: string }[];
     defaultGroup?: string;
+    editTask?: TaskData;
     onClose: () => void;
     onCreated: () => void;
 }
 
-export function TaskFormModal({ groups, defaultGroup, onClose, onCreated }: TaskFormModalProps) {
+export function TaskFormModal({ groups, defaultGroup, editTask, onClose, onCreated }: TaskFormModalProps) {
+    const isEdit = !!editTask;
+
     const [form, setForm] = useState({
-        group_folder: defaultGroup || groups[0]?.id || '',
-        prompt: '',
-        schedule_type: 'cron' as 'cron' | 'interval' | 'once',
-        schedule_value: '',
-        context_mode: 'isolated' as 'group' | 'isolated',
+        group_folder: editTask?.group_folder || defaultGroup || groups[0]?.id || '',
+        prompt: editTask?.prompt || '',
+        schedule_type: (editTask?.schedule_type || 'cron') as 'cron' | 'interval' | 'once',
+        schedule_value: editTask?.schedule_value || '',
+        context_mode: (editTask?.context_mode || 'isolated') as 'group' | 'isolated',
     });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -26,14 +38,25 @@ export function TaskFormModal({ groups, defaultGroup, onClose, onCreated }: Task
         setLoading(true);
         setError(null);
         try {
-            await apiFetch('/api/tasks', {
-                method: 'POST',
-                body: JSON.stringify(form),
-            });
+            if (isEdit) {
+                await apiFetch(`/api/tasks/${editTask.id}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        prompt: form.prompt,
+                        schedule_type: form.schedule_type,
+                        schedule_value: form.schedule_value,
+                    }),
+                });
+            } else {
+                await apiFetch('/api/tasks', {
+                    method: 'POST',
+                    body: JSON.stringify(form),
+                });
+            }
             onCreated();
             onClose();
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to create task');
+            setError(err instanceof Error ? err.message : `Failed to ${isEdit ? 'update' : 'create'} task`);
         } finally {
             setLoading(false);
         }
@@ -43,7 +66,9 @@ export function TaskFormModal({ groups, defaultGroup, onClose, onCreated }: Task
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
             <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-lg mx-4 shadow-2xl">
                 <div className="flex items-center justify-between p-4 border-b border-slate-800">
-                    <h2 className="text-lg font-bold text-slate-100">Create Scheduled Task</h2>
+                    <h2 className="text-lg font-bold text-slate-100">
+                        {isEdit ? 'Edit Task' : 'Create Scheduled Task'}
+                    </h2>
                     <button onClick={onClose} className="text-slate-500 hover:text-slate-300">
                         <X size={20} />
                     </button>
@@ -56,7 +81,11 @@ export function TaskFormModal({ groups, defaultGroup, onClose, onCreated }: Task
                         <select
                             value={form.group_folder}
                             onChange={e => setForm(f => ({ ...f, group_folder: e.target.value }))}
-                            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200"
+                            disabled={isEdit}
+                            className={cn(
+                                "w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200",
+                                isEdit && "opacity-60 cursor-not-allowed"
+                            )}
                         >
                             {groups.map(g => (
                                 <option key={g.id} value={g.id}>{g.name}</option>
@@ -142,26 +171,28 @@ export function TaskFormModal({ groups, defaultGroup, onClose, onCreated }: Task
                     </div>
 
                     {/* Context Mode */}
-                    <div>
-                        <label className="text-sm text-slate-400 block mb-1">Context Mode</label>
-                        <div className="flex gap-2">
-                            {(['isolated', 'group'] as const).map(mode => (
-                                <button
-                                    key={mode}
-                                    type="button"
-                                    onClick={() => setForm(f => ({ ...f, context_mode: mode }))}
-                                    className={cn(
-                                        "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
-                                        form.context_mode === mode
-                                            ? "bg-blue-600 text-white"
-                                            : "bg-slate-800 text-slate-400 hover:text-slate-200"
-                                    )}
-                                >
-                                    {mode}
-                                </button>
-                            ))}
+                    {!isEdit && (
+                        <div>
+                            <label className="text-sm text-slate-400 block mb-1">Context Mode</label>
+                            <div className="flex gap-2">
+                                {(['isolated', 'group'] as const).map(mode => (
+                                    <button
+                                        key={mode}
+                                        type="button"
+                                        onClick={() => setForm(f => ({ ...f, context_mode: mode }))}
+                                        className={cn(
+                                            "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+                                            form.context_mode === mode
+                                                ? "bg-blue-600 text-white"
+                                                : "bg-slate-800 text-slate-400 hover:text-slate-200"
+                                        )}
+                                    >
+                                        {mode}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
-                    </div>
+                    )}
 
                     {error && <div className="text-red-400 text-sm">{error}</div>}
 
@@ -170,7 +201,7 @@ export function TaskFormModal({ groups, defaultGroup, onClose, onCreated }: Task
                             Cancel
                         </button>
                         <button type="submit" disabled={loading} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
-                            {loading ? 'Creating...' : 'Create Task'}
+                            {loading ? (isEdit ? 'Saving...' : 'Creating...') : (isEdit ? 'Save Changes' : 'Create Task')}
                         </button>
                     </div>
                 </form>

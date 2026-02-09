@@ -5,10 +5,24 @@ import { useSocket } from '../hooks/useSocket';
 import { TaskList } from '../components/TaskList';
 import { TaskFormModal } from '../components/TaskFormModal';
 
+interface TaskData {
+    id: string;
+    group_folder: string;
+    prompt: string;
+    schedule_type: string;
+    schedule_value: string;
+    context_mode: string;
+    status: string;
+    next_run: string | null;
+    last_run: string | null;
+    created_at: string;
+}
+
 export function TasksPage() {
     const { groups } = useSocket();
-    const { data: tasks, isLoading, refetch } = useApiQuery<any[]>('/api/tasks');
+    const { data: tasks, isLoading, refetch } = useApiQuery<TaskData[]>('/api/tasks');
     const [showForm, setShowForm] = useState(false);
+    const [editingTask, setEditingTask] = useState<TaskData | null>(null);
     const [filterGroup, setFilterGroup] = useState('');
     const [filterStatus, setFilterStatus] = useState('');
 
@@ -63,7 +77,11 @@ export function TasksPage() {
             {isLoading ? (
                 <div className="text-slate-500 text-center py-8">Loading tasks...</div>
             ) : (
-                <TaskList tasks={filteredTasks} onRefresh={refetch} />
+                <TaskList
+                    tasks={filteredTasks}
+                    onRefresh={refetch}
+                    onEdit={task => setEditingTask(task)}
+                />
             )}
 
             {showForm && (
@@ -71,6 +89,15 @@ export function TasksPage() {
                     groups={groups.map(g => ({ id: g.id, name: g.name }))}
                     onClose={() => setShowForm(false)}
                     onCreated={refetch}
+                />
+            )}
+
+            {editingTask && (
+                <TaskFormModal
+                    groups={groups.map(g => ({ id: g.id, name: g.name }))}
+                    editTask={editingTask}
+                    onClose={() => setEditingTask(null)}
+                    onCreated={() => { setEditingTask(null); refetch(); }}
                 />
             )}
         </div>

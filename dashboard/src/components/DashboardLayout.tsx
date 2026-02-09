@@ -6,9 +6,10 @@ interface DashboardLayoutProps {
     activeTab?: string;
     onTabChange?: (tab: string) => void;
     onSearchOpen?: () => void;
+    onAddGroup?: () => void;
 }
 
-export function DashboardLayout({ children, activeTab = 'overview', onTabChange, onSearchOpen }: DashboardLayoutProps) {
+export function DashboardLayout({ children, activeTab = 'overview', onTabChange, onSearchOpen, onAddGroup }: DashboardLayoutProps) {
 
     return (
         <div className="min-h-screen bg-slate-950 text-slate-200 flex font-sans selection:bg-blue-500/30">
@@ -93,7 +94,10 @@ export function DashboardLayout({ children, activeTab = 'overview', onTabChange,
                 </nav>
 
                 <div className="p-4 border-t border-slate-800 hidden lg:block">
-                    <button className="flex items-center gap-2 w-full bg-blue-600 hover:bg-blue-500 text-white p-2 rounded-lg text-sm font-medium transition-colors shadow-lg shadow-blue-900/20">
+                    <button
+                        onClick={onAddGroup}
+                        className="flex items-center gap-2 w-full bg-blue-600 hover:bg-blue-500 text-white p-2 rounded-lg text-sm font-medium transition-colors shadow-lg shadow-blue-900/20"
+                    >
                         <Plus size={16} /> Add Group
                     </button>
                 </div>

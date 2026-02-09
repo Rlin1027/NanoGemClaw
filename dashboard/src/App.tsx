@@ -13,6 +13,7 @@ import { CalendarPage } from './pages/CalendarPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastContainer } from './components/ToastContainer';
 import { SearchOverlay } from './components/SearchOverlay';
+import { AddGroupModal } from './components/AddGroupModal';
 import { Search, Loader2, Bot, ChevronRight } from 'lucide-react';
 import { useSocket } from './hooks/useSocket';
 import { useApiQuery } from './hooks/useApi';
@@ -23,6 +24,7 @@ function App() {
     const [selectedGroupForMemory, setSelectedGroupForMemory] = useState<string | null>(null);
     const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
     const [searchOpen, setSearchOpen] = useState(false);
+    const [addGroupOpen, setAddGroupOpen] = useState(false);
 
     // Cmd+K global shortcut
     useEffect(() => {
@@ -59,7 +61,7 @@ function App() {
 
     return (
         <>
-            <DashboardLayout activeTab={activeTab} onTabChange={setActiveTab} onSearchOpen={() => setSearchOpen(true)}>
+            <DashboardLayout activeTab={activeTab} onTabChange={setActiveTab} onSearchOpen={() => setSearchOpen(true)} onAddGroup={() => setAddGroupOpen(true)}>
                 <ErrorBoundary>
                     {/* OVERVIEW TAB */}
                     {activeTab === 'overview' && (
@@ -209,6 +211,13 @@ function App() {
                 </ErrorBoundary>
             </DashboardLayout>
             <SearchOverlay isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
+            {addGroupOpen && (
+                <AddGroupModal
+                    registeredIds={new Set(groups.map(g => g.id))}
+                    onClose={() => setAddGroupOpen(false)}
+                    onAdded={() => setAddGroupOpen(false)}
+                />
+            )}
             <ToastContainer />
         </>
     );

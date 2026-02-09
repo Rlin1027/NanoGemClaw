@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Play, Pause, Trash2, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
+import { Play, Pause, Trash2, Pencil, ChevronDown, ChevronRight, Loader2, Clock, Zap, CalendarClock } from 'lucide-react';
 import { apiFetch } from '../hooks/useApi';
 import { showToast } from '../hooks/useToast';
 import { cn } from '@/lib/utils';
@@ -29,10 +29,11 @@ interface TaskRunLog {
 interface TaskListProps {
     tasks: Task[];
     onRefresh: () => void;
+    onEdit?: (task: Task) => void;
     showGroup?: boolean;
 }
 
-export function TaskList({ tasks, onRefresh, showGroup = true }: TaskListProps) {
+export function TaskList({ tasks, onRefresh, onEdit, showGroup = true }: TaskListProps) {
     const [expandedTask, setExpandedTask] = useState<string | null>(null);
     const [runLogs, setRunLogs] = useState<Record<string, TaskRunLog[]>>({});
     const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -81,6 +82,15 @@ export function TaskList({ tasks, onRefresh, showGroup = true }: TaskListProps) 
         }
     };
 
+    const scheduleIcon = (type: string) => {
+        switch (type) {
+            case 'cron': return <Clock size={12} />;
+            case 'interval': return <Zap size={12} />;
+            case 'once': return <CalendarClock size={12} />;
+            default: return <Clock size={12} />;
+        }
+    };
+
     if (tasks.length === 0) {
         return <div className="text-slate-500 text-sm text-center py-8">No tasks found</div>;
     }
@@ -97,9 +107,9 @@ export function TaskList({ tasks, onRefresh, showGroup = true }: TaskListProps) 
 
                         <div className="flex-1 min-w-0">
                             <div className="text-sm text-slate-200 truncate">{task.prompt}</div>
-                            <div className="text-xs text-slate-500 mt-1">
-                                {showGroup && <span className="mr-3">📁 {task.group_folder}</span>}
-                                <span className="mr-3">⏰ {task.schedule_type}: {task.schedule_value}</span>
+                            <div className="text-xs text-slate-500 mt-1 flex items-center gap-3 flex-wrap">
+                                {showGroup && <span>📁 {task.group_folder}</span>}
+                                <span className="flex items-center gap-1">{scheduleIcon(task.schedule_type)} {task.schedule_type}: {task.schedule_value}</span>
                                 {task.next_run && <span>Next: {new Date(task.next_run).toLocaleString()}</span>}
                             </div>
                         </div>
@@ -118,6 +128,15 @@ export function TaskList({ tasks, onRefresh, showGroup = true }: TaskListProps) 
                                 <span className="p-1.5"><Loader2 size={16} className="animate-spin text-slate-500" /></span>
                             ) : (
                                 <>
+                                    {onEdit && (
+                                        <button
+                                            onClick={() => onEdit(task)}
+                                            className="p-1.5 text-slate-400 hover:text-blue-400 transition-colors"
+                                            title="Edit"
+                                        >
+                                            <Pencil size={16} />
+                                        </button>
+                                    )}
                                     {task.status === 'active' ? (
                                         <button
                                             onClick={() => handleStatusChange(task.id, 'paused')}
@@ -147,42 +166,82 @@ export function TaskList({ tasks, onRefresh, showGroup = true }: TaskListProps) 
                         </div>
                     </div>
 
-                    {/* Expanded: Run Logs */}
+                    {/* Expanded: Task Details + Run Logs */}
                     {expandedTask === task.id && (
-                        <div className="border-t border-slate-800 p-4 bg-slate-950/50">
-                            <div className="text-xs font-medium text-slate-400 mb-3">Run History</div>
-                            {(runLogs[task.id] || []).length === 0 ? (
-                                <div className="text-xs text-slate-600">No runs yet</div>
-                            ) : (
-                                <div className="space-y-1.5">
-                                    {(runLogs[task.id] || []).slice(0, 10).map((log, i) => (
-                                        <div key={i} className={cn(
-                                            "flex items-center gap-3 text-xs px-2.5 py-1.5 rounded-md",
-                                            log.status === 'success' ? 'bg-green-500/5' : 'bg-red-500/5'
-                                        )}>
-                                            <span className={cn(
-                                                "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0",
-                                                log.status === 'success'
-                                                    ? 'bg-green-500/20 text-green-400'
-                                                    : 'bg-red-500/20 text-red-400'
-                                            )}>
-                                                {log.status === 'success' ? '✓' : '✗'}
-                                            </span>
-                                            <span className="text-slate-400">{new Date(log.run_at).toLocaleString()}</span>
-                                            <span className="text-slate-600 font-mono">{(log.duration_ms / 1000).toFixed(1)}s</span>
-                                            {log.result && !log.error && (
-                                                <span className="text-slate-500 truncate flex-1">{log.result.slice(0, 80)}</span>
-                                            )}
-                                            {log.error && <span className="text-red-400 truncate flex-1">{log.error}</span>}
+                        <div className="border-t border-slate-800 bg-slate-950/50">
+                            {/* Task Details */}
+                            <div className="p-4 border-b border-slate-800/50">
+                                <div className="text-xs font-medium text-slate-400 mb-2">Task Details</div>
+                                <div className="grid grid-cols-2 gap-3 text-xs">
+                                    <div>
+                                        <span className="text-slate-500">Schedule:</span>
+                                        <span className="ml-2 text-slate-300 font-mono">{task.schedule_type}: {task.schedule_value}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-slate-500">Context:</span>
+                                        <span className="ml-2 text-slate-300">{task.context_mode}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-slate-500">Created:</span>
+                                        <span className="ml-2 text-slate-300">{new Date(task.created_at).toLocaleString()}</span>
+                                    </div>
+                                    {task.last_run && (
+                                        <div>
+                                            <span className="text-slate-500">Last run:</span>
+                                            <span className="ml-2 text-slate-300">{new Date(task.last_run).toLocaleString()}</span>
                                         </div>
-                                    ))}
-                                    {(runLogs[task.id] || []).length > 10 && (
-                                        <div className="text-[10px] text-slate-600 px-2.5">
-                                            +{(runLogs[task.id] || []).length - 10} more runs
+                                    )}
+                                    {task.next_run && (
+                                        <div>
+                                            <span className="text-slate-500">Next run:</span>
+                                            <span className="ml-2 text-slate-300">{new Date(task.next_run).toLocaleString()}</span>
                                         </div>
                                     )}
                                 </div>
-                            )}
+                                <div className="mt-3">
+                                    <span className="text-slate-500 text-xs">Prompt:</span>
+                                    <div className="mt-1 text-sm text-slate-300 bg-slate-900 rounded-lg p-3 whitespace-pre-wrap break-words">
+                                        {task.prompt}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Run History */}
+                            <div className="p-4">
+                                <div className="text-xs font-medium text-slate-400 mb-3">Run History</div>
+                                {(runLogs[task.id] || []).length === 0 ? (
+                                    <div className="text-xs text-slate-600">No runs yet</div>
+                                ) : (
+                                    <div className="space-y-1.5">
+                                        {(runLogs[task.id] || []).slice(0, 10).map((log, i) => (
+                                            <div key={i} className={cn(
+                                                "flex items-center gap-3 text-xs px-2.5 py-1.5 rounded-md",
+                                                log.status === 'success' ? 'bg-green-500/5' : 'bg-red-500/5'
+                                            )}>
+                                                <span className={cn(
+                                                    "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0",
+                                                    log.status === 'success'
+                                                        ? 'bg-green-500/20 text-green-400'
+                                                        : 'bg-red-500/20 text-red-400'
+                                                )}>
+                                                    {log.status === 'success' ? '✓' : '✗'}
+                                                </span>
+                                                <span className="text-slate-400">{new Date(log.run_at).toLocaleString()}</span>
+                                                <span className="text-slate-600 font-mono">{(log.duration_ms / 1000).toFixed(1)}s</span>
+                                                {log.result && !log.error && (
+                                                    <span className="text-slate-500 truncate flex-1">{log.result.slice(0, 80)}</span>
+                                                )}
+                                                {log.error && <span className="text-red-400 truncate flex-1">{log.error}</span>}
+                                            </div>
+                                        ))}
+                                        {(runLogs[task.id] || []).length > 10 && (
+                                            <div className="text-[10px] text-slate-600 px-2.5">
+                                                +{(runLogs[task.id] || []).length - 10} more runs
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     )}
                 </div>

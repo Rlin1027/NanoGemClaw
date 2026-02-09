@@ -78,6 +78,7 @@ interface GroupDetailPageProps {
 export function GroupDetailPage({ groupFolder, onBack }: GroupDetailPageProps) {
     const { group, loading, error, refetch, updateSettings } = useGroupDetail(groupFolder);
     const [showTaskForm, setShowTaskForm] = useState(false);
+    const [editingTask, setEditingTask] = useState<any>(null);
     const [saving, setSaving] = useState(false);
 
     const handleSettingChange = async (updates: Record<string, any>) => {
@@ -214,6 +215,7 @@ export function GroupDetailPage({ groupFolder, onBack }: GroupDetailPageProps) {
                 <TaskList
                     tasks={group.tasks}
                     onRefresh={refetch}
+                    onEdit={task => setEditingTask(task)}
                     showGroup={false}
                 />
             </div>
@@ -239,6 +241,15 @@ export function GroupDetailPage({ groupFolder, onBack }: GroupDetailPageProps) {
                     defaultGroup={group.folder}
                     onClose={() => setShowTaskForm(false)}
                     onCreated={refetch}
+                />
+            )}
+
+            {editingTask && (
+                <TaskFormModal
+                    groups={[{ id: group.folder, name: group.name }]}
+                    editTask={editingTask}
+                    onClose={() => setEditingTask(null)}
+                    onCreated={() => { setEditingTask(null); refetch(); }}
                 />
             )}
         </div>
