@@ -128,6 +128,12 @@ export interface ContainerOutput {
   responseTokens?: number;
 }
 
+export interface ProgressInfo {
+  type: 'tool_use' | 'thinking' | 'message';
+  toolName?: string;
+  content?: string;
+}
+
 interface VolumeMount {
   hostPath: string;
   containerPath: string;
@@ -287,6 +293,7 @@ function buildContainerArgs(mounts: VolumeMount[]): string[] {
 export async function runContainerAgent(
   group: RegisteredGroup,
   input: ContainerInput,
+  onProgress?: (info: ProgressInfo) => void,
 ): Promise<ContainerOutput> {
   logger.debug(
     {
@@ -304,7 +311,7 @@ export async function runContainerAgent(
     });
 
     const startTime = Date.now();
-    const result = await runContainerAgentInternal(group, input);
+    const result = await runContainerAgentInternal(group, input, onProgress);
     const durationMs = Date.now() - startTime;
 
     // Log usage statistics and track errors
@@ -367,6 +374,7 @@ export async function runContainerAgent(
 async function runContainerAgentInternal(
   group: RegisteredGroup,
   input: ContainerInput,
+  onProgress?: (info: ProgressInfo) => void,
 ): Promise<ContainerOutput> {
   const startTime = Date.now();
 
@@ -447,6 +455,9 @@ async function runContainerAgentInternal(
     container.stdin.write(JSON.stringify(input));
     container.stdin.end();
 
+    let lastProgressTime = 0;
+    const PROGRESS_THROTTLE_MS = 2000;
+
     container.stdout.on('data', (data) => {
       if (stdoutTruncated) return;
       const chunk = data.toString();
@@ -460,6 +471,36 @@ async function runContainerAgentInternal(
         );
       } else {
         stdout += chunk;
+      }
+
+      // Try to parse stream-json events for progress
+      if (onProgress) {
+        const lines = chunk.split('\n');
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('{')) continue;
+          try {
+            const event = JSON.parse(trimmed);
+            const now = Date.now();
+            if (now - lastProgressTime < PROGRESS_THROTTLE_MS) continue;
+
+            if (event.type === 'tool_use' && event.tool_name) {
+              lastProgressTime = now;
+              onProgress({
+                type: 'tool_use',
+                toolName: event.tool_name,
+              });
+            } else if (event.type === 'message' && event.content) {
+              lastProgressTime = now;
+              onProgress({
+                type: 'message',
+                content: event.content.substring(0, 100),
+              });
+            }
+          } catch {
+            // Not valid JSON, skip
+          }
+        }
       }
     });
 

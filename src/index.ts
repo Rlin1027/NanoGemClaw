@@ -27,6 +27,7 @@ import {
   runContainerAgent,
   writeGroupsSnapshot,
   writeTasksSnapshot,
+  type ProgressInfo,
 } from './container-runner.js';
 import {
   getAllChats,
@@ -685,7 +686,7 @@ async function processMessage(msg: TelegramBot.Message): Promise<void> {
 
   await setTyping(chatId, true);
   ipcMessageSentChats.delete(chatId); // Reset before agent run
-  const response = await runAgent(group, prompt, chatId, mediaPath);
+  const response = await runAgent(group, prompt, chatId, mediaPath, statusMsg);
   await setTyping(chatId, false);
 
   // Skip container output if agent already sent response via IPC
@@ -714,10 +715,15 @@ async function processMessage(msg: TelegramBot.Message): Promise<void> {
     // IPC handled the response; just clean up status message
     await bot.deleteMessage(parseInt(chatId), statusMsg.message_id).catch(() => { });
   } else if (statusMsg) {
-    // If no response, update status message to error
+    // If no response, update status message to error with retry button
     await bot.editMessageText(`❌ ${t().errorOccurred}`, {
       chat_id: parseInt(chatId),
       message_id: statusMsg.message_id,
+      reply_markup: {
+        inline_keyboard: [[
+          { text: '🔄 Retry', callback_data: `retry:${msg.message_id}` }
+        ]]
+      }
     }).catch(() => { });
   }
 }
@@ -727,6 +733,7 @@ async function runAgent(
   prompt: string,
   chatId: string,
   mediaPath: string | null = null,
+  statusMsg: TelegramBot.Message | null = null,
 ): Promise<string | null> {
   const isMain = group.folder === MAIN_GROUP_FOLDER;
   const sessionId = sessions[group.folder];
@@ -756,6 +763,31 @@ async function runAgent(
     new Set(Object.keys(registeredGroups)),
   );
 
+  // Create progress callback that updates Telegram statusMsg
+  const onProgress = async (info: ProgressInfo) => {
+    if (!statusMsg) return;
+    try {
+      let progressText = '🤖 思考中...';
+      if (info.type === 'tool_use') {
+        const toolEmoji: Record<string, string> = {
+          'google_search': '🔍 正在搜尋網路...',
+          'web_search': '🔍 正在搜尋網路...',
+          'read_file': '📄 正在讀取檔案...',
+          'write_file': '✍️ 正在寫入...',
+          'generate_image': '🎨 正在生成圖片...',
+          'execute_code': '⚙️ 正在執行程式...',
+        };
+        progressText = toolEmoji[info.toolName || ''] || `🔧 使用工具: ${info.toolName}...`;
+      } else if (info.type === 'message' && info.content) {
+        progressText = `💬 回應中...`;
+      }
+      await bot.editMessageText(progressText, {
+        chat_id: chatId,
+        message_id: statusMsg.message_id,
+      }).catch(() => {});
+    } catch {}
+  };
+
   try {
     // Get memory context from conversation summaries
     const { getMemoryContext } = await import('./memory-summarizer.js');
@@ -772,7 +804,7 @@ async function runAgent(
       enableWebSearch: group.enableWebSearch ?? true, // Default: enabled
       mediaPath: mediaPath ? `/workspace/group/media/${path.basename(mediaPath)}` : undefined,
       memoryContext: memoryContext ?? undefined,
-    });
+    }, onProgress);
 
     if (output.newSessionId) {
       sessions[group.folder] = output.newSessionId;
@@ -806,6 +838,50 @@ async function runAgent(
 
         if (retryOutput.status === 'error') {
           logger.error({ group: group.name, error: retryOutput.error }, 'Container agent error (retry)');
+          return null;
+        }
+        return retryOutput.result;
+      }
+
+      // Auto-retry on timeout or non-zero exit (fresh session)
+      const isTimeout = output.error?.includes('Container timed out after');
+      const isNonZeroExit = output.error?.includes('Container exited with code');
+
+      if (isTimeout || isNonZeroExit) {
+        logger.warn({ group: group.name, error: output.error }, 'Container timeout/error, retrying with fresh session');
+
+        // Send retry status update to chat
+        try {
+          await bot.sendMessage(parseInt(chatId), '🔄 重試中...').catch(() => {});
+        } catch {}
+
+        // Wait 2 seconds before retry
+        await new Promise(r => setTimeout(r, 2000));
+
+        // Clear session for fresh start
+        delete sessions[group.folder];
+        saveJson(path.join(DATA_DIR, 'sessions.json'), sessions);
+
+        const retryOutput = await runContainerAgent(group, {
+          prompt,
+          sessionId: undefined,
+          groupFolder: group.folder,
+          chatJid: chatId,
+          isMain,
+          systemPrompt: group.systemPrompt,
+          persona: group.persona,
+          enableWebSearch: group.enableWebSearch ?? true,
+          mediaPath: mediaPath ? `/workspace/group/media/${path.basename(mediaPath)}` : undefined,
+          memoryContext: memoryContext ?? undefined,
+        });
+
+        if (retryOutput.newSessionId) {
+          sessions[group.folder] = retryOutput.newSessionId;
+          saveJson(path.join(DATA_DIR, 'sessions.json'), sessions);
+        }
+
+        if (retryOutput.status === 'error') {
+          logger.error({ group: group.name, error: retryOutput.error }, 'Container agent error (retry after timeout)');
           return null;
         }
         return retryOutput.result;
@@ -1629,6 +1705,13 @@ async function main(): Promise<void> {
   fs.mkdirSync(GROUPS_DIR, { recursive: true });
 
   initDatabase();
+
+  // Initialize search index (after database init)
+  const { initSearchIndex } = await import('./search.js');
+  const { getDatabase } = await import('./db.js');
+  const dbInstance = getDatabase();
+  initSearchIndex(dbInstance);
+
   await loadState();
   loadMaintenanceState();
 

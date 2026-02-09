@@ -86,21 +86,44 @@ export function initDatabase(): void {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_memory_summaries_group ON memory_summaries(group_folder);
   `);
 
-  // Add sender_name column if it doesn't exist (migration for existing DBs)
-  try {
-    db.exec(`ALTER TABLE messages ADD COLUMN sender_name TEXT`);
-  } catch {
-    /* column already exists */
+  // Schema migration mechanism using PRAGMA user_version
+  const currentVersion = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version;
+
+  if (currentVersion < 1) {
+    // Migration v1: composite index + column additions
+    db.exec('CREATE INDEX IF NOT EXISTS idx_messages_chat_timestamp ON messages(chat_jid, timestamp)');
+
+    // Add sender_name column if it doesn't exist
+    try {
+      db.exec(`ALTER TABLE messages ADD COLUMN sender_name TEXT`);
+    } catch {
+      /* column already exists */
+    }
+
+    // Add context_mode column if it doesn't exist
+    try {
+      db.exec(`ALTER TABLE scheduled_tasks ADD COLUMN context_mode TEXT DEFAULT 'isolated'`);
+    } catch {
+      /* column already exists */
+    }
+
+    // Create preferences table
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS preferences (
+        group_folder TEXT NOT NULL,
+        key TEXT NOT NULL,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (group_folder, key)
+      );
+      CREATE INDEX IF NOT EXISTS idx_preferences_group ON preferences(group_folder);
+    `);
+
+    db.exec('PRAGMA user_version = 1');
   }
 
-  // Add context_mode column if it doesn't exist (migration for existing DBs)
-  try {
-    db.exec(
-      `ALTER TABLE scheduled_tasks ADD COLUMN context_mode TEXT DEFAULT 'isolated'`,
-    );
-  } catch {
-    /* column already exists */
-  }
+  // Future migrations go here:
+  // if (currentVersion < 2) { ... db.exec('PRAGMA user_version = 2'); }
 }
 
 /**
@@ -111,6 +134,10 @@ export function closeDatabase(): void {
   if (db) {
     db.close();
   }
+}
+
+export function getDatabase(): Database.Database {
+  return db;
 }
 
 /**
@@ -897,4 +924,34 @@ export function getRateLimitStatus(
     remaining: Math.max(0, maxRequests - count),
     resetInMs: Math.max(0, resetInMs),
   };
+}
+
+// ============================================================================
+// User Preferences
+// ============================================================================
+
+/**
+ * Get all preferences for a group as a key-value object
+ */
+export function getPreferences(groupFolder: string): Record<string, string> {
+  const rows = db
+    .prepare('SELECT key, value FROM preferences WHERE group_folder = ?')
+    .all(groupFolder) as { key: string; value: string }[];
+
+  const prefs: Record<string, string> = {};
+  for (const row of rows) {
+    prefs[row.key] = row.value;
+  }
+  return prefs;
+}
+
+/**
+ * Set a single preference for a group
+ */
+export function setPreference(groupFolder: string, key: string, value: string): void {
+  const now = new Date().toISOString();
+  db.prepare(
+    `INSERT INTO preferences (group_folder, key, value, updated_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT(group_folder, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
+  ).run(groupFolder, key, value, now);
 }

@@ -680,6 +680,74 @@ export function startDashboardServer() {
     }
   });
 
+  // Get user preferences for a group
+  app.get('/api/groups/:folder/preferences', async (req, res) => {
+    const folder = req.params.folder;
+    if (!SAFE_FOLDER_RE.test(folder)) {
+      res.status(400).json({ error: 'Invalid folder' });
+      return;
+    }
+    try {
+      const db = await import('./db.js');
+      const prefs = db.getPreferences(folder);
+      res.json({ data: prefs });
+    } catch {
+      res.status(500).json({ error: 'Failed to fetch preferences' });
+    }
+  });
+
+  // Set a user preference for a group
+  app.put('/api/groups/:folder/preferences', async (req, res) => {
+    const folder = req.params.folder;
+    if (!SAFE_FOLDER_RE.test(folder)) {
+      res.status(400).json({ error: 'Invalid folder' });
+      return;
+    }
+    const { key, value } = req.body;
+    if (!key || typeof key !== 'string') {
+      res.status(400).json({ error: 'Key required' });
+      return;
+    }
+    // Only allow specific preference keys
+    const ALLOWED_KEYS = ['language', 'nickname', 'response_style', 'interests', 'timezone', 'custom_instructions'];
+    if (!ALLOWED_KEYS.includes(key)) {
+      res.status(400).json({ error: `Invalid key. Allowed: ${ALLOWED_KEYS.join(', ')}` });
+      return;
+    }
+    try {
+      const db = await import('./db.js');
+      db.setPreference(folder, key, String(value));
+      res.json({ data: { key, value } });
+    } catch {
+      res.status(500).json({ error: 'Failed to save preference' });
+    }
+  });
+
+  // ================================================================
+  // REST API: Search
+  // ================================================================
+  app.get('/api/search', async (req, res) => {
+    try {
+      const q = req.query.q as string;
+      const group = req.query.group as string | undefined;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const offset = parseInt(req.query.offset as string) || 0;
+
+      if (!q || q.trim().length === 0) {
+        res.status(400).json({ error: 'Query parameter "q" is required' });
+        return;
+      }
+
+      const { searchMessages } = await import('./search.js');
+      const { getDatabase } = await import('./db.js');
+      const db = getDatabase();
+      const results = searchMessages(db, q, { group, limit, offset });
+      res.json({ data: results });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ================================================================
   // REST API: Conversation Export
   // ================================================================

@@ -348,6 +348,23 @@ function buildSystemContext(input: ContainerInput): string {
     }
   }
 
+  // Inject user preferences
+  let prefsInfo = '';
+  const prefsPath = path.join('/workspace/data', 'preferences.json');
+  if (fs.existsSync(prefsPath)) {
+    try {
+      const prefs = JSON.parse(fs.readFileSync(prefsPath, 'utf-8'));
+      if (Object.keys(prefs).length > 0) {
+        const prefsBlock = Object.entries(prefs)
+          .map(([k, v]) => `- ${k}: ${v}`)
+          .join('\n');
+        prefsInfo = `\n\n## User Preferences\nRemember these preferences for all interactions:\n${prefsBlock}`;
+      }
+    } catch {
+      // Ignore parse errors
+    }
+  }
+
   return `You are an AI assistant for NanoGemClaw. You are helping with the "${groupFolder}" group.
 
 IMPORTANT: To interact with the messaging system, you must write JSON files to specific directories:
@@ -369,6 +386,14 @@ ${isMain ? `4. TO REGISTER A GROUP (main only) - Write to /workspace/ipc/tasks/:
 5. TO GENERATE AN IMAGE - Write to /workspace/ipc/tasks/:
    {"type":"generate_image","prompt":"description of image to generate","chatJid":"${chatJid}"}
 
+6. TO SAVE USER PREFERENCE - Write to /workspace/ipc/messages/:
+   {"type":"set_preference","key":"<key>","value":"<value>","timestamp":"..."}
+   Allowed keys: language, nickname, response_style, interests, timezone, custom_instructions
+   Use this when the user expresses a preference, such as:
+   - "請用中文回答" → {"type":"set_preference","key":"language","value":"zh-TW"}
+   - "叫我小明" → {"type":"set_preference","key":"nickname","value":"小明"}
+   - "我喜歡簡潔的回答" → {"type":"set_preference","key":"response_style","value":"concise"}
+
 WEB BROWSING:
 You have access to the \`agent-browser\` CLI tool for advanced web interaction (Javascript, screenshots, etc).
 Documentation is available at: \`/workspace/docs/agent-browser.md\`.
@@ -377,7 +402,7 @@ Example: \`agent-browser open https://google.com && agent-browser snapshot -i\`
 Current context:
 - Group: ${groupFolder}
 - Chat JID: ${chatJid}
-- Is Main Group: ${isMain}${tasksInfo}${groupsInfo}${memoryContext}
+- Is Main Group: ${isMain}${tasksInfo}${groupsInfo}${prefsInfo}${memoryContext}
 
 When you need to send a message or manage tasks, use the shell to write JSON files to the appropriate IPC directory.
 Example: echo '{"type":"message","chatJid":"${chatJid}","text":"Hello!","timestamp":"'$(date -Iseconds)'"}' > /workspace/ipc/messages/$(date +%s)-msg.json`;
