@@ -33,6 +33,7 @@
 | **Scheduling** | - | Natural language + cron, iCal calendar |
 | **Dashboard** | - | 9-module real-time management SPA |
 | **Advanced Tools** | - | STT, Image Gen, Personas, Skills, Multi-model |
+| **Fast Path** | - | Direct Gemini API streaming, context caching, native function calling |
 
 ---
 
@@ -49,6 +50,9 @@
 - **Personas** - Pre-defined personalities (coder, translator, writer, analyst) or create custom personas per group.
 - **Multi-model Support** - Choose Gemini model per group (`gemini-3-flash-preview`, `gemini-3-pro-preview`, etc.).
 - **Multi-turn Task Tracking** - Track and manage complex, multi-step background tasks with auto follow-up.
+- **Fast Path (Direct API)** - Simple text queries bypass container startup entirely, streaming responses in real-time via the `@google/genai` SDK. Falls back to containers for media and code execution.
+- **Context Caching** - Static content (system prompt, memory summaries) is cached via the Gemini caching API, reducing input token costs by 75–90%.
+- **Native Function Calling** - Tool operations (scheduling, image gen, preferences) use Gemini's native function calling instead of file-based IPC polling — near-zero latency.
 - **Container Isolation** - Every group runs in its own sandbox (Apple Container or Docker).
 - **Web Dashboard** - 9-module real-time command center with log streaming, memory editor, analytics, knowledge management, and more.
 - **i18n Support** - Full interface support for English, Chinese, Japanese, and Spanish.
@@ -138,6 +142,15 @@
 | `RATE_LIMIT_WINDOW` | `5` | Rate limit window in minutes |
 | `ALERTS_ENABLED` | `true` | Send error alerts to main group |
 
+### Optional - Fast Path
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FAST_PATH_ENABLED` | `true` | Enable direct Gemini API calls for text queries |
+| `FAST_PATH_TIMEOUT_MS` | `180000` | Fast path API timeout (ms) |
+| `CACHE_TTL_SECONDS` | `21600` | Context cache TTL (default: 6 hours) |
+| `MIN_CACHE_CHARS` | `100000` | Minimum content length to trigger context caching |
+
 ### Optional - Infrastructure
 
 | Variable | Default | Description |
@@ -190,6 +203,9 @@ graph LR
     TG[Telegram] --> Bot[Node.js Host]
     Bot --> DB[(SQLite + FTS5)]
     Bot --> STT[FFmpeg / STT]
+    Bot --> FP[Fast Path<br/>Direct Gemini API]
+    FP --> Cache[Context Cache]
+    FP --> FC[Function Calling]
     Bot --> IPC[IPC Handlers]
     IPC --> Container[Gemini Agent Container]
     Container --> Browser[agent-browser]
@@ -211,7 +227,11 @@ graph LR
 | `db/` | Split SQLite modules (connection, messages, tasks, stats, preferences) |
 | `ipc-handlers/` | Plugin-based IPC handlers (schedule, image gen, register, preferences, suggest actions) |
 | `container-runner.ts` | Container lifecycle, streaming output |
-| `message-handler.ts` | Message processing, multi-modal input |
+| `fast-path.ts` | Direct Gemini API execution with streaming (bypasses container) |
+| `gemini-client.ts` | `@google/genai` SDK client with streaming support |
+| `context-cache.ts` | Per-group Gemini context cache manager |
+| `gemini-tools.ts` | Native function calling declarations and execution |
+| `message-handler.ts` | Message processing, fast path routing, multi-modal input |
 | `knowledge.ts` | FTS5 knowledge base engine |
 | `google-calendar.ts` | iCal feed parser |
 | `skills.ts` | Skill file discovery and assignment |
@@ -287,6 +307,8 @@ npm run typecheck         # TypeScript type check
 - **Dashboard blank page?** Run `cd dashboard && npm install` before building. The dashboard has its own `package.json`.
 - **CORS errors?** Check `DASHBOARD_ORIGINS` env var or ensure your origin is in the allowed list.
 - **Container EROFS error?** Apple Container doesn't support nested overlapping bind mounts. Ensure `~/.gemini` is mounted as read-write.
+- **Fast path not working?** Ensure `GEMINI_API_KEY` is set. OAuth-only setups automatically fall back to container path.
+- **Want to disable fast path?** Set `FAST_PATH_ENABLED=false` globally, or set `enableFastPath: false` per group in the dashboard.
 - **Rate limited?** Adjust `RATE_LIMIT_MAX` and `RATE_LIMIT_WINDOW` in `.env`.
 - **Health check port conflict?** Change `HEALTH_CHECK_PORT` or disable with `HEALTH_CHECK_ENABLED=false`.
 
