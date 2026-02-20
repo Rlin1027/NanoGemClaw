@@ -214,6 +214,8 @@ export const FAST_PATH = {
   STREAMING_INTERVAL_MS: 500,
   /** Max conversation history messages to include in context */
   MAX_HISTORY_MESSAGES: 50,
+  /** Timeout for fast path API calls (ms, default: 3 minutes) */
+  TIMEOUT_MS: safeParseInt(process.env.FAST_PATH_TIMEOUT_MS, 180000),
 } as const;
 
 /**

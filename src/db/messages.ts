@@ -248,6 +248,34 @@ export function getMessagesForSummary(
   }[];
 }
 
+/**
+ * Get recent messages for multi-turn conversation context.
+ * Returns messages ordered oldest-first, with role mapped from is_from_me.
+ */
+export function getRecentConversation(
+  chatJid: string,
+  limit: number = 50,
+): Array<{ role: 'user' | 'model'; text: string }> {
+  const db = getDatabase();
+  const rows = db
+    .prepare(
+      `
+      SELECT content, is_from_me
+      FROM messages
+      WHERE chat_jid = ? AND content != ''
+      ORDER BY timestamp DESC
+      LIMIT ?
+    `,
+    )
+    .all(chatJid, limit) as Array<{ content: string; is_from_me: number }>;
+
+  // Reverse to oldest-first order for conversation context
+  return rows.reverse().map((row) => ({
+    role: row.is_from_me ? ('model' as const) : ('user' as const),
+    text: row.content,
+  }));
+}
+
 export function deleteOldMessages(
   chatJid: string,
   beforeTimestamp: string,
@@ -288,7 +316,7 @@ export function getConversationExport(
     chatJid,
     exportedAt: new Date().toISOString(),
     messageCount: messages.length,
-    messages: messages.map(m => ({
+    messages: messages.map((m) => ({
       ...m,
       is_from_me: !!m.is_from_me,
     })),
@@ -327,11 +355,15 @@ export function formatExportAsMarkdown(exp: ConversationExport): string {
  */
 export function getMessageCountsBatch(): Map<string, number> {
   const db = getDatabase();
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT chat_jid, COUNT(*) as message_count
     FROM messages
     GROUP BY chat_jid
-  `).all() as Array<{ chat_jid: string; message_count: number }>;
+  `,
+    )
+    .all() as Array<{ chat_jid: string; message_count: number }>;
   const map = new Map<string, number>();
   for (const row of rows) map.set(row.chat_jid, row.message_count);
   return map;

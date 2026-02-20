@@ -16,11 +16,19 @@ import { logger } from './logger.js';
 // Function Declarations for Gemini
 // ============================================================================
 
+// Cached declarations (static, built once per permission level)
+let cachedMainDeclarations: any[] | null = null;
+let cachedNonMainDeclarations: any[] | null = null;
+
 /**
  * Build the function declarations array based on group permissions.
  * Main groups get access to all functions; other groups get a subset.
+ * Results are cached since declarations are static.
  */
 export function buildFunctionDeclarations(isMain: boolean): any[] {
+  if (isMain && cachedMainDeclarations) return cachedMainDeclarations;
+  if (!isMain && cachedNonMainDeclarations) return cachedNonMainDeclarations;
+
   const declarations: any[] = [
     {
       name: 'schedule_task',
@@ -162,6 +170,13 @@ export function buildFunctionDeclarations(isMain: boolean): any[] {
         required: ['chat_id', 'name'],
       },
     });
+  }
+
+  // Cache for reuse
+  if (isMain) {
+    cachedMainDeclarations = declarations;
+  } else {
+    cachedNonMainDeclarations = declarations;
   }
 
   return declarations;

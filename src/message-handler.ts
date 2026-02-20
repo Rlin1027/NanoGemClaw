@@ -10,6 +10,7 @@ import {
   ASSISTANT_NAME,
   CLEANUP,
   DATA_DIR,
+  FAST_PATH,
   GROUPS_DIR,
   MAIN_GROUP_FOLDER,
   TELEGRAM_BOT_TOKEN,
@@ -1051,6 +1052,21 @@ async function runAgent(
         bot,
       };
 
+      // Fetch recent conversation history for multi-turn context
+      let conversationHistory: Array<{
+        role: 'user' | 'model';
+        text: string;
+      }> = [];
+      try {
+        const { getRecentConversation } = await import('./db.js');
+        conversationHistory = getRecentConversation(
+          chatId,
+          FAST_PATH.MAX_HISTORY_MESSAGES,
+        );
+      } catch {
+        // DB may not have messages yet
+      }
+
       const startTime = Date.now();
 
       const output = await runFastPath(
@@ -1063,6 +1079,7 @@ async function runAgent(
           systemPrompt,
           memoryContext: memoryContext ?? undefined,
           enableWebSearch: group.enableWebSearch ?? true,
+          conversationHistory,
         },
         ipcContext,
         onProgress,
@@ -1073,12 +1090,14 @@ async function runAgent(
       // Log usage statistics (same mechanism as container runner)
       try {
         const { logUsage, resetErrors, recordError } = await import('./db.js');
+        const { GEMINI_MODEL: defaultModel } = await import('./config.js');
         logUsage({
           group_folder: group.folder,
           timestamp: new Date().toISOString(),
           duration_ms: durationMs,
           prompt_tokens: output.promptTokens,
           response_tokens: output.responseTokens,
+          model: `fast:${group.geminiModel || defaultModel}`,
         });
 
         if (output.status === 'error') {

@@ -5,53 +5,24 @@
  * as an alternative to container-based execution for simple queries.
  */
 
-import { GoogleGenAI, type Content, type Part } from '@google/genai';
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
+import { GoogleGenAI, type Content } from '@google/genai';
 import { logger } from './logger.js';
 
 // ============================================================================
 // Authentication
 // ============================================================================
 
-const OAUTH_CREDS_PATH = path.join(os.homedir(), '.gemini', 'oauth_creds.json');
-
-interface OAuthCreds {
-  access_token: string;
-  refresh_token?: string;
-  expires_at?: number;
-}
-
-function readOAuthCreds(): OAuthCreds | null {
-  try {
-    if (!fs.existsSync(OAUTH_CREDS_PATH)) return null;
-    const raw = fs.readFileSync(OAUTH_CREDS_PATH, 'utf-8');
-    const creds = JSON.parse(raw) as OAuthCreds;
-    if (!creds.access_token) return null;
-    return creds;
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Resolve the API key for Gemini.
- * Priority: GEMINI_API_KEY env → GOOGLE_API_KEY env → OAuth (not supported by SDK directly)
+ * Priority: GEMINI_API_KEY env → GOOGLE_API_KEY env
+ *
+ * Note: OAuth tokens are NOT supported by the @google/genai SDK's apiKey param.
+ * OAuth auth requires a different SDK configuration (e.g. Vertex AI).
+ * For OAuth-only setups, the fast path will be unavailable and container
+ * path (which uses the gemini CLI with OAuth) will be used instead.
  */
 export function resolveApiKey(): string | null {
-  const key = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-  if (key) return key;
-
-  // Fallback: try OAuth creds (SDK doesn't support OAuth directly,
-  // but we can use the access token as a bearer-like key in some configurations)
-  const creds = readOAuthCreds();
-  if (creds?.access_token) {
-    logger.debug('Using OAuth access_token for Gemini API');
-    return creds.access_token;
-  }
-
-  return null;
+  return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || null;
 }
 
 // ============================================================================

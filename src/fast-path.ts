@@ -23,12 +23,7 @@ import type { Content } from '@google/genai';
 
 import { FAST_PATH, GEMINI_MODEL, MAIN_GROUP_FOLDER } from './config.js';
 import { getOrCreateCache } from './context-cache.js';
-import {
-  isGeminiClientAvailable,
-  streamGenerate,
-  generate,
-  type StreamChunk,
-} from './gemini-client.js';
+import { isGeminiClientAvailable, streamGenerate } from './gemini-client.js';
 import {
   buildFunctionDeclarations,
   executeFunctionCall,
@@ -76,6 +71,8 @@ export interface FastPathInput {
   systemPrompt?: string;
   memoryContext?: string;
   enableWebSearch?: boolean;
+  /** Recent conversation history for multi-turn context */
+  conversationHistory?: Array<{ role: 'user' | 'model'; text: string }>;
 }
 
 /**
@@ -85,6 +82,36 @@ export interface FastPathInput {
  * the existing message handler.
  */
 export async function runFastPath(
+  group: RegisteredGroup,
+  input: FastPathInput,
+  ipcContext: IpcContext,
+  onProgress?: (info: ProgressInfo) => void,
+): Promise<ContainerOutput> {
+  // Wrap in timeout to prevent indefinite hangs
+  const timeoutMs = FAST_PATH.TIMEOUT_MS;
+  return Promise.race([
+    runFastPathInner(group, input, ipcContext, onProgress),
+    new Promise<ContainerOutput>((_, reject) =>
+      setTimeout(
+        () => reject(new Error(`Fast path timed out after ${timeoutMs}ms`)),
+        timeoutMs,
+      ),
+    ),
+  ]).catch((err) => {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    logger.error(
+      { group: group.name, err: errorMsg },
+      'Fast path: timeout or fatal error',
+    );
+    return {
+      status: 'error' as const,
+      result: null,
+      error: `Fast path error: ${errorMsg}`,
+    };
+  });
+}
+
+async function runFastPathInner(
   group: RegisteredGroup,
   input: FastPathInput,
   ipcContext: IpcContext,
@@ -113,45 +140,56 @@ After your response, if there are natural follow-up questions the user might ask
 Only suggest follow-ups when they genuinely add value. Do not suggest them for simple greetings or short answers.`;
     }
 
-    // Try to get or create context cache
-    let cachedContent: string | null = null;
-
-    // Fetch knowledge content for caching
+    // Fetch query-relevant knowledge (NOT cached — varies per query)
     let knowledgeContent = '';
     try {
       const { getDatabase } = await import('./db.js');
       const { getRelevantKnowledge } = await import('./knowledge.js');
       const db = getDatabase();
-      // Use the user's prompt to find relevant knowledge
       const queryText = input.prompt.replace(/<[^>]*>/g, '').slice(0, 200);
       knowledgeContent = getRelevantKnowledge(db, queryText, input.groupFolder);
     } catch {
       // Knowledge search may fail if no docs exist
     }
 
-    cachedContent = await getOrCreateCache(
+    // Cache ONLY static content (system prompt + memory summary).
+    // Knowledge is query-dependent and must NOT be cached.
+    const cachedContent = await getOrCreateCache(
       input.groupFolder,
       model,
       systemInstruction,
-      knowledgeContent,
+      undefined,
       input.memoryContext,
     );
 
-    // Build content messages
-    const contents: Content[] = [
-      {
-        role: 'user' as const,
-        parts: [{ text: input.prompt }],
-      },
-    ];
+    // Build content messages with conversation history for multi-turn context
+    const contents: Content[] = [];
 
-    // If we have knowledge but no cache, inject it into the system instruction
-    if (knowledgeContent && !cachedContent) {
-      systemInstruction += `\n\n[KNOWLEDGE BASE]\n${knowledgeContent}\n[END KNOWLEDGE BASE]`;
+    if (input.conversationHistory && input.conversationHistory.length > 0) {
+      for (const msg of input.conversationHistory) {
+        contents.push({
+          role: msg.role as 'user' | 'model',
+          parts: [{ text: msg.text }],
+        });
+      }
     }
 
-    // If we have memory context but no cache, inject it
-    if (input.memoryContext && !cachedContent) {
+    // Inject knowledge into user message (per-query, not cached)
+    const userParts: string[] = [];
+    if (knowledgeContent) {
+      userParts.push(
+        `[RELEVANT KNOWLEDGE]\n${knowledgeContent}\n[END RELEVANT KNOWLEDGE]\n`,
+      );
+    }
+    userParts.push(input.prompt);
+
+    contents.push({
+      role: 'user' as const,
+      parts: [{ text: userParts.join('\n') }],
+    });
+
+    // If NOT using cache, inject static context into system instruction
+    if (!cachedContent && input.memoryContext) {
       systemInstruction += `\n\n${input.memoryContext}`;
     }
 
@@ -165,12 +203,13 @@ Only suggest follow-ups when they genuinely add value. Do not suggest them for s
       tools.push({ googleSearch: {} } as any);
     }
 
-    // Stream the response
+    // Stream the response (use array for O(n) concatenation instead of O(n²))
+    const textParts: string[] = [];
     let fullText = '';
     let promptTokens: number | undefined;
     let responseTokens: number | undefined;
     let lastProgressTime = 0;
-    let pendingFunctionCalls: Array<{
+    const pendingFunctionCalls: Array<{
       name: string;
       args: Record<string, any>;
     }> = [];
@@ -186,7 +225,8 @@ Only suggest follow-ups when they genuinely add value. Do not suggest them for s
     for await (const chunk of streamGenerate(streamOptions)) {
       // Handle text chunks
       if (chunk.text) {
-        fullText += chunk.text;
+        textParts.push(chunk.text);
+        fullText = textParts.join('');
 
         // Emit progress with throttling
         if (onProgress) {
@@ -255,25 +295,43 @@ Only suggest follow-ups when they genuinely add value. Do not suggest them for s
         },
       ];
 
-      // Generate follow-up response (non-streaming for simplicity)
-      const followUp = await generate({
+      // Stream follow-up response after function calls
+      const followUpOptions = {
         model,
         systemInstruction: cachedContent ? undefined : systemInstruction,
         contents: followUpContents,
         tools,
         cachedContent: cachedContent || undefined,
-      });
+      };
 
-      if (followUp.text) {
-        fullText += followUp.text;
-      }
+      for await (const followChunk of streamGenerate(followUpOptions)) {
+        if (followChunk.text) {
+          textParts.push(followChunk.text);
+          fullText = textParts.join('');
 
-      if (followUp.usageMetadata) {
-        promptTokens =
-          (promptTokens || 0) + (followUp.usageMetadata.promptTokenCount || 0);
-        responseTokens =
-          (responseTokens || 0) +
-          (followUp.usageMetadata.candidatesTokenCount || 0);
+          if (onProgress) {
+            const now = Date.now();
+            if (now - lastProgressTime >= FAST_PATH.STREAMING_INTERVAL_MS) {
+              lastProgressTime = now;
+              onProgress({
+                type: 'message',
+                content: fullText.slice(0, 100),
+                contentDelta: followChunk.text,
+                contentSnapshot: fullText,
+                isComplete: false,
+              });
+            }
+          }
+        }
+
+        if (followChunk.usageMetadata) {
+          promptTokens =
+            (promptTokens || 0) +
+            (followChunk.usageMetadata.promptTokenCount || 0);
+          responseTokens =
+            (responseTokens || 0) +
+            (followChunk.usageMetadata.candidatesTokenCount || 0);
+        }
       }
     }
 
