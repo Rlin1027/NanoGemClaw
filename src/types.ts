@@ -49,6 +49,8 @@ export interface RegisteredGroup {
   requireTrigger?: boolean;
   /** Gemini model to use for this group (e.g. 'gemini-3-flash-preview', 'gemini-3-pro-preview') */
   geminiModel?: string;
+  /** Use direct Gemini API (fast path) instead of container for simple queries (default: true) */
+  enableFastPath?: boolean;
 }
 
 export interface Session {

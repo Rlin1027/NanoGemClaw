@@ -15,22 +15,10 @@ import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 
-import {
-  ASSISTANT_NAME,
-  DATA_DIR,
-  GROUPS_DIR,
-  STORE_DIR,
-} from './config.js';
-import {
-  initDatabase,
-  closeDatabase,
-} from './db.js';
+import { ASSISTANT_NAME, DATA_DIR, GROUPS_DIR, STORE_DIR } from './config.js';
+import { initDatabase, closeDatabase } from './db.js';
 import { loadMaintenanceState } from './maintenance.js';
-import {
-  getBot,
-  getRegisteredGroups,
-  getTypingIntervals,
-} from './state.js';
+import { getBot, getRegisteredGroups, getTypingIntervals } from './state.js';
 import { loadState, saveState, registerGroup } from './group-manager.js';
 import { connectTelegram } from './telegram-bot.js';
 import { closeAllWatchers } from './ipc-watcher.js';
@@ -72,7 +60,8 @@ async function main(): Promise<void> {
   await loadBuiltinHandlers();
 
   // Start health check server
-  const { setHealthCheckDependencies, startHealthCheckServer } = await import('./health-check.js');
+  const { setHealthCheckDependencies, startHealthCheckServer } =
+    await import('./health-check.js');
   setHealthCheckDependencies({
     getGroupCount: () => Object.keys(getRegisteredGroups()).length,
   });
@@ -83,17 +72,34 @@ async function main(): Promise<void> {
   if (isSTTAvailable()) {
     const hasFFmpeg = await checkFFmpegAvailability();
     if (!hasFFmpeg) {
-      console.warn('\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557');
-      console.warn('\u2551  WARNING: ffmpeg not found on host system                    \u2551');
-      console.warn('\u2551  STT audio conversion may fail.                              \u2551');
-      console.warn('\u2551  Please install: brew install ffmpeg                         \u2551');
-      console.warn('\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d');
+      console.warn(
+        '\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557',
+      );
+      console.warn(
+        '\u2551  WARNING: ffmpeg not found on host system                    \u2551',
+      );
+      console.warn(
+        '\u2551  STT audio conversion may fail.                              \u2551',
+      );
+      console.warn(
+        '\u2551  Please install: brew install ffmpeg                         \u2551',
+      );
+      console.warn(
+        '\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d',
+      );
     }
   }
 
   // Start Dashboard Server
-  const { startDashboardServer, setGroupsProvider, setGroupRegistrar, setGroupUpdater, setChatJidResolver } = await import('./server.js');
-  const { getActiveTaskCountsBatch, getMessageCountsBatch, getErrorState } = await import('./db.js');
+  const {
+    startDashboardServer,
+    setGroupsProvider,
+    setGroupRegistrar,
+    setGroupUpdater,
+    setChatJidResolver,
+  } = await import('./server.js');
+  const { getActiveTaskCountsBatch, getMessageCountsBatch, getErrorState } =
+    await import('./db.js');
 
   startDashboardServer();
 
@@ -114,12 +120,13 @@ async function main(): Promise<void> {
         id: group.folder,
         name: group.name,
         status,
-        messageCount: chatId ? (messageCounts.get(chatId) || 0) : 0,
+        messageCount: chatId ? messageCounts.get(chatId) || 0 : 0,
         activeTasks,
         // Extended fields
         persona: group.persona,
         requireTrigger: group.requireTrigger,
         enableWebSearch: group.enableWebSearch,
+        enableFastPath: group.enableFastPath,
         folder: group.folder,
       };
     });
@@ -141,16 +148,34 @@ async function main(): Promise<void> {
   setGroupUpdater((folder: string, updates: Record<string, any>) => {
     const registeredGroups = getRegisteredGroups();
     // Find chatId by folder
-    const entry = Object.entries(registeredGroups).find(([, g]) => g.folder === folder);
+    const entry = Object.entries(registeredGroups).find(
+      ([, g]) => g.folder === folder,
+    );
     if (!entry) return null;
 
     const [chatId, group] = entry;
 
     // Apply updates
     if (updates.persona !== undefined) group.persona = updates.persona;
-    if (updates.enableWebSearch !== undefined) group.enableWebSearch = updates.enableWebSearch;
-    if (updates.requireTrigger !== undefined) group.requireTrigger = updates.requireTrigger;
+    if (updates.enableWebSearch !== undefined)
+      group.enableWebSearch = updates.enableWebSearch;
+    if (updates.requireTrigger !== undefined)
+      group.requireTrigger = updates.requireTrigger;
     if (updates.name !== undefined) group.name = updates.name;
+    if (updates.enableFastPath !== undefined)
+      group.enableFastPath = updates.enableFastPath;
+
+    // Invalidate context cache if relevant settings changed
+    if (
+      updates.persona !== undefined ||
+      updates.enableWebSearch !== undefined
+    ) {
+      import('./context-cache.js')
+        .then(({ invalidateCache }) => {
+          invalidateCache(folder);
+        })
+        .catch(() => {});
+    }
 
     // Save
     registeredGroups[chatId] = group;
@@ -162,7 +187,9 @@ async function main(): Promise<void> {
   // Inject chat JID resolver for export API
   setChatJidResolver((folder: string) => {
     const registeredGroups = getRegisteredGroups();
-    const entry = Object.entries(registeredGroups).find(([, g]) => g.folder === folder);
+    const entry = Object.entries(registeredGroups).find(
+      ([, g]) => g.folder === folder,
+    );
     return entry ? entry[0] : null;
   });
 

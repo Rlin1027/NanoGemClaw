@@ -201,6 +201,24 @@ Keep the summary under 500 words. Output in the same language as the conversatio
 } as const;
 
 /**
+ * Fast Path configuration - Direct Gemini API calls with streaming
+ */
+export const FAST_PATH = {
+  /** Enable direct API calls instead of container for simple queries */
+  ENABLED: process.env.FAST_PATH_ENABLED !== 'false',
+  /** Context cache TTL in seconds (default: 6 hours) */
+  CACHE_TTL_SECONDS: safeParseInt(process.env.CACHE_TTL_SECONDS, 21600),
+  /** Minimum cacheable content length in chars (~32K tokens ≈ 100K chars) */
+  MIN_CACHE_CHARS: safeParseInt(process.env.MIN_CACHE_CHARS, 100000),
+  /** How often to emit streaming progress updates (ms) */
+  STREAMING_INTERVAL_MS: 500,
+  /** Max conversation history messages to include in context */
+  MAX_HISTORY_MESSAGES: 50,
+  /** Timeout for fast path API calls (ms, default: 3 minutes) */
+  TIMEOUT_MS: safeParseInt(process.env.FAST_PATH_TIMEOUT_MS, 180000),
+} as const;
+
+/**
  * Allowed environment variables to pass to containers
  */
 export const ALLOWED_CONTAINER_ENV_KEYS = [
