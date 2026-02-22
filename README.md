@@ -3,11 +3,11 @@
 </p>
 
 <p align="center">
-  Personal AI assistant powered by <strong>Gemini CLI</strong>. Runs securely in containers. Lightweight and built to be understood and customized.
+  Personal AI assistant powered by <strong>Gemini</strong>. Runs securely in containers. Lightweight and built to be understood, customized, and extended.
 </p>
 
 <p align="center">
-  <em>Forked from <a href="https://github.com/gavrielc/nanoclaw">NanoClaw</a> - replaced Claude Agent SDK with Gemini CLI and WhatsApp with Telegram</em>
+  <em>Forked from <a href="https://github.com/gavrielc/nanoclaw">NanoClaw</a> - replaced Claude Agent SDK with Gemini and WhatsApp with Telegram</em>
 </p>
 
 <p align="center">
@@ -18,15 +18,19 @@
   <a href="README.ja.md">日本語</a>
 </p>
 
+---
+
 ## Why NanoGemClaw?
 
-**NanoGemClaw** is a lightweight, secure, and customizable AI assistant that runs **Gemini CLI** in isolated containers.
+**NanoGemClaw** is a lightweight, secure, and extensible AI assistant that runs **Gemini** in isolated containers — delivered via Telegram.
 
 | Feature | NanoClaw | NanoGemClaw |
 |---------|----------|-------------|
-| **Agent Runtime** | Claude Agent SDK | Gemini CLI |
+| **Agent Runtime** | Claude Agent SDK | Gemini CLI + Direct API |
 | **Messaging** | WhatsApp (Baileys) | Telegram Bot API |
 | **Cost** | Claude Max ($100/mo) | Free tier (60 req/min) |
+| **Architecture** | Monolith | Modular monorepo (7 packages) |
+| **Extensibility** | Hardcoded | Plugin system with lifecycle hooks |
 | **Media Support** | Text only | Photo, Voice, Audio, Video, Document |
 | **Web Browsing** | Search only | Full `agent-browser` (Playwright) |
 | **Knowledge Base** | - | FTS5 full-text search per group |
@@ -39,27 +43,61 @@
 
 ## Key Features
 
+- **Modular Monorepo** - 7 npm workspace packages. Use individual packages in your own projects or deploy the full stack.
+- **Plugin System** - Extend with custom Gemini tools, message hooks, API routes, and background services without modifying core code.
 - **Multi-modal I/O** - Send photos, voice messages, videos, or documents. Gemini processes them natively.
-- **Speech-to-Text (STT)** - Voice messages are automatically transcribed (Gemini multimodal or Google Cloud Speech).
+- **Fast Path (Direct API)** - Simple text queries bypass container startup, streaming responses in real-time via the `@google/genai` SDK. Falls back to containers for code execution.
+- **Context Caching** - Static content cached via the Gemini caching API, reducing input token costs by 75-90%.
+- **Native Function Calling** - Tool operations use Gemini's native function calling instead of file-based IPC polling.
+- **Speech-to-Text** - Voice messages are automatically transcribed (Gemini multimodal or Google Cloud Speech).
 - **Image Generation** - Create images using **Imagen 3** via natural language.
-- **Browser Automation** - Agents use `agent-browser` for complex web tasks (interaction, screenshots).
-- **Knowledge Base** - Per-group document store with SQLite FTS5 full-text search. Upload and query documents from the dashboard.
-- **Scheduled Tasks** - Natural language scheduling ("every day at 8am", "每天早上8點") with cron, interval, and one-time support.
-- **Calendar Integration** - Subscribe to iCal feeds (Google Calendar, Apple Calendar, etc.) and query upcoming events.
-- **Skills System** - Assign Markdown-based skill files to groups. Agents gain specialized capabilities (e.g. `agent-browser`, `long-memory`).
-- **Personas** - Pre-defined personalities (coder, translator, writer, analyst) or create custom personas per group.
+- **Browser Automation** - Agents use `agent-browser` for complex web tasks.
+- **Knowledge Base** - Per-group document store with SQLite FTS5 full-text search.
+- **Scheduled Tasks** - Natural language scheduling ("every day at 8am") with cron, interval, and one-time support.
+- **Calendar Integration** - Subscribe to iCal feeds and query upcoming events.
+- **Skills System** - Assign Markdown-based skill files to groups for specialized capabilities.
+- **Personas** - Pre-defined personalities or create custom personas per group.
 - **Multi-model Support** - Choose Gemini model per group (`gemini-3-flash-preview`, `gemini-3-pro-preview`, etc.).
-- **Multi-turn Task Tracking** - Track and manage complex, multi-step background tasks with auto follow-up.
-- **Fast Path (Direct API)** - Simple text queries bypass container startup entirely, streaming responses in real-time via the `@google/genai` SDK. Falls back to containers for media and code execution.
-- **Context Caching** - Static content (system prompt, memory summaries) is cached via the Gemini caching API, reducing input token costs by 75–90%.
-- **Native Function Calling** - Tool operations (scheduling, image gen, preferences) use Gemini's native function calling instead of file-based IPC polling — near-zero latency.
 - **Container Isolation** - Every group runs in its own sandbox (Apple Container or Docker).
-- **Web Dashboard** - 9-module real-time command center with log streaming, memory editor, analytics, knowledge management, and more.
-- **i18n Support** - Full interface support for English, Chinese, Japanese, and Spanish.
+- **Web Dashboard** - 9-module real-time command center with log streaming, memory editor, analytics, and more.
+- **i18n** - Full interface support for English, Chinese, Japanese, and Spanish.
 
 ---
 
-## Installation
+## Monorepo Architecture
+
+```
+nanogemclaw/
+├── packages/
+│   ├── core/          # @nanogemclaw/core      — types, config, logger, utilities
+│   ├── db/            # @nanogemclaw/db        — SQLite persistence (better-sqlite3)
+│   ├── gemini/        # @nanogemclaw/gemini    — Gemini API client, context cache, tools
+│   ├── telegram/      # @nanogemclaw/telegram  — Bot helpers, rate limiter, consolidator
+│   ├── server/        # @nanogemclaw/server    — Express + Socket.IO dashboard API
+│   ├── plugin-api/    # @nanogemclaw/plugin-api — Plugin interface & lifecycle types
+│   └── dashboard/     # React + Vite frontend SPA (private)
+├── app/               # Application entry point — wires all packages together
+├── src/               # Application modules (message handler, bot, scheduler, etc.)
+├── examples/
+│   └── plugin-skeleton/  # Minimal plugin example
+├── container/         # Agent container (Gemini CLI + tools)
+└── docs/              # Documentation & guides
+```
+
+### Package Overview
+
+| Package | Description | Reuse Value |
+|---------|-------------|-------------|
+| `@nanogemclaw/core` | Shared types, config factory, logger, utilities | Medium |
+| `@nanogemclaw/db` | SQLite database layer with FTS5 search | Medium |
+| `@nanogemclaw/gemini` | Gemini API client, context caching, function calling | **High** |
+| `@nanogemclaw/telegram` | Telegram bot helpers, rate limiter, message consolidator | Medium |
+| `@nanogemclaw/server` | Express dashboard server + Socket.IO real-time events | Medium |
+| `@nanogemclaw/plugin-api` | Plugin interface definitions and lifecycle types | **High** |
+
+---
+
+## Quick Start
 
 ### Prerequisites
 
@@ -69,82 +107,125 @@
 | **Gemini CLI** | AI Agent | `npm install -g @google/gemini-cli` |
 | **FFmpeg** | Audio processing (STT) | `brew install ffmpeg` |
 
-### Quick Start
+### 1. Clone & Install
 
-1. **Clone & Install:**
+```bash
+git clone https://github.com/Rlin1027/NanoGemClaw.git
+cd NanoGemClaw
+npm install
+```
 
-   ```bash
-   git clone https://github.com/Rlin1027/NanoGemClaw.git
-   cd NanoGemClaw
-   npm install
-   ```
+### 2. Configure
 
-2. **Configure Bot:**
-   - Get a token from **@BotFather** on Telegram.
-   - Create `.env` based on `.env.example`.
-   - Run `npm run setup:telegram` to verify.
+```bash
+cp .env.example .env
+```
 
-3. **Build Dashboard:**
+Edit `.env` and fill in:
+- `TELEGRAM_BOT_TOKEN` — Get from [@BotFather](https://t.me/BotFather) on Telegram
+- `GEMINI_API_KEY` — Get from [Google AI Studio](https://aistudio.google.com/)
 
-   ```bash
-   cd dashboard && npm install && cd ..
-   npm run build:dashboard
-   ```
+Optionally copy the config file for TypeScript autocompletion:
 
-4. **Build Agent Container:**
+```bash
+cp nanogemclaw.config.example.ts nanogemclaw.config.ts
+```
 
-   ```bash
-   bash container/build.sh
-   ```
+### 3. Build Dashboard
 
-5. **Start:**
+```bash
+cd packages/dashboard && npm install && cd ../..
+npm run build:dashboard
+```
 
-   ```bash
-   npm run dev
-   ```
+### 4. Build Agent Container
 
-   Open `http://localhost:3000` to access the Web Dashboard.
+```bash
+bash container/build.sh
+```
+
+### 5. Start
+
+```bash
+npm run dev
+```
+
+Open `http://localhost:3000` to access the Web Dashboard.
+
+> For a detailed step-by-step guide, see [docs/GUIDE.md](docs/GUIDE.md).
 
 ---
 
-## Monorepo Architecture
+## Plugin System
 
-This project is organized as a TypeScript monorepo with npm workspaces:
+NanoGemClaw supports plugins that extend functionality without modifying core code. Plugins can provide:
 
-```
-packages/
-  core/          # @nanogemclaw/core   — shared types, config, logger, utilities
-  db/            # @nanogemclaw/db     — SQLite database layer (better-sqlite3)
-  gemini/        # @nanogemclaw/gemini — Gemini API client, context caching, function calling
-  telegram/      # @nanogemclaw/telegram — Telegram bot helpers, rate limiter, consolidator
-  server/        # @nanogemclaw/server — Express dashboard server + Socket.IO
-  plugin-api/    # @nanogemclaw/plugin-api — Plugin interface & lifecycle types
-  dashboard/     # @nanogemclaw/dashboard — React + Vite frontend (dashboard SPA)
-
-app/             # Application entry point — wires all packages together
-examples/
-  plugin-skeleton/ — Minimal plugin example to get started
-```
+- **Gemini Tools** — Custom function calling tools available to the AI
+- **Message Hooks** — Intercept messages before/after processing
+- **API Routes** — Custom dashboard API endpoints
+- **Background Services** — Long-running background tasks
+- **IPC Handlers** — Custom inter-process communication handlers
 
 ### Writing a Plugin
 
 1. Copy `examples/plugin-skeleton/` to a new directory.
-2. Implement the `NanoPlugin` interface (lifecycle, tools, hooks, routes).
-3. Register it in `data/plugins.json`:
+2. Implement the `NanoPlugin` interface:
 
-   ```json
-   {
-     "plugins": [
-       {
-         "source": "./my-plugin/src/index.ts",
-         "config": { "myOption": "value" },
-         "enabled": true
-       }
-     ]
-   }
-   ```
+```typescript
+import type { NanoPlugin, PluginApi, GeminiToolContribution } from '@nanogemclaw/plugin-api';
 
-See `examples/plugin-skeleton/src/index.ts` for full documentation.
+const myPlugin: NanoPlugin = {
+  id: 'my-plugin',
+  name: 'My Plugin',
+  version: '1.0.0',
+
+  async init(api: PluginApi) {
+    api.logger.info('Plugin initialized');
+  },
+
+  geminiTools: [
+    {
+      name: 'my_tool',
+      description: 'Does something useful',
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          input: { type: 'STRING', description: 'The input value' },
+        },
+        required: ['input'],
+      },
+      permission: 'any',
+      async execute(args) {
+        return JSON.stringify({ result: `Processed: ${args.input}` });
+      },
+    },
+  ],
+
+  hooks: {
+    async afterMessage(context) {
+      // Log every message for analytics
+    },
+  },
+};
+
+export default myPlugin;
+```
+
+3. Register in `data/plugins.json`:
+
+```json
+{
+  "plugins": [
+    {
+      "source": "./path/to/my-plugin/src/index.ts",
+      "config": { "myOption": "value" },
+      "enabled": true
+    }
+  ]
+}
+```
+
+See `examples/plugin-skeleton/src/index.ts` for a fully documented example, and [docs/GUIDE.md](docs/GUIDE.md) for the complete plugin development guide.
 
 ---
 
@@ -160,11 +241,10 @@ See `examples/plugin-skeleton/src/index.ts` for full documentation.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `GEMINI_API_KEY` | - | API key (if not using OAuth). Required for image generation. |
+| `GEMINI_API_KEY` | - | API key (required for image gen and fast path) |
 | `GEMINI_MODEL` | `gemini-3-flash-preview` | Default Gemini model for all groups |
 | `ASSISTANT_NAME` | `Andy` | Bot trigger name (used for `@Andy` mentions) |
 | `STT_PROVIDER` | `gemini` | Speech-to-text: `gemini` (free) or `gcp` (paid) |
-| `GOOGLE_APPLICATION_CREDENTIALS` | - | GCP service account JSON path (if `STT_PROVIDER=gcp`) |
 
 ### Optional - Dashboard & Security
 
@@ -172,25 +252,17 @@ See `examples/plugin-skeleton/src/index.ts` for full documentation.
 |----------|---------|-------------|
 | `DASHBOARD_HOST` | `127.0.0.1` | Bind address (`0.0.0.0` for LAN access) |
 | `DASHBOARD_API_KEY` | - | API key to protect dashboard access |
+| `DASHBOARD_ACCESS_CODE` | - | Access code for dashboard login screen |
 | `DASHBOARD_ORIGINS` | auto | Comma-separated allowed CORS origins |
-
-### Optional - Rate Limiting & Alerts
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RATE_LIMIT_ENABLED` | `true` | Enable request rate limiting |
-| `RATE_LIMIT_MAX` | `20` | Max requests per window per group |
-| `RATE_LIMIT_WINDOW` | `5` | Rate limit window in minutes |
-| `ALERTS_ENABLED` | `true` | Send error alerts to main group |
 
 ### Optional - Fast Path
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `FAST_PATH_ENABLED` | `true` | Enable direct Gemini API calls for text queries |
-| `FAST_PATH_TIMEOUT_MS` | `180000` | Fast path API timeout (ms) |
-| `CACHE_TTL_SECONDS` | `21600` | Context cache TTL (default: 6 hours) |
-| `MIN_CACHE_CHARS` | `100000` | Minimum content length to trigger context caching |
+| `FAST_PATH_ENABLED` | `true` | Enable direct Gemini API for text queries |
+| `FAST_PATH_TIMEOUT_MS` | `180000` | API timeout (ms) |
+| `CACHE_TTL_SECONDS` | `21600` | Context cache TTL (6 hours) |
+| `MIN_CACHE_CHARS` | `100000` | Min content length for caching |
 
 ### Optional - Infrastructure
 
@@ -198,12 +270,14 @@ See `examples/plugin-skeleton/src/index.ts` for full documentation.
 |----------|---------|-------------|
 | `CONTAINER_TIMEOUT` | `300000` | Container execution timeout (ms) |
 | `CONTAINER_IMAGE` | `nanogemclaw-agent:latest` | Container image name |
-| `HEALTH_CHECK_ENABLED` | `true` | Enable health check HTTP server |
-| `HEALTH_CHECK_PORT` | `8080` | Health check server port |
-| `WEBHOOK_URL` | - | External webhook for notifications (Slack/Discord) |
-| `WEBHOOK_EVENTS` | `error,alert` | Events to trigger webhook |
+| `RATE_LIMIT_ENABLED` | `true` | Enable request rate limiting |
+| `RATE_LIMIT_MAX` | `20` | Max requests per window per group |
+| `RATE_LIMIT_WINDOW` | `5` | Rate limit window (minutes) |
+| `WEBHOOK_URL` | - | External webhook for notifications |
 | `TZ` | system | Timezone for scheduled tasks |
 | `LOG_LEVEL` | `info` | Logging level |
+
+For the complete list, see [.env.example](.env.example).
 
 ---
 
@@ -218,22 +292,19 @@ See `examples/plugin-skeleton/src/index.ts` for full documentation.
 ### Task Scheduling
 
 - `@Andy every morning at 8am, check the weather and suggest what to wear`
-- `@Andy 每天下午3點提醒我喝水`
 - `@Andy monitor my website every 30 minutes and alert me if it goes down`
 
 ### Knowledge Base
 
 - Upload documents via the dashboard, then ask: `@Andy search the knowledge base for deployment guide`
 
----
-
-## Administration
+### Administration
 
 Send these commands directly to the bot:
 
-- `/admin language <lang>` - Switch bot interface language.
-- `/admin persona <name>` - Change bot personality (default, coder, translator, writer, analyst).
-- `/admin report` - Get a daily activity summary.
+- `/admin language <lang>` - Switch bot interface language
+- `/admin persona <name>` - Change bot personality
+- `/admin report` - Get a daily activity summary
 
 ---
 
@@ -256,31 +327,34 @@ graph LR
     Bot --> Scheduler[Task Scheduler]
     Bot --> Calendar[iCal Integration]
     Bot --> Knowledge[Knowledge Base]
+    Bot --> Plugins[Plugin System]
 ```
 
-### Backend (`src/`)
+### Backend Packages
+
+| Package | Key Modules |
+|---------|-------------|
+| `@nanogemclaw/core` | `config.ts`, `types.ts`, `logger.ts`, `utils.ts`, `safe-compare.ts` |
+| `@nanogemclaw/db` | `connection.ts`, `messages.ts`, `tasks.ts`, `stats.ts`, `preferences.ts` |
+| `@nanogemclaw/gemini` | `gemini-client.ts`, `context-cache.ts`, `gemini-tools.ts` |
+| `@nanogemclaw/telegram` | `telegram-helpers.ts`, `telegram-rate-limiter.ts`, `message-consolidator.ts` |
+| `@nanogemclaw/server` | `server.ts`, `routes/` (auth, groups, tasks, knowledge, calendar, skills, config, analytics) |
+| `@nanogemclaw/plugin-api` | `NanoPlugin`, `PluginApi`, `GeminiToolContribution`, `HookContributions` |
+
+### Application Layer (`src/`)
 
 | Module | Purpose |
 |--------|---------|
 | `index.ts` | Telegram bot entry, state management, IPC dispatch |
-| `server.ts` | Express REST API + Socket.IO server |
-| `routes/` | Modular API routes (auth, groups, tasks, knowledge, calendar, skills, config, analytics) |
-| `db/` | Split SQLite modules (connection, messages, tasks, stats, preferences) |
-| `ipc-handlers/` | Plugin-based IPC handlers (schedule, image gen, register, preferences, suggest actions) |
-| `container-runner.ts` | Container lifecycle, streaming output |
-| `fast-path.ts` | Direct Gemini API execution with streaming (bypasses container) |
-| `gemini-client.ts` | `@google/genai` SDK client with streaming support |
-| `context-cache.ts` | Per-group Gemini context cache manager |
-| `gemini-tools.ts` | Native function calling declarations and execution |
 | `message-handler.ts` | Message processing, fast path routing, multi-modal input |
-| `knowledge.ts` | FTS5 knowledge base engine |
-| `google-calendar.ts` | iCal feed parser |
-| `skills.ts` | Skill file discovery and assignment |
-| `natural-schedule.ts` | Natural language to cron parser (EN/ZH) |
-| `personas.ts` | Persona definitions and custom persona management |
+| `fast-path.ts` | Direct Gemini API execution with streaming |
+| `container-runner.ts` | Container lifecycle and streaming output |
 | `task-scheduler.ts` | Cron/interval/one-time task execution |
+| `knowledge.ts` | FTS5 knowledge base engine |
+| `personas.ts` | Persona definitions and custom persona management |
+| `natural-schedule.ts` | Natural language to cron parser (EN/ZH) |
 
-### Frontend (`dashboard/`)
+### Frontend (`packages/dashboard/`)
 
 React + Vite + TailwindCSS SPA with 9 modules:
 
@@ -288,7 +362,7 @@ React + Vite + TailwindCSS SPA with 9 modules:
 |------|-------------|
 | **Overview** | Group status cards with real-time agent activity |
 | **Logs** | Universal log stream with level filtering |
-| **Memory Studio** | Monaco editor for system prompts (GEMINI.md) and conversation summaries |
+| **Memory Studio** | Monaco editor for system prompts and conversation summaries |
 | **Group Detail** | Per-group settings: persona, model, trigger, web search toggle |
 | **Tasks** | Scheduled task CRUD with execution history |
 | **Analytics** | Usage charts, container logs, message statistics |
@@ -305,8 +379,6 @@ React + Vite + TailwindCSS SPA with 9 modules:
 ---
 
 ## Web Dashboard
-
-### Access
 
 ```bash
 # Local access (default)
@@ -328,13 +400,23 @@ npm start                  # Serves dashboard at :3000
 
 ---
 
-## Testing
+## Development
 
 ```bash
-npm test                  # Run all tests (Vitest)
+npm run dev               # Start with tsx (hot reload)
+npm run typecheck         # TypeScript type check (backend)
+npm test                  # Run all tests (Vitest, 12 files, ~330 tests)
 npm run test:watch        # Watch mode
 npm run test:coverage     # Coverage report
-npm run typecheck         # TypeScript type check
+npm run format:check      # Prettier check
+```
+
+Dashboard development:
+
+```bash
+cd packages/dashboard
+npm run dev               # Vite dev server (port 5173, proxies /api -> :3000)
+npx tsc --noEmit          # Type check frontend
 ```
 
 ---
@@ -345,13 +427,12 @@ npm run typecheck         # TypeScript type check
 - **STT failing?** Ensure `ffmpeg` is installed (`brew install ffmpeg`).
 - **Media not processing?** Verify `GEMINI_API_KEY` is set in `.env`.
 - **Container issues?** Run `bash container/build.sh` to rebuild the image.
-- **Dashboard blank page?** Run `cd dashboard && npm install` before building. The dashboard has its own `package.json`.
-- **CORS errors?** Check `DASHBOARD_ORIGINS` env var or ensure your origin is in the allowed list.
-- **Container EROFS error?** Apple Container doesn't support nested overlapping bind mounts. Ensure `~/.gemini` is mounted as read-write.
-- **Fast path not working?** Ensure `GEMINI_API_KEY` is set. OAuth-only setups automatically fall back to container path.
-- **Want to disable fast path?** Set `FAST_PATH_ENABLED=false` globally, or set `enableFastPath: false` per group in the dashboard.
+- **Dashboard blank page?** Run `cd packages/dashboard && npm install` before building.
+- **CORS errors?** Check `DASHBOARD_ORIGINS` env var.
+- **Container EROFS error?** Apple Container doesn't support nested overlapping bind mounts.
+- **Fast path not working?** Ensure `GEMINI_API_KEY` is set. OAuth-only setups fall back to container path.
+- **Want to disable fast path?** Set `FAST_PATH_ENABLED=false` globally, or toggle per group in the dashboard.
 - **Rate limited?** Adjust `RATE_LIMIT_MAX` and `RATE_LIMIT_WINDOW` in `.env`.
-- **Health check port conflict?** Change `HEALTH_CHECK_PORT` or disable with `HEALTH_CHECK_ENABLED=false`.
 
 ---
 
@@ -362,4 +443,4 @@ MIT
 ## Credits
 
 - Original [NanoClaw](https://github.com/gavrielc/nanoclaw) by [@gavrielc](https://github.com/gavrielc)
-- Powered by [Gemini CLI](https://github.com/google-gemini/gemini-cli)
+- Powered by [Gemini](https://ai.google.dev/)

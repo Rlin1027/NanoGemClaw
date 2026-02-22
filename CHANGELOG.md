@@ -10,6 +10,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+#### Monorepo Architecture — 7 npm Workspace Packages
+
+Restructured the entire project from a flat layout into a modular npm workspaces monorepo. Each package can be used independently or as part of the full stack.
+
+- **`@nanogemclaw/core`** — Shared types (`RegisteredGroup`, `ScheduledTask`, `IpcContext`), config factory (`createConfig`, `loadConfigFromEnv`), structured logger (pino-based), and utilities (`loadJson`, `saveJson`, `formatError`, `safeCompare`).
+- **`@nanogemclaw/db`** — SQLite persistence layer built on `better-sqlite3`. Modules for connection management, message storage, task tracking, usage stats, and user preferences. FTS5 full-text search support.
+- **`@nanogemclaw/gemini`** — Gemini API client with streaming support, per-group context cache manager with SHA-256 change detection, and native function calling tool declarations and execution.
+- **`@nanogemclaw/telegram`** — Telegram bot helpers (message sending, typing indicators, media handling), token-bucket rate limiter with per-chat queuing, and message consolidator for batching rapid updates.
+- **`@nanogemclaw/server`** — Express + Socket.IO dashboard server with factory pattern (`createDashboardServer(options)`). Includes 8 modular route files (auth, groups, tasks, knowledge, calendar, skills, config, analytics).
+- **`@nanogemclaw/plugin-api`** — Plugin interface definitions including `NanoPlugin` lifecycle, `GeminiToolContribution`, `HookContributions` (beforeMessage/afterMessage/onMessageError), `RouteContribution`, `ServiceContribution`, and `IpcHandlerContribution`.
+- **`@nanogemclaw/dashboard`** — React + Vite + TailwindCSS + shadcn/ui dashboard SPA (private, not published to npm). Migrated from root `dashboard/` directory.
+
+#### Plugin System
+
+- **Plugin loader** (`app/src/plugin-loader.ts`) — Discovers, loads, initializes, starts, and stops plugins with full error isolation.
+- **Plugin lifecycle** — `init()` for DB migrations/config, `start()` after bot connects, `stop()` for graceful shutdown.
+- **Gemini tool contributions** — Plugins can register custom function calling tools with permission controls (`main` or `any` group).
+- **Message hooks** — Three lifecycle hooks: `beforeMessage` (can short-circuit or skip), `afterMessage` (fire-and-forget for analytics), `onMessageError` (fallback reply).
+- **Route contributions** — Plugin-provided Express routers mounted at `/api/plugins/{pluginId}/{prefix}`.
+- **IPC handler contributions** — Plugins can register custom IPC message handlers.
+- **Plugin manifest** — `data/plugins.json` for declarative plugin registration with per-plugin config.
+- **Example plugin** — `examples/plugin-skeleton/` with fully documented `NanoPlugin` implementation.
+
+#### Deployment Templates
+
+- **`.env.example`** — Comprehensive environment variable reference with all required and optional variables documented.
+- **`nanogemclaw.config.example.ts`** — TypeScript config file example with autocompletion support.
+- **`docs/GUIDE.md`** — Step-by-step deployment and plugin development guide.
+
+### Changed
+
+- **Dashboard location** — Moved from `dashboard/` to `packages/dashboard/`. Build command updated accordingly.
+- **`src/container-runner.ts`** — Changed from direct import of `emitDashboardEvent` to callback injection pattern (`setDashboardEventEmitter`), breaking the circular dependency with `server.ts`.
+- **`src/types.ts`** — `RegisteredGroup` interface extended with optional `id` field to unify the dual-type pattern.
+- **`src/server.ts`** — Added `createDashboardServer()` factory function and `extraRoutes` support for plugin route mounting.
+- **Root `package.json`** — Added `workspaces: ["packages/*"]` for npm workspace support.
+
+---
+
+### Added
+
 #### Fast Path — Direct Gemini API with Streaming
 
 A new **hybrid execution architecture** that bypasses container startup for simple text queries, reducing response latency from 5–15s to 1–3s.
