@@ -8,7 +8,6 @@ import path from 'path';
 import os from 'os';
 import { logger, logEmitter, getLogBuffer } from './logger.js';
 import { safeCompare } from './utils/safe-compare.js';
-
 // Route modules
 import { createAuthRouter } from './routes/auth.js';
 import { createGroupsRouter } from './routes/groups.js';
@@ -18,6 +17,19 @@ import { createCalendarRouter } from './routes/calendar.js';
 import { createSkillsRouter } from './routes/skills.js';
 import { createConfigRouter } from './routes/config.js';
 import { createAnalyticsRouter } from './routes/analytics.js';
+
+/** API-layer group representation (subset of RegisteredGroup for dashboard responses) */
+export interface DashboardGroup {
+  id: string;
+  folder: string;
+  name: string;
+  persona?: string;
+  enableWebSearch?: boolean;
+  requireTrigger?: boolean;
+  geminiModel?: string;
+  enableFastPath?: boolean;
+  [key: string]: unknown; // Allow extra fields like status, messageCount, etc.
+}
 
 // Configuration
 const DASHBOARD_PORT = 3000;
@@ -30,23 +42,13 @@ const ALLOWED_ORIGINS = (
 const DASHBOARD_HOST = process.env.DASHBOARD_HOST || '127.0.0.1';
 const DASHBOARD_API_KEY = process.env.DASHBOARD_API_KEY;
 
-interface RegisteredGroup {
-  id: string;
-  folder: string;
-  name: string;
-  persona?: string;
-  enableWebSearch?: boolean;
-  requireTrigger?: boolean;
-  geminiModel?: string;
-}
-
 // Application State
 let io: Server;
 let httpServer: ReturnType<typeof createServer> | null = null;
-let groupsProvider: () => RegisteredGroup[] = () => [];
-let groupRegistrar: ((chatId: string, name: string) => RegisteredGroup) | null = null;
+let groupsProvider: () => DashboardGroup[] = () => [];
+let groupRegistrar: ((chatId: string, name: string) => DashboardGroup) | null = null;
 let groupUpdater:
-  | ((folder: string, updates: Record<string, any>) => RegisteredGroup | null)
+  | ((folder: string, updates: Record<string, any>) => DashboardGroup | null)
   | null = null;
 let chatJidResolver: ((folder: string) => string | null) | null = null;
 
@@ -326,14 +328,14 @@ export function stopDashboardServer(): void {
 /**
  * Inject the data source for groups
  */
-export function setGroupsProvider(provider: () => RegisteredGroup[]) {
+export function setGroupsProvider(provider: () => DashboardGroup[]) {
   groupsProvider = provider;
 }
 
 /**
  * Inject the group registration function
  */
-export function setGroupRegistrar(fn: (chatId: string, name: string) => RegisteredGroup) {
+export function setGroupRegistrar(fn: (chatId: string, name: string) => DashboardGroup) {
   groupRegistrar = fn;
 }
 
@@ -341,7 +343,7 @@ export function setGroupRegistrar(fn: (chatId: string, name: string) => Register
  * Inject the group update function
  */
 export function setGroupUpdater(
-  fn: (folder: string, updates: Record<string, any>) => RegisteredGroup | null,
+  fn: (folder: string, updates: Record<string, any>) => DashboardGroup | null,
 ) {
   groupUpdater = fn;
 }

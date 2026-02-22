@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import fs from 'fs';
 import path from 'path';
-import { GROUPS_DIR } from '../config.js';
+import { logger } from '@nanogemclaw/core/logger';
 import type { DashboardGroup } from '../server.js';
 
 const SAFE_FOLDER_RE = /^[a-zA-Z0-9_-]+$/;
@@ -14,16 +14,16 @@ interface GroupsRouterDeps {
     validateFolder: (folder: string) => boolean;
     validateNumericParam: (value: string, name: string) => number | null;
     emitDashboardEvent: (event: string, data: unknown) => void;
+    groupsDir: string;
 }
 
 export function createGroupsRouter(deps: GroupsRouterDeps): Router {
     const router = Router();
-    // Note: groupsProvider, groupRegistrar, groupUpdater, chatJidResolver
-    // are accessed via deps.X to support late-binding (set after server start).
     const {
         validateFolder,
         validateNumericParam,
         emitDashboardEvent,
+        groupsDir,
     } = deps;
 
     // GET /api/groups
@@ -35,7 +35,7 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
     // GET /api/groups/discover
     router.get('/groups/discover', async (_req, res) => {
         try {
-            const { getAllChats } = await import('../db.js');
+            const { getAllChats } = await import('@nanogemclaw/db');
             const chats = getAllChats();
             res.json({ data: chats });
         } catch {
@@ -49,7 +49,6 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
             const { chatId } = req.params;
             const { name } = req.body;
 
-            // Validate chatId format (numeric string for Telegram chat IDs)
             if (!chatId || !/^-?\d+$/.test(chatId)) {
                 res.status(400).json({ error: 'Invalid chatId format' });
                 return;
@@ -64,7 +63,6 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
                 return;
             }
             const result = deps.groupRegistrar(chatId, name);
-            // Broadcast updated groups to all dashboard clients
             emitDashboardEvent('groups:update', deps.groupsProvider());
             res.json({ data: result });
         } catch {
@@ -80,8 +78,7 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
             return;
         }
         try {
-            const { getTasksForGroup, getUsageStats, getErrorState } =
-                await import('../db.js');
+            const { getTasksForGroup, getUsageStats, getErrorState } = await import('@nanogemclaw/db');
             const groups = deps.groupsProvider();
             const group = groups.find(
                 (g) => g.id === folder || g.folder === folder,
@@ -122,16 +119,14 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
 
         const { persona, enableWebSearch, requireTrigger, name, geminiModel } = req.body;
 
-        // Validate persona if provided
         if (persona !== undefined) {
-            const { getAllPersonas } = await import('../personas.js');
+            const { getAllPersonas } = await import('../../../../src/personas.js');
             if (!getAllPersonas()[persona]) {
                 res.status(400).json({ error: `Invalid persona: ${persona}` });
                 return;
             }
         }
 
-        // Validate geminiModel if provided
         if (geminiModel !== undefined) {
             const validModels = ['gemini-3-flash-preview', 'gemini-3-pro-preview', 'gemini-2.5-flash', 'gemini-2.5-pro'];
             if (!validModels.includes(geminiModel)) {
@@ -142,8 +137,7 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
 
         const updates: Record<string, unknown> = {};
         if (persona !== undefined) updates.persona = persona;
-        if (enableWebSearch !== undefined)
-            updates.enableWebSearch = enableWebSearch;
+        if (enableWebSearch !== undefined) updates.enableWebSearch = enableWebSearch;
         if (requireTrigger !== undefined) updates.requireTrigger = requireTrigger;
         if (name !== undefined) updates.name = name;
         if (geminiModel !== undefined) updates.geminiModel = geminiModel;
@@ -154,8 +148,6 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
                 res.status(404).json({ error: 'Group not found' });
                 return;
             }
-
-            // Broadcast update to all dashboard clients
             emitDashboardEvent('groups:update', deps.groupsProvider());
             res.json({ data: result });
         } catch {
@@ -166,7 +158,7 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
     // GET /api/personas
     router.get('/personas', async (_req, res) => {
         try {
-            const { getAllPersonas } = await import('../personas.js');
+            const { getAllPersonas } = await import('../../../../src/personas.js');
             res.json({ data: getAllPersonas() });
         } catch {
             res.status(500).json({ error: 'Failed to fetch personas' });
@@ -185,12 +177,12 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
                 res.status(400).json({ error: 'Invalid persona key (alphanumeric, dash, underscore only)' });
                 return;
             }
-            const { saveCustomPersona } = await import('../personas.js');
+            const { saveCustomPersona } = await import('../../../../src/personas.js');
             saveCustomPersona(key, { name, description: description || '', systemPrompt });
             res.json({ data: { key } });
         } catch (err) {
-            const message = err instanceof Error ? err.message : 'Failed to create persona';
-            res.status(400).json({ error: message });
+            logger.error({ err }, 'Failed to create persona');
+            res.status(400).json({ error: 'Failed to create persona' });
         }
     });
 
@@ -202,7 +194,7 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
                 res.status(400).json({ error: 'Invalid persona key' });
                 return;
             }
-            const { deleteCustomPersona } = await import('../personas.js');
+            const { deleteCustomPersona } = await import('../../../../src/personas.js');
             const deleted = deleteCustomPersona(key);
             if (!deleted) {
                 res.status(404).json({ error: 'Persona not found' });
@@ -210,8 +202,8 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
             }
             res.json({ data: { success: true } });
         } catch (err) {
-            const message = err instanceof Error ? err.message : 'Failed to delete persona';
-            res.status(400).json({ error: message });
+            logger.error({ err }, 'Failed to delete persona');
+            res.status(400).json({ error: 'Failed to delete persona' });
         }
     });
 
@@ -223,8 +215,8 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
             return;
         }
         try {
-            const db = await import('../db.js');
-            const prefs = db.getPreferences(folder);
+            const { getPreferences } = await import('@nanogemclaw/db');
+            const prefs = getPreferences(folder);
             res.json({ data: prefs });
         } catch {
             res.status(500).json({ error: 'Failed to fetch preferences' });
@@ -243,15 +235,14 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
             res.status(400).json({ error: 'Key required' });
             return;
         }
-        // Only allow specific preference keys
         const ALLOWED_KEYS = ['language', 'nickname', 'response_style', 'interests', 'timezone', 'custom_instructions'];
         if (!ALLOWED_KEYS.includes(key)) {
             res.status(400).json({ error: `Invalid key. Allowed: ${ALLOWED_KEYS.join(', ')}` });
             return;
         }
         try {
-            const db = await import('../db.js');
-            db.setPreference(folder, key, String(value));
+            const { setPreference } = await import('@nanogemclaw/db');
+            setPreference(folder, key, String(value));
             res.json({ data: { key, value } });
         } catch {
             res.status(500).json({ error: 'Failed to save preference' });
@@ -267,11 +258,10 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
         }
 
         try {
-            const { getConversationExport, formatExportAsMarkdown } = await import('../db.js');
+            const { getConversationExport, formatExportAsMarkdown } = await import('@nanogemclaw/db');
             const format = (req.query.format as string) || 'json';
             const since = req.query.since as string | undefined;
 
-            // Resolve chatJid from folder using the injected resolver
             if (!deps.chatJidResolver) {
                 res.status(503).json({ error: 'Chat resolver not available' });
                 return;
@@ -304,7 +294,7 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
             res.status(400).json({ error: 'Invalid group folder' });
             return;
         }
-        const filePath = path.join(GROUPS_DIR, groupFolder, 'GEMINI.md');
+        const filePath = path.join(groupsDir, groupFolder, 'GEMINI.md');
         try {
             if (!fs.existsSync(filePath)) {
                 res.json({ data: { content: '', mtime: 0 } });
@@ -330,16 +320,14 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
             res.status(400).json({ error: 'Content is required' });
             return;
         }
-        const filePath = path.join(GROUPS_DIR, groupFolder, 'GEMINI.md');
-        const groupDir = path.join(GROUPS_DIR, groupFolder);
+        const filePath = path.join(groupsDir, groupFolder, 'GEMINI.md');
+        const groupDir = path.join(groupsDir, groupFolder);
         try {
-            // Optimistic locking: check mtime
             if (expectedMtime && fs.existsSync(filePath)) {
                 const currentMtime = fs.statSync(filePath).mtimeMs;
                 if (Math.abs(currentMtime - expectedMtime) > 1) {
                     res.status(409).json({
-                        error:
-                            'File was modified by another process. Please reload and try again.',
+                        error: 'File was modified by another process. Please reload and try again.',
                     });
                     return;
                 }
@@ -361,7 +349,7 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
             return;
         }
         try {
-            const { getMemorySummary } = await import('../db.js');
+            const { getMemorySummary } = await import('@nanogemclaw/db');
             const summary = getMemorySummary(groupFolder);
             res.json({ data: summary ?? null });
         } catch {
@@ -400,8 +388,8 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
                 offset = parsedOffset;
             }
 
-            const { searchMessages } = await import('../search.js');
-            const { getDatabase } = await import('../db.js');
+            const { searchMessages } = await import('../../../../src/search.js');
+            const { getDatabase } = await import('@nanogemclaw/db');
             const db = getDatabase();
             const results = searchMessages(db, q, { group, limit, offset });
             res.json({ data: results });

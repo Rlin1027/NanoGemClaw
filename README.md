@@ -107,6 +107,47 @@
 
 ---
 
+## Monorepo Architecture
+
+This project is organized as a TypeScript monorepo with npm workspaces:
+
+```
+packages/
+  core/          # @nanogemclaw/core   — shared types, config, logger, utilities
+  db/            # @nanogemclaw/db     — SQLite database layer (better-sqlite3)
+  gemini/        # @nanogemclaw/gemini — Gemini API client, context caching, function calling
+  telegram/      # @nanogemclaw/telegram — Telegram bot helpers, rate limiter, consolidator
+  server/        # @nanogemclaw/server — Express dashboard server + Socket.IO
+  plugin-api/    # @nanogemclaw/plugin-api — Plugin interface & lifecycle types
+  dashboard/     # @nanogemclaw/dashboard — React + Vite frontend (dashboard SPA)
+
+app/             # Application entry point — wires all packages together
+examples/
+  plugin-skeleton/ — Minimal plugin example to get started
+```
+
+### Writing a Plugin
+
+1. Copy `examples/plugin-skeleton/` to a new directory.
+2. Implement the `NanoPlugin` interface (lifecycle, tools, hooks, routes).
+3. Register it in `data/plugins.json`:
+
+   ```json
+   {
+     "plugins": [
+       {
+         "source": "./my-plugin/src/index.ts",
+         "config": { "myOption": "value" },
+         "enabled": true
+       }
+     ]
+   }
+   ```
+
+See `examples/plugin-skeleton/src/index.ts` for full documentation.
+
+---
+
 ## Environment Variables
 
 ### Required
