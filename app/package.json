@@ -1,0 +1,20 @@
+{
+  "name": "@nanogemclaw/app",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@nanogemclaw/core": "workspace:*",
+    "@nanogemclaw/db": "workspace:*",
+    "@nanogemclaw/gemini": "workspace:*",
+    "@nanogemclaw/telegram": "workspace:*",
+    "@nanogemclaw/server": "workspace:*",
+    "@nanogemclaw/plugin-api": "workspace:*"
+  },
+  "engines": { "node": ">=20" }
+}

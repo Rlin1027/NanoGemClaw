@@ -18,7 +18,23 @@ import {
 import { logger } from './logger.js';
 import { validateAdditionalMounts } from './mount-security.js';
 import { RegisteredGroup } from './types.js';
-import { emitDashboardEvent } from './server.js';
+
+// Dashboard event callback - injected by index.ts to avoid circular dependency
+let dashboardEventEmitter: ((event: string, data: unknown) => void) | null = null;
+
+/**
+ * Set the dashboard event emitter callback.
+ * Called from index.ts after server initialization.
+ */
+export function setDashboardEventEmitter(fn: (event: string, data: unknown) => void): void {
+  dashboardEventEmitter = fn;
+}
+
+function emitDashboardEvent(event: string, data: unknown): void {
+  if (dashboardEventEmitter) {
+    dashboardEventEmitter(event, data);
+  }
+}
 
 // Sentinel markers for robust output parsing (must match agent-runner)
 const OUTPUT_START_MARKER = '---NANOCLAW_OUTPUT_START---';

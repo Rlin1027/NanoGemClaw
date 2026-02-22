@@ -1,0 +1,21 @@
+{
+  "name": "@nanogemclaw/telegram",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./helpers": "./src/telegram-helpers.ts",
+    "./rate-limiter": "./src/telegram-rate-limiter.ts",
+    "./consolidator": "./src/message-consolidator.ts"
+  },
+  "dependencies": {
+    "@nanogemclaw/core": "*",
+    "node-telegram-bot-api": "^0.67.0"
+  },
+  "devDependencies": {
+    "@types/node-telegram-bot-api": "^0.64.0"
+  },
+  "engines": { "node": ">=20" }
+}

@@ -103,6 +103,11 @@ async function main(): Promise<void> {
 
   startDashboardServer();
 
+  // Wire up container-runner → server dashboard event bridge
+  const { emitDashboardEvent } = await import('./server.js');
+  const { setDashboardEventEmitter } = await import('./container-runner.js');
+  setDashboardEventEmitter(emitDashboardEvent);
+
   // Inject data provider
   setGroupsProvider(() => {
     const registeredGroups = getRegisteredGroups();
