@@ -1,6 +1,8 @@
 name: CI
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
 
@@ -14,6 +16,16 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm run typecheck
-      - run: npm run format:check
-      - run: npm test
+
+      # Backend checks
+      - name: Typecheck (backend)
+        run: npm run typecheck
+      - name: Format check
+        run: npm run format:check
+      - name: Test
+        run: npm test
+
+      # Dashboard checks
+      - name: Typecheck (dashboard)
+        run: npx tsc --noEmit
+        working-directory: packages/dashboard
