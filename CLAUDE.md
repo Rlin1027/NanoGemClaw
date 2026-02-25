@@ -9,11 +9,14 @@ Personal AI assistant powered by Gemini, delivered via Telegram. TypeScript mono
 npm run dev              # Start with tsx (hot reload)
 npm run build            # tsc → dist/
 npm run typecheck        # tsc --noEmit
-npm test                 # vitest run (12 files, ~330 tests)
+npm test                 # vitest run (12 files, ~335 tests)
 npm run test:watch       # vitest (watch mode)
+npm run test:coverage    # vitest with coverage report
 npm run format:check     # prettier --check
+npm run setup:telegram   # Telegram bot setup wizard
+npm run build:dashboard  # Build dashboard (packages/dashboard)
 
-# Dashboard (cd dashboard/)
+# Dashboard (cd packages/dashboard/)
 npm run dev              # Vite dev server (port 5173, proxies /api → :3000)
 npm run build            # tsc && vite build
 npx tsc --noEmit         # Type check frontend separately
@@ -24,26 +27,47 @@ npx tsc --noEmit         # Type check frontend separately
 ## Architecture
 
 ```
-src/                     # Backend (Express + Socket.IO + better-sqlite3)
-├── index.ts             # Entry: Telegram bot, state management, IPC
-├── server.ts            # REST API + Socket.IO (dashboard backend, port 3000)
+packages/                # Monorepo workspaces
+├── core/                # @nanogemclaw/core — shared types, logger, config utils
+├── db/                  # @nanogemclaw/db — better-sqlite3, FTS5
+├── gemini/              # @nanogemclaw/gemini — Gemini SDK, context caching, fast path
+├── telegram/            # @nanogemclaw/telegram — bot adapter, rate limiter
+├── server/              # @nanogemclaw/server — Express + Socket.IO REST API
+├── plugin-api/          # @nanogemclaw/plugin-api — plugin SDK (6 extension points)
+└── dashboard/           # @nanogemclaw/dashboard — React + Vite + Tailwind + shadcn/ui
+
+app/                     # Application bootstrap
+├── src/index.ts         # Entry point: wires packages together
+├── src/plugin-loader.ts # Plugin discovery & lifecycle
+└── src/plugin-types.ts  # Plugin type definitions
+
+src/                     # Backend business logic
+├── index.ts             # Telegram bot, state management, IPC
+├── server.ts            # REST API + Socket.IO (port 3000)
 ├── config.ts            # All env vars & constants
-├── types.ts             # Shared types (RegisteredGroup, ScheduledTask, IPC, etc.)
+├── types.ts             # Shared types (RegisteredGroup, ScheduledTask, etc.)
 ├── db.ts                # Re-exports from db/ modules
 ├── db/                  # Split DB: connection, messages, tasks, stats, preferences
-├── routes/              # Express routers: auth, groups, tasks, knowledge, calendar, skills, config, analytics
-├── ipc-handlers/        # IPC message handlers (schedule, cancel, pause, resume, register-group, etc.)
+├── routes/              # Express routers (8): auth, groups, tasks, knowledge, calendar, skills, config, analytics
+├── ipc-handlers/        # IPC handlers (9): schedule, cancel, pause, resume, register-group, etc.
 ├── utils/               # safe-compare.ts (timingSafeEqual)
-└── __tests__/           # Vitest tests
+└── __tests__/           # Vitest tests (12 files)
 
-dashboard/               # Frontend (React + Vite + Tailwind + shadcn/ui)
-├── src/pages/           # Overview, Tasks, Knowledge, Calendar, Analytics, Settings, Logs, Memory, GroupDetail
-├── src/components/      # DashboardLayout, LoginScreen, modals, editors, charts
-├── src/hooks/           # useApi (apiFetch, useApiQuery, useApiMutation), useToast
-└── src/lib/             # utils (cn())
+container/               # Agent execution environment
+├── Dockerfile           # Container image definition
+├── build.sh             # Container build script
+├── agent-runner/        # Agent runtime inside container
+└── skills/              # Container-side skill definitions
 
-store/                   # Runtime data (gitignored): messages.db, registered_groups.json
-groups/                  # Per-group folders with conversation context
+docs/                    # Project documentation
+├── GUIDE.md             # User guide
+├── SECURITY.md          # Security model documentation
+├── SPEC.md              # Technical specification
+└── REQUIREMENTS.md      # Requirements document
+
+examples/plugin-skeleton/ # Plugin template with package.json + src/index.ts
+store/                    # Runtime data (gitignored): messages.db, registered_groups.json
+groups/                   # Per-group folders with conversation context
 ```
 
 ## Key Patterns
@@ -61,6 +85,10 @@ groups/                  # Per-group folders with conversation context
 **Route param validation** — `SAFE_FOLDER_RE = /^[a-zA-Z0-9_-]+$/` for folder params to prevent path traversal.
 
 **FTS5 queries** — Wrap search terms in double quotes: `"${query.replace(/"/g, '""')}"` to prevent injection.
+
+**Plugin system** — 6 extension points: Gemini Tools (permission: `'main' | 'any'`), Message Hooks (`before/after/onError`), Express Routes (`/api/plugins/{id}/`), IPC Handlers, Background Services, Dashboard extensions. Lifecycle: `init() → start() → stop()` (reverse shutdown). See `examples/plugin-skeleton/`.
+
+**Monorepo workspaces** — `packages/*` via npm workspaces. Each package exports through `index.ts`. `@nanogemclaw/gemini` and `@nanogemclaw/plugin-api` are independently reusable.
 
 ## Conventions
 
