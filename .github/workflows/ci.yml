@@ -29,3 +29,6 @@ jobs:
       - name: Typecheck (dashboard)
         run: npx tsc --noEmit
         working-directory: packages/dashboard
+      - name: Test (dashboard)
+        run: npm test
+        working-directory: packages/dashboard
