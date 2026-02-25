@@ -122,6 +122,7 @@ cp .env.example .env
 ```
 
 `.env` を編集して以下を入力してください:
+
 - `TELEGRAM_BOT_TOKEN` — Telegram の [@BotFather](https://t.me/BotFather) から取得
 - `GEMINI_API_KEY` — [Google AI Studio](https://aistudio.google.com/) から取得
 
@@ -211,7 +212,7 @@ const myPlugin: NanoPlugin = {
 export default myPlugin;
 ```
 
-3. `data/plugins.json` に登録します:
+1. `data/plugins.json` に登録します:
 
 ```json
 {

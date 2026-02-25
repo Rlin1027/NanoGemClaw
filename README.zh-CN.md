@@ -122,6 +122,7 @@ cp .env.example .env
 ```
 
 编辑 `.env` 并填写：
+
 - `TELEGRAM_BOT_TOKEN` — 在 Telegram 上从 [@BotFather](https://t.me/BotFather) 获取
 - `GEMINI_API_KEY` — 从 [Google AI Studio](https://aistudio.google.com/) 获取
 
@@ -211,7 +212,7 @@ const myPlugin: NanoPlugin = {
 export default myPlugin;
 ```
 
-3. 在 `data/plugins.json` 中注册：
+1. 在 `data/plugins.json` 中注册：
 
 ```json
 {

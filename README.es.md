@@ -122,6 +122,7 @@ cp .env.example .env
 ```
 
 Edita `.env` y completa:
+
 - `TELEGRAM_BOT_TOKEN` — Obtenlo de [@BotFather](https://t.me/BotFather) en Telegram
 - `GEMINI_API_KEY` — Obtenlo de [Google AI Studio](https://aistudio.google.com/)
 
@@ -211,7 +212,7 @@ const myPlugin: NanoPlugin = {
 export default myPlugin;
 ```
 
-3. Registra en `data/plugins.json`:
+1. Registra en `data/plugins.json`:
 
 ```json
 {
