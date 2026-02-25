@@ -4,19 +4,18 @@
  */
 import { spawn } from 'child_process';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 
 import {
   CONTAINER,
-  CONTAINER_IMAGE,
   CONTAINER_MAX_OUTPUT_SIZE,
   CONTAINER_TIMEOUT,
   DATA_DIR,
   GROUPS_DIR,
 } from './config.js';
+import { buildContainerArgs, buildVolumeMounts } from './container-mounts.js';
+import { groupLockManager } from './group-lock-manager.js';
 import { logger } from './logger.js';
-import { validateAdditionalMounts } from './mount-security.js';
 import { RegisteredGroup } from './types.js';
 
 // Dashboard event callback - injected by index.ts to avoid circular dependency
@@ -42,82 +41,6 @@ function emitDashboardEvent(event: string, data: unknown): void {
 // Sentinel markers for robust output parsing (must match agent-runner)
 const OUTPUT_START_MARKER = '---NANOCLAW_OUTPUT_START---';
 const OUTPUT_END_MARKER = '---NANOCLAW_OUTPUT_END---';
-
-// ============================================================================
-// Group Lock Manager - Centralized per-group concurrency control
-// ============================================================================
-
-/**
- * Manages per-group locks to prevent concurrent container execution.
- * Ensures only one container runs per group at a time, whether triggered by
- * user messages, scheduled tasks, or IPC commands.
- *
- * Memory is automatically cleaned up when a group's queue becomes empty.
- */
-class GroupLockManager {
-  private locks: Map<string, Promise<void>> = new Map();
-  private activeCount: Map<string, number> = new Map();
-
-  /**
-   * Acquire a lock for the given group and execute the task.
-   * Tasks are queued and executed serially per group.
-   */
-  async withLock<T>(groupFolder: string, task: () => Promise<T>): Promise<T> {
-    // Increment active count
-    const currentCount = this.activeCount.get(groupFolder) || 0;
-    this.activeCount.set(groupFolder, currentCount + 1);
-
-    // Chain this task to the group's queue
-    const currentLock = this.locks.get(groupFolder) || Promise.resolve();
-
-    let taskResolve: () => void;
-    const taskPromise = new Promise<void>((resolve) => {
-      taskResolve = resolve;
-    });
-
-    // Update the lock to include this task
-    this.locks.set(
-      groupFolder,
-      currentLock.then(() => taskPromise),
-    );
-
-    // Wait for our turn
-    await currentLock;
-
-    try {
-      return await task();
-    } finally {
-      // Decrement active count and cleanup if empty
-      const newCount = (this.activeCount.get(groupFolder) || 1) - 1;
-      if (newCount <= 0) {
-        this.activeCount.delete(groupFolder);
-        this.locks.delete(groupFolder);
-      } else {
-        this.activeCount.set(groupFolder, newCount);
-      }
-      // Signal next task can proceed
-      taskResolve!();
-    }
-  }
-
-  /** Check if a group currently has pending tasks */
-  hasPending(groupFolder: string): boolean {
-    return (this.activeCount.get(groupFolder) || 0) > 0;
-  }
-}
-
-// Singleton instance for the application
-const groupLockManager = new GroupLockManager();
-
-function getHomeDir(): string {
-  const home = process.env.HOME || os.homedir();
-  if (!home) {
-    throw new Error(
-      'Unable to determine home directory: HOME environment variable is not set and os.homedir() returned empty',
-    );
-  }
-  return home;
-}
 
 export interface ContainerInput {
   prompt: string;
@@ -154,158 +77,6 @@ export interface ProgressInfo {
   contentDelta?: string; // 增量文字內容
   contentSnapshot?: string; // 當前完整累積文字（供 editMessage 使用）
   isComplete?: boolean; // 回覆是否完成
-}
-
-interface VolumeMount {
-  hostPath: string;
-  containerPath: string;
-  readonly?: boolean;
-}
-
-function buildVolumeMounts(
-  group: RegisteredGroup,
-  isMain: boolean,
-): VolumeMount[] {
-  if (!/^[a-zA-Z0-9_-]+$/.test(group.folder)) {
-    throw new Error(`Invalid group folder name: ${group.folder}`);
-  }
-  const mounts: VolumeMount[] = [];
-  const homeDir = getHomeDir();
-  const projectRoot = process.cwd();
-
-  if (isMain) {
-    // Main gets the project root mounted read-only to prevent code tampering
-    mounts.push({
-      hostPath: projectRoot,
-      containerPath: '/workspace/project',
-      readonly: true, // Security: prevent code tampering
-    });
-
-    // Main gets its group folder as the working directory (writable)
-    // Note: Apple Container doesn't allow duplicate host paths in mounts,
-    // so we only mount groups/main once at /workspace/group
-    mounts.push({
-      hostPath: path.join(GROUPS_DIR, group.folder),
-      containerPath: '/workspace/group',
-      readonly: false,
-    });
-  } else {
-    // Other groups only get their own folder
-    mounts.push({
-      hostPath: path.join(GROUPS_DIR, group.folder),
-      containerPath: '/workspace/group',
-      readonly: false,
-    });
-
-    // Global memory directory (read-only for non-main)
-    // Apple Container only supports directory mounts, not file mounts
-    const globalDir = path.join(GROUPS_DIR, 'global');
-    if (fs.existsSync(globalDir)) {
-      mounts.push({
-        hostPath: globalDir,
-        containerPath: '/workspace/global',
-        readonly: true,
-      });
-    }
-  }
-
-  // Global Gemini directory for OAuth credentials and session data
-  // Read-only: protect OAuth credentials from being modified by container code.
-  // The per-group sessions directory below overrides /home/node/.gemini/tmp
-  // with a writable mount for session isolation.
-  const hostGeminiDir = path.join(homeDir, '.gemini');
-  if (fs.existsSync(hostGeminiDir)) {
-    mounts.push({
-      hostPath: hostGeminiDir,
-      containerPath: '/home/node/.gemini',
-      readonly: true, // Security: prevent container from modifying OAuth credentials
-    });
-  }
-
-  // Per-group Gemini sessions directory (isolated from other groups)
-  // This overrides the global .gemini/tmp for session isolation
-  const groupSessionsDir = path.join(
-    DATA_DIR,
-    'sessions',
-    group.folder,
-    '.gemini-tmp',
-  );
-  fs.mkdirSync(groupSessionsDir, { recursive: true });
-  mounts.push({
-    hostPath: groupSessionsDir,
-    containerPath: '/home/node/.gemini/tmp',
-    readonly: false,
-  });
-
-  // Per-group IPC namespace: each group gets its own IPC directory
-  // This prevents cross-group privilege escalation via IPC
-  const groupIpcDir = path.join(DATA_DIR, 'ipc', group.folder);
-  fs.mkdirSync(path.join(groupIpcDir, 'messages'), { recursive: true });
-  fs.mkdirSync(path.join(groupIpcDir, 'tasks'), { recursive: true });
-  mounts.push({
-    hostPath: groupIpcDir,
-    containerPath: '/workspace/ipc',
-    readonly: false,
-  });
-
-  // Environment file directory (workaround for Apple Container -i env var bug)
-  // Only expose specific auth variables needed by Gemini CLI, not the entire .env
-  const envDir = path.join(DATA_DIR, 'env', group.folder); // per-group isolation
-  fs.mkdirSync(envDir, { recursive: true });
-  const envFile = path.join(projectRoot, '.env');
-  if (fs.existsSync(envFile)) {
-    const envContent = fs.readFileSync(envFile, 'utf-8');
-    const allowedVars = ['GEMINI_API_KEY', 'GOOGLE_API_KEY'];
-    const filteredLines = envContent.split('\n').filter((line) => {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('#')) return false;
-      return allowedVars.some((v) => trimmed.startsWith(`${v}=`));
-    });
-
-    if (filteredLines.length > 0) {
-      fs.writeFileSync(
-        path.join(envDir, 'env'),
-        filteredLines.join('\n') + '\n',
-      );
-      mounts.push({
-        hostPath: envDir,
-        containerPath: '/workspace/env-dir',
-        readonly: true,
-      });
-    }
-  }
-
-  // Additional mounts validated against external allowlist (tamper-proof from containers)
-  if (group.containerConfig?.additionalMounts) {
-    const validatedMounts = validateAdditionalMounts(
-      group.containerConfig.additionalMounts,
-      group.name,
-      isMain,
-    );
-    mounts.push(...validatedMounts);
-  }
-
-  return mounts;
-}
-
-function buildContainerArgs(mounts: VolumeMount[]): string[] {
-  const args: string[] = ['run', '-i', '--rm'];
-
-  // Apple Container: --mount for readonly, -v for read-write
-  for (const mount of mounts) {
-    if (mount.readonly) {
-      args.push(
-        '--mount',
-        `type=bind,source=${mount.hostPath},target=${mount.containerPath},readonly`,
-      );
-    } else {
-      args.push('-v', `${mount.hostPath}:${mount.containerPath}`);
-    }
-  }
-
-  args.push(CONTAINER_IMAGE);
-
-  return args;
 }
 
 /**
@@ -797,66 +568,11 @@ Only suggest follow-ups when they genuinely add value. Do not suggest them for s
   });
 }
 
-export function writeTasksSnapshot(
-  groupFolder: string,
-  isMain: boolean,
-  tasks: Array<{
-    id: string;
-    groupFolder: string;
-    prompt: string;
-    schedule_type: string;
-    schedule_value: string;
-    status: string;
-    next_run: string | null;
-  }>,
-): void {
-  // Write filtered tasks to the group's IPC directory
-  const groupIpcDir = path.join(DATA_DIR, 'ipc', groupFolder);
-  fs.mkdirSync(groupIpcDir, { recursive: true });
-
-  // Main sees all tasks, others only see their own
-  const filteredTasks = isMain
-    ? tasks
-    : tasks.filter((t) => t.groupFolder === groupFolder);
-
-  const tasksFile = path.join(groupIpcDir, 'current_tasks.json');
-  fs.writeFileSync(tasksFile, JSON.stringify(filteredTasks, null, 2));
-}
-
-export interface AvailableGroup {
-  jid: string;
-  name: string;
-  lastActivity: string;
-  isRegistered: boolean;
-}
-
-/**
- * Write available groups snapshot for the container to read.
- * Only main group can see all available groups (for activation).
- * Non-main groups only see their own registration status.
- */
-export function writeGroupsSnapshot(
-  groupFolder: string,
-  isMain: boolean,
-  groups: AvailableGroup[],
-  registeredJids: Set<string>,
-): void {
-  const groupIpcDir = path.join(DATA_DIR, 'ipc', groupFolder);
-  fs.mkdirSync(groupIpcDir, { recursive: true });
-
-  // Main sees all groups; others see nothing (they can't activate groups)
-  const visibleGroups = isMain ? groups : [];
-
-  const groupsFile = path.join(groupIpcDir, 'available_groups.json');
-  fs.writeFileSync(
-    groupsFile,
-    JSON.stringify(
-      {
-        groups: visibleGroups,
-        lastSync: new Date().toISOString(),
-      },
-      null,
-      2,
-    ),
-  );
-}
+// Backward compatibility re-exports
+export { GroupLockManager, groupLockManager } from './group-lock-manager.js';
+export {
+  AvailableGroup,
+  writeTasksSnapshot,
+  writeGroupsSnapshot,
+} from './container-ipc.js';
+export type { VolumeMount } from './container-mounts.js';

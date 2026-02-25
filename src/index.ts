@@ -16,7 +16,13 @@ import fs from 'fs';
 import path from 'path';
 
 import { ASSISTANT_NAME, DATA_DIR, GROUPS_DIR, STORE_DIR } from './config.js';
-import { initDatabase, closeDatabase } from './db.js';
+import {
+  initDatabase,
+  closeDatabase,
+  getActiveTaskCountsBatch,
+  getMessageCountsBatch,
+  getErrorState,
+} from './db.js';
 import { loadMaintenanceState } from './maintenance.js';
 import { getBot, getRegisteredGroups, getTypingIntervals } from './state.js';
 import { loadState, saveState, registerGroup } from './group-manager.js';
@@ -97,14 +103,12 @@ async function main(): Promise<void> {
     setGroupRegistrar,
     setGroupUpdater,
     setChatJidResolver,
+    emitDashboardEvent,
   } = await import('./server.js');
-  const { getActiveTaskCountsBatch, getMessageCountsBatch, getErrorState } =
-    await import('./db.js');
 
   startDashboardServer();
 
   // Wire up container-runner → server dashboard event bridge
-  const { emitDashboardEvent } = await import('./server.js');
   const { setDashboardEventEmitter } = await import('./container-runner.js');
   setDashboardEventEmitter(emitDashboardEvent);
 
@@ -220,8 +224,22 @@ async function gracefulShutdown(signal: string): Promise<void> {
   console.log(`\n${signal} received, shutting down gracefully...`);
   let shutdownError = false;
   try {
+    // Import shutdown dependencies in parallel
+    const [
+      { stopHealthCheckServer },
+      { stopBackupSchedule },
+      { messageConsolidator },
+      { telegramRateLimiter },
+      { stopDashboardServer },
+    ] = await Promise.all([
+      import('./health-check.js'),
+      import('./backup.js'),
+      import('./message-consolidator.js'),
+      import('./telegram-rate-limiter.js'),
+      import('./server.js'),
+    ]);
+
     // Stop health check server
-    const { stopHealthCheckServer } = await import('./health-check.js');
     await stopHealthCheckServer();
 
     // Stop Telegram polling
@@ -229,7 +247,6 @@ async function gracefulShutdown(signal: string): Promise<void> {
     await bot?.stopPolling();
 
     // Stop backup schedule
-    const { stopBackupSchedule } = await import('./backup.js');
     stopBackupSchedule();
 
     // Clean up typing intervals (memory leak fix)
@@ -241,13 +258,10 @@ async function gracefulShutdown(signal: string): Promise<void> {
     closeAllWatchers();
 
     // Clean up consolidator + rate limiter
-    const { messageConsolidator } = await import('./message-consolidator.js');
     messageConsolidator.destroy();
-    const { telegramRateLimiter } = await import('./telegram-rate-limiter.js');
     telegramRateLimiter.destroy();
 
     // Stop Dashboard server
-    const { stopDashboardServer } = await import('./server.js');
     stopDashboardServer();
 
     // Save state and close database
