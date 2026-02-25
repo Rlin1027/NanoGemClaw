@@ -2,48 +2,55 @@
 
 A personal Gemini assistant accessible via Telegram, with persistent memory per conversation, scheduled tasks, and web access.
 
+> For setup, deployment, and plugin development, see [GUIDE.md](./GUIDE.md).
+> For the security model, see [SECURITY.md](./SECURITY.md).
+
 ---
 
 ## Table of Contents
 
 1. [Architecture](#architecture)
-2. [Folder Structure](#folder-structure)
-3. [Configuration](#configuration)
-4. [Memory System](#memory-system)
-5. [Session Management](#session-management)
-6. [Message Flow](#message-flow)
-7. [Commands](#commands)
-8. [Scheduled Tasks](#scheduled-tasks)
-9. [MCP Servers](#mcp-servers)
-10. [Deployment](#deployment)
-11. [Security Considerations](#security-considerations)
+2. [Memory System](#memory-system)
+3. [Session Management](#session-management)
+4. [Message Flow](#message-flow)
+5. [Commands](#commands)
+6. [Scheduled Tasks](#scheduled-tasks)
+7. [MCP Servers](#mcp-servers)
+8. [Security Considerations](#security-considerations)
 
 ---
 
 ## Architecture
 
+### Dual-Path Processing
+
+Messages are routed through one of two paths depending on complexity:
+
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                        HOST (macOS)                                  │
-│                   (Main Node.js Process)                             │
+│                        HOST (Node.js Process)                        │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │  ┌──────────────┐                     ┌────────────────────┐        │
 │  │  Telegram    │────────────────────▶│   SQLite Database  │        │
-│  │  (node-tg)   │◀────────────────────│   (messages.db)    │        │
+│  │  (bot-api)   │◀────────────────────│   (messages.db)    │        │
 │  └──────────────┘   store/send        └─────────┬──────────┘        │
 │                                                  │                   │
 │         ┌────────────────────────────────────────┘                   │
 │         │                                                            │
 │         ▼                                                            │
 │  ┌──────────────────┐    ┌──────────────────┐    ┌───────────────┐  │
-│  │  Message Loop    │    │  Scheduler Loop  │    │  IPC Watcher  │  │
-│  │  (polls SQLite)  │    │  (checks tasks)  │    │  (file-based) │  │
+│  │  Message Handler │    │  Scheduler Loop  │    │  IPC Watcher  │  │
+│  │  (routes msgs)   │    │  (checks tasks)  │    │  (file-based) │  │
 │  └────────┬─────────┘    └────────┬─────────┘    └───────────────┘  │
 │           │                       │                                  │
-│           └───────────┬───────────┘                                  │
-│                       │ spawns container                             │
-│                       ▼                                              │
+│           ├── Fast path ──────────┤                                  │
+│           │   (direct Gemini API) │                                  │
+│           │   No container needed │                                  │
+│           │                       │                                  │
+│           └── Container path ─────┘                                  │
+│               (complex tasks)     │ spawns container                 │
+│                                   ▼                                  │
 ├─────────────────────────────────────────────────────────────────────┤
 │                  APPLE CONTAINER (Linux VM)                          │
 ├─────────────────────────────────────────────────────────────────────┤
@@ -53,7 +60,7 @@ A personal Gemini assistant accessible via Telegram, with persistent memory per 
 │  │  Working directory: /workspace/group (mounted from host)       │   │
 │  │  Volume mounts:                                                │   │
 │  │    • groups/{name}/ → /workspace/group                         │   │
-│  │    • groups/global/ → /workspace/global/ (non-main only)        │   │
+│  │    • groups/global/ → /workspace/global/ (non-main only)       │   │
 │  │    • data/sessions/{group}/.gemini/ → /home/node/.gemini/      │   │
 │  │    • Additional dirs → /workspace/extra/*                      │   │
 │  │                                                                │   │
@@ -69,182 +76,22 @@ A personal Gemini assistant accessible via Telegram, with persistent memory per 
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
+**Fast path** — Simple text queries go directly to the Gemini API (`src/fast-path.ts`) with streaming response. Bypasses container startup latency (5–15s). Uses context caching to reduce token costs 75–90%.
+
+**Container path** — Complex tasks (code execution, browser automation, multi-step workflows) spawn an isolated Apple Container with the Gemini CLI agent.
+
 ### Technology Stack
 
 | Component | Technology | Purpose |
 |-----------|------------|---------|
-| Telegram Connection | Node.js (node-telegram-bot-api) | Connect to Telegram, send/receive messages |
-| Message Storage | SQLite (better-sqlite3) | Store messages for polling |
+| Telegram Connection | node-telegram-bot-api | Connect to Telegram, send/receive messages |
+| Message Storage | SQLite (better-sqlite3) | Store messages, tasks, stats, preferences |
+| Fast Path AI | @google/genai SDK | Direct Gemini API with function calling + caching |
 | Container Runtime | Apple Container | Isolated Linux VMs for agent execution |
-| Agent | Gemini CLI | Run Gemini agent with tools and MCP servers |
+| Container Agent | Gemini CLI | Run Gemini agent with tools and MCP servers |
 | Browser Automation | agent-browser + Chromium | Web interaction and screenshots |
-| Runtime | Node.js 20+ | Host process for routing and scheduling |
-
----
-
-## Folder Structure
-
-```
-nanogemclaw/
-├── GEMINI.md                      # Project context for Gemini CLI
-├── docs/
-│   ├── SPEC.md                    # This specification document
-│   ├── REQUIREMENTS.md            # Architecture decisions
-│   └── SECURITY.md                # Security model
-├── README.md                      # User documentation
-├── package.json                   # Node.js dependencies
-├── tsconfig.json                  # TypeScript configuration
-├── .mcp.json                      # MCP server configuration (reference)
-├── .gitignore
-│
-├── src/
-│   ├── index.ts                   # Main application (Telegram + routing)
-│   ├── config.ts                  # Configuration constants
-│   ├── types.ts                   # TypeScript interfaces
-│   ├── utils.ts                   # Generic utility functions
-│   ├── db.ts                      # Database initialization and queries
-│   ├── task-scheduler.ts          # Runs scheduled tasks when due
-│   └── container-runner.ts        # Spawns agents in Apple Containers
-│
-├── container/
-│   ├── Dockerfile                 # Container image (runs as 'node' user, includes Gemini CLI)
-│   ├── build.sh                   # Build script for container image
-│   ├── agent-runner/              # Code that runs inside the container
-│   │   ├── package.json
-│   │   ├── tsconfig.json
-│   │   └── src/
-│   │       ├── index.ts           # Entry point (reads JSON, runs agent)
-│   │       └── ipc-mcp.ts         # MCP server for host communication
-│   └── skills/
-│       └── agent-browser.md       # Browser automation skill
-│
-├── dist/                          # Compiled JavaScript (gitignored)
-│
-├── .gemini/
-│   └── skills/
-│       ├── setup/
-│       │   └── SKILL.md           # /setup skill
-│       ├── customize/
-│       │   └── SKILL.md           # /customize skill
-│       └── debug/
-│           └── SKILL.md           # /debug skill (container debugging)
-│
-├── groups/
-│   ├── GEMINI.md                  # Global memory (all groups read this)
-│   ├── main/                      # Self-chat (main control channel)
-│   │   ├── GEMINI.md              # Main channel memory
-│   │   └── logs/                  # Task execution logs
-│   └── {Group Name}/              # Per-group folders (created on registration)
-│       ├── GEMINI.md              # Group-specific memory
-│       ├── logs/                  # Task logs for this group
-│       └── *.md                   # Files created by the agent
-│
-├── store/                         # Local data (gitignored)
-│   ├── auth/                      # Telegram authentication state
-│   └── messages.db                # SQLite database (messages, scheduled_tasks, task_run_logs)
-│
-├── data/                          # Application state (gitignored)
-│   ├── sessions.json              # Active session IDs per group
-│   ├── registered_groups.json     # Group JID → folder mapping
-│   ├── router_state.json          # Last processed timestamp + last agent timestamps
-│   ├── env/env                    # Copy of .env for container mounting
-│   └── ipc/                       # Container IPC (messages/, tasks/)
-│
-├── logs/                          # Runtime logs (gitignored)
-│   ├── nanogemclaw.log            # Host stdout
-│   └── nanogemclaw.error.log      # Host stderr
-│   # Note: Per-container logs are in groups/{folder}/logs/container-*.log
-│
-└── launchd/
-    └── com.nanogemclaw.plist      # macOS service configuration
-```
-
----
-
-## Configuration
-
-Configuration constants are in `src/config.ts`:
-
-```typescript
-import path from 'path';
-
-export const ASSISTANT_NAME = process.env.ASSISTANT_NAME || 'Andy';
-export const POLL_INTERVAL = 2000;
-export const SCHEDULER_POLL_INTERVAL = 60000;
-
-// Paths are absolute (required for container mounts)
-const PROJECT_ROOT = process.cwd();
-export const STORE_DIR = path.resolve(PROJECT_ROOT, 'store');
-export const GROUPS_DIR = path.resolve(PROJECT_ROOT, 'groups');
-export const DATA_DIR = path.resolve(PROJECT_ROOT, 'data');
-
-// Container configuration
-export const CONTAINER_IMAGE = process.env.CONTAINER_IMAGE || 'nanogemclaw-agent:latest';
-export const CONTAINER_TIMEOUT = parseInt(process.env.CONTAINER_TIMEOUT || '300000', 10);
-export const IPC_POLL_INTERVAL = 1000;
-
-export const TRIGGER_PATTERN = new RegExp(`^@${ASSISTANT_NAME}\\b`, 'i');
-```
-
-**Note:** Paths must be absolute for Apple Container volume mounts to work correctly.
-
-### Container Configuration
-
-Groups can have additional directories mounted via `containerConfig` in `data/registered_groups.json`:
-
-```json
-{
-  "1234567890@g.us": {
-    "name": "Dev Team",
-    "folder": "dev-team",
-    "trigger": "@Andy",
-    "added_at": "2026-01-31T12:00:00Z",
-    "containerConfig": {
-      "additionalMounts": [
-        {
-          "hostPath": "~/projects/webapp",
-          "containerPath": "webapp",
-          "readonly": false
-        }
-      ],
-      "timeout": 600000
-    }
-  }
-}
-```
-
-Additional mounts appear at `/workspace/extra/{containerPath}` inside the container.
-
-**Apple Container mount syntax note:** Read-write mounts use `-v host:container`, but readonly mounts require `--mount "type=bind,source=...,target=...,readonly"` (the `:ro` suffix doesn't work).
-
-### Gemini Authentication
-
-Configure authentication in a `.env` file in the project root:
-
-```bash
-GEMINI_API_KEY=AIza...
-```
-
-Only the `GEMINI_API_KEY` variable is extracted from `.env` and mounted into the container at `/workspace/env-dir/env`, then sourced by the entrypoint script. This ensures other environment variables in `.env` are not exposed to the agent. This workaround is needed because Apple Container loses `-e` environment variables when using `-i` (interactive mode with piped stdin).
-
-### Changing the Assistant Name
-
-Set the `ASSISTANT_NAME` environment variable:
-
-```bash
-ASSISTANT_NAME=Bot npm start
-```
-
-Or edit the default in `src/config.ts`. This changes:
-- The trigger pattern (messages must start with `@YourName`)
-- The response prefix (`YourName:` added automatically)
-
-### Placeholder Values in launchd
-
-Files with `{{PLACEHOLDER}}` values need to be configured:
-- `{{PROJECT_ROOT}}` - Absolute path to your nanogemclaw installation
-- `{{NODE_PATH}}` - Path to node binary (detected via `which node`)
-- `{{HOME}}` - User's home directory
+| Dashboard | Express + Socket.IO + React | Real-time monitoring and management |
+| Runtime | Node.js 20+ | Host process |
 
 ---
 
@@ -283,7 +130,7 @@ NanoGemClaw uses a hierarchical memory system based on GEMINI.md files.
 
 ## Session Management
 
-Sessions enable conversation continuity - Gemini remembers what you talked about.
+Sessions enable conversation continuity — Gemini remembers what you talked about.
 
 ### How Sessions Work
 
@@ -329,22 +176,21 @@ Sessions enable conversation continuity - Gemini remembers what you talked about
    └── Build prompt with full conversation context
    │
    ▼
-7. Router invokes Gemini CLI:
-   ├── cwd: groups/{group-name}/
-   ├── prompt: conversation history + current message
-   ├── resume: session_id (for continuity)
-   └── mcpServers: nanogemclaw (scheduler)
+7. Message handler decides path:
+   ├── Fast path (simple text) → Direct Gemini API call with streaming
+   └── Container path (complex) → Spawn agent container
    │
    ▼
 8. Gemini processes message:
    ├── Reads GEMINI.md files for context
-   └── Uses tools as needed (search, web, etc.)
+   ├── Uses tools as needed (search, web, function calling)
+   └── Plugin hooks run (before/after/onError)
    │
    ▼
-9. Router prefixes response with assistant name and sends via Telegram
+9. Response sent to Telegram
    │
    ▼
-10. Router updates last agent timestamp and saves session ID
+10. Message logged to SQLite, Socket.IO event emitted to dashboard
 ```
 
 ### Trigger Word Matching
@@ -469,88 +315,15 @@ The `nanogemclaw` MCP server is created dynamically per agent call with the curr
 
 ---
 
-## Deployment
-
-NanoGemClaw runs as a single macOS launchd service.
-
-### Startup Sequence
-
-When NanoGemClaw starts, it:
-1. **Ensures Apple Container system is running** - Automatically starts it if needed (survives reboots)
-2. Initializes the SQLite database
-3. Loads state (registered groups, sessions, router state)
-4. Connects to Telegram
-5. Starts the message polling loop
-6. Starts the scheduler loop
-7. Starts the IPC watcher for container messages
-
-### Service: com.nanogemclaw
-
-**launchd/com.nanogemclaw.plist:**
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "...">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.nanogemclaw</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>{{NODE_PATH}}</string>
-        <string>{{PROJECT_ROOT}}/dist/index.js</string>
-    </array>
-    <key>WorkingDirectory</key>
-    <string>{{PROJECT_ROOT}}</string>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>PATH</key>
-        <string>{{HOME}}/.local/bin:/usr/local/bin:/usr/bin:/bin</string>
-        <key>HOME</key>
-        <string>{{HOME}}</string>
-        <key>ASSISTANT_NAME</key>
-        <string>Andy</string>
-    </dict>
-    <key>StandardOutPath</key>
-    <string>{{PROJECT_ROOT}}/logs/nanogemclaw.log</string>
-    <key>StandardErrorPath</key>
-    <string>{{PROJECT_ROOT}}/logs/nanogemclaw.error.log</string>
-</dict>
-</plist>
-```
-
-### Managing the Service
-
-```bash
-# Install service
-cp launchd/com.nanogemclaw.plist ~/Library/LaunchAgents/
-
-# Start service
-launchctl load ~/Library/LaunchAgents/com.nanogemclaw.plist
-
-# Stop service
-launchctl unload ~/Library/LaunchAgents/com.nanogemclaw.plist
-
-# Check status
-launchctl list | grep nanogemclaw
-
-# View logs
-tail -f logs/nanogemclaw.log
-```
-
----
-
 ## Security Considerations
+
+> For the complete security model, trust boundaries, and privilege comparison, see [SECURITY.md](./SECURITY.md).
 
 ### Container Isolation
 
 All agents run inside Apple Container (lightweight Linux VMs), providing:
 - **Filesystem isolation**: Agents can only access mounted directories
 - **Safe Bash access**: Commands run inside the container, not on your Mac
-- **Network isolation**: Can be configured per-container if needed
 - **Process isolation**: Container processes can't affect the host
 - **Non-root user**: Container runs as unprivileged `node` user (uid 1000)
 
@@ -563,14 +336,8 @@ Telegram messages could contain malicious instructions attempting to manipulate 
 - Only registered groups are processed
 - Trigger word required (reduces accidental processing)
 - Agents can only access their group's mounted directories
-- Main can configure additional directories per group
+- Plugin hooks can intercept and filter messages before processing
 - Gemini's built-in safety training
-
-**Recommendations:**
-- Only register trusted groups
-- Review additional directory mounts carefully
-- Review scheduled tasks periodically
-- Monitor logs for unusual activity
 
 ### Credential Storage
 
@@ -578,40 +345,11 @@ Telegram messages could contain malicious instructions attempting to manipulate 
 |------------|------------------|-------|
 | Gemini API Key | .env, mounted to container | Filtered, read-only mount to container |
 | Telegram Bot Token | .env, host only | Never mounted to containers |
+| Dashboard credentials | .env, host only | `x-access-code` / `x-api-key` header auth |
 
 ### File Permissions
 
 The groups/ folder contains personal memory and should be protected:
 ```bash
 chmod 700 groups/
-```
-
----
-
-## Troubleshooting
-
-### Common Issues
-
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| No response to messages | Service not running | Check `launchctl list | grep nanogemclaw` |
-| "Gemini CLI process exited with code 1" | Apple Container failed to start | Check logs; NanoGemClaw auto-starts container system but may fail |
-| "Gemini CLI process exited with code 1" | Session mount path wrong | Ensure mount is to `/home/node/.gemini/` not `/root/.gemini/` |
-| Session not continuing | Session ID not saved | Check `data/sessions.json` |
-| Session not continuing | Mount path mismatch | Container user is `node` with HOME=/home/node; sessions must be at `/home/node/.gemini/` |
-| "Bot token invalid" | TELEGRAM_BOT_TOKEN wrong | Check .env and verify token with Telegram |
-| "No groups registered" | Haven't added groups | Use `@Andy add group "Name"` in main |
-
-### Log Location
-
-- `logs/nanogemclaw.log` - stdout
-- `logs/nanogemclaw.error.log` - stderr
-
-### Debug Mode
-
-Run manually for verbose output:
-```bash
-npm run dev
-# or
-node dist/index.js
 ```
