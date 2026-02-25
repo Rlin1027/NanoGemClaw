@@ -1,5 +1,8 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { TelegramRateLimiter, safeMarkdownTruncate } from '../telegram-rate-limiter.js';
+import {
+  TelegramRateLimiter,
+  safeMarkdownTruncate,
+} from '../telegram-rate-limiter.js';
 
 describe('telegram-rate-limiter.ts', () => {
   let limiter: TelegramRateLimiter;

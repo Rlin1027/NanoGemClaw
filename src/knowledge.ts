@@ -30,7 +30,11 @@ export interface KnowledgeSearchResult {
 
 /** Abstract interface for future embedding/vector replacement */
 export interface KnowledgeSearcher {
-  search(query: string, groupFolder: string, limit?: number): KnowledgeSearchResult[];
+  search(
+    query: string,
+    groupFolder: string,
+    limit?: number,
+  ): KnowledgeSearchResult[];
   index(doc: KnowledgeDoc): void;
   remove(docId: number): void;
 }
@@ -62,7 +66,9 @@ export function initKnowledgeIndex(db: Database.Database): void {
   `);
 
   // Populate FTS index from existing knowledge_docs rows
-  const existingDocs = db.prepare('SELECT id, group_folder, title, content FROM knowledge_docs').all() as Array<{
+  const existingDocs = db
+    .prepare('SELECT id, group_folder, title, content FROM knowledge_docs')
+    .all() as Array<{
     id: number;
     group_folder: string;
     title: string;
@@ -100,7 +106,9 @@ export function addKnowledgeDoc(
 ): KnowledgeDoc {
   // Validate filename
   if (!SAFE_FILENAME_RE.test(filename)) {
-    throw new Error('Invalid filename. Only alphanumeric, dash, underscore, and .md extension allowed.');
+    throw new Error(
+      'Invalid filename. Only alphanumeric, dash, underscore, and .md extension allowed.',
+    );
   }
 
   const now = new Date().toISOString();
@@ -115,18 +123,24 @@ export function addKnowledgeDoc(
   fs.writeFileSync(filePath, content, 'utf-8');
 
   // Insert into DB
-  const result = db.prepare(`
+  const result = db
+    .prepare(
+      `
     INSERT INTO knowledge_docs (group_folder, filename, title, content, size_chars, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(groupFolder, filename, title, content, sizeChars, now, now);
+  `,
+    )
+    .run(groupFolder, filename, title, content, sizeChars, now, now);
 
   const docId = result.lastInsertRowid as number;
 
   // Insert into FTS index
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO knowledge_fts (doc_id, group_folder, title, content)
     VALUES (?, ?, ?, ?)
-  `).run(docId, groupFolder, title, content);
+  `,
+  ).run(docId, groupFolder, title, content);
 
   return {
     id: docId,
@@ -151,7 +165,9 @@ export function updateKnowledgeDoc(
   content: string,
 ): KnowledgeDoc | null {
   // Get existing doc to find file location
-  const existing = db.prepare('SELECT * FROM knowledge_docs WHERE id = ?').get(docId) as KnowledgeDoc | undefined;
+  const existing = db
+    .prepare('SELECT * FROM knowledge_docs WHERE id = ?')
+    .get(docId) as KnowledgeDoc | undefined;
   if (!existing) {
     return null;
   }
@@ -160,21 +176,30 @@ export function updateKnowledgeDoc(
   const sizeChars = content.length;
 
   // Update DB
-  db.prepare(`
+  db.prepare(
+    `
     UPDATE knowledge_docs
     SET title = ?, content = ?, size_chars = ?, updated_at = ?
     WHERE id = ?
-  `).run(title, content, sizeChars, now, docId);
+  `,
+  ).run(title, content, sizeChars, now, docId);
 
   // Update FTS index
-  db.prepare(`
+  db.prepare(
+    `
     UPDATE knowledge_fts
     SET title = ?, content = ?
     WHERE doc_id = ?
-  `).run(title, content, docId);
+  `,
+  ).run(title, content, docId);
 
   // Update disk file
-  const filePath = path.join(GROUPS_DIR, existing.group_folder, 'knowledge', existing.filename);
+  const filePath = path.join(
+    GROUPS_DIR,
+    existing.group_folder,
+    'knowledge',
+    existing.filename,
+  );
   fs.writeFileSync(filePath, content, 'utf-8');
 
   return {
@@ -195,7 +220,9 @@ export function deleteKnowledgeDoc(
   docId: number,
 ): boolean {
   // Get doc to find file location
-  const doc = db.prepare('SELECT * FROM knowledge_docs WHERE id = ?').get(docId) as KnowledgeDoc | undefined;
+  const doc = db
+    .prepare('SELECT * FROM knowledge_docs WHERE id = ?')
+    .get(docId) as KnowledgeDoc | undefined;
   if (!doc) {
     return false;
   }
@@ -207,7 +234,12 @@ export function deleteKnowledgeDoc(
   db.prepare('DELETE FROM knowledge_docs WHERE id = ?').run(docId);
 
   // Delete from disk
-  const filePath = path.join(GROUPS_DIR, doc.group_folder, 'knowledge', doc.filename);
+  const filePath = path.join(
+    GROUPS_DIR,
+    doc.group_folder,
+    'knowledge',
+    doc.filename,
+  );
   try {
     fs.unlinkSync(filePath);
   } catch {
@@ -224,11 +256,15 @@ export function getKnowledgeDocs(
   db: Database.Database,
   groupFolder: string,
 ): KnowledgeDoc[] {
-  return db.prepare(`
+  return db
+    .prepare(
+      `
     SELECT * FROM knowledge_docs
     WHERE group_folder = ?
     ORDER BY updated_at DESC
-  `).all(groupFolder) as KnowledgeDoc[];
+  `,
+    )
+    .all(groupFolder) as KnowledgeDoc[];
 }
 
 /**
@@ -240,13 +276,21 @@ export function getKnowledgeDocsPaginated(
   limit: number,
   offset: number,
 ): { rows: KnowledgeDoc[]; total: number } {
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT * FROM knowledge_docs
     WHERE group_folder = ?
     ORDER BY updated_at DESC
     LIMIT ? OFFSET ?
-  `).all(groupFolder, limit, offset) as KnowledgeDoc[];
-  const { total } = db.prepare('SELECT COUNT(*) as total FROM knowledge_docs WHERE group_folder = ?').get(groupFolder) as { total: number };
+  `,
+    )
+    .all(groupFolder, limit, offset) as KnowledgeDoc[];
+  const { total } = db
+    .prepare(
+      'SELECT COUNT(*) as total FROM knowledge_docs WHERE group_folder = ?',
+    )
+    .get(groupFolder) as { total: number };
   return { rows, total };
 }
 
@@ -257,7 +301,9 @@ export function getKnowledgeDoc(
   db: Database.Database,
   docId: number,
 ): KnowledgeDoc | null {
-  const doc = db.prepare('SELECT * FROM knowledge_docs WHERE id = ?').get(docId) as KnowledgeDoc | undefined;
+  const doc = db
+    .prepare('SELECT * FROM knowledge_docs WHERE id = ?')
+    .get(docId) as KnowledgeDoc | undefined;
   return doc || null;
 }
 
@@ -278,7 +324,9 @@ export function searchKnowledge(
   // Sanitize FTS5 query - wrap in quotes to treat as literal phrase
   const sanitizedQuery = `"${query.replace(/"/g, '""')}"`;
 
-  const results = db.prepare(`
+  const results = db
+    .prepare(
+      `
     SELECT
       d.id,
       d.group_folder,
@@ -291,7 +339,9 @@ export function searchKnowledge(
     WHERE fts.group_folder = ? AND knowledge_fts MATCH ?
     ORDER BY fts.rank
     LIMIT ?
-  `).all(groupFolder, sanitizedQuery, limit) as KnowledgeSearchResult[];
+  `,
+    )
+    .all(groupFolder, sanitizedQuery, limit) as KnowledgeSearchResult[];
 
   return results;
 }
@@ -309,7 +359,9 @@ export function getRelevantKnowledge(
   const sanitizedQuery = `"${query.replace(/"/g, '""')}"`;
 
   // Single query: JOIN full document content with FTS results
-  const results = db.prepare(`
+  const results = db
+    .prepare(
+      `
     SELECT
       d.title,
       d.content
@@ -318,7 +370,12 @@ export function getRelevantKnowledge(
     WHERE fts.group_folder = ? AND knowledge_fts MATCH ?
     ORDER BY fts.rank
     LIMIT 20
-  `).all(groupFolder, sanitizedQuery) as Array<{ title: string; content: string }>;
+  `,
+    )
+    .all(groupFolder, sanitizedQuery) as Array<{
+    title: string;
+    content: string;
+  }>;
 
   if (results.length === 0) {
     return '';

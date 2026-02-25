@@ -4,18 +4,17 @@
  */
 import { TELEGRAM } from './config.js';
 import { logger } from './logger.js';
-import {
-  getBot,
-  setTypingInterval,
-  clearTypingInterval,
-} from './state.js';
+import { getBot, setTypingInterval, clearTypingInterval } from './state.js';
 import { formatError } from './utils.js';
 
 // ============================================================================
 // Typing Indicator
 // ============================================================================
 
-export async function setTyping(chatId: string, isTyping: boolean): Promise<void> {
+export async function setTyping(
+  chatId: string,
+  isTyping: boolean,
+): Promise<void> {
   const bot = getBot();
   if (isTyping) {
     // Clear any existing interval
@@ -52,16 +51,22 @@ export async function setTyping(chatId: string, isTyping: boolean): Promise<void
 export async function sendMessage(chatId: string, text: string): Promise<void> {
   const bot = getBot();
   try {
-    const chunks = splitMessageIntelligently(text, TELEGRAM.MAX_MESSAGE_LENGTH - 96);
+    const chunks = splitMessageIntelligently(
+      text,
+      TELEGRAM.MAX_MESSAGE_LENGTH - 96,
+    );
 
     for (let i = 0; i < chunks.length; i++) {
       await bot.sendMessage(parseInt(chatId), chunks[i]);
       // Rate limiting: add delay between chunks to avoid Telegram limits
       if (i < chunks.length - 1) {
-        await new Promise(r => setTimeout(r, TELEGRAM.RATE_LIMIT_DELAY_MS));
+        await new Promise((r) => setTimeout(r, TELEGRAM.RATE_LIMIT_DELAY_MS));
       }
     }
-    logger.info({ chatId, length: text.length, chunks: chunks.length }, 'Message sent');
+    logger.info(
+      { chatId, length: text.length, chunks: chunks.length },
+      'Message sent',
+    );
   } catch (err) {
     logger.error({ chatId, err: formatError(err) }, 'Failed to send message');
   }
@@ -101,9 +106,15 @@ export async function sendMessageWithButtons(
         inline_keyboard: inlineKeyboard,
       },
     });
-    logger.info({ chatId, buttonRows: buttons.length }, 'Message with buttons sent');
+    logger.info(
+      { chatId, buttonRows: buttons.length },
+      'Message with buttons sent',
+    );
   } catch (err) {
-    logger.error({ chatId, err: formatError(err) }, 'Failed to send message with buttons');
+    logger.error(
+      { chatId, err: formatError(err) },
+      'Failed to send message with buttons',
+    );
   }
 }
 
@@ -115,7 +126,10 @@ export async function sendMessageWithButtons(
  * Split a long message at natural breakpoints (paragraphs, then sentences)
  * while trying to preserve markdown code blocks.
  */
-export function splitMessageIntelligently(text: string, maxLen: number): string[] {
+export function splitMessageIntelligently(
+  text: string,
+  maxLen: number,
+): string[] {
   if (text.length <= maxLen) {
     return [text];
   }

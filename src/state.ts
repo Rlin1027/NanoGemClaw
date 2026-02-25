@@ -86,9 +86,15 @@ export function getTypingIntervals(): Map<string, NodeJS.Timeout> {
  * Set a typing interval for a chat, with an upper bound to prevent leaks.
  * If the map exceeds MAX_TYPING_ENTRIES, the oldest entry is evicted.
  */
-export function setTypingInterval(chatId: string, interval: NodeJS.Timeout): void {
+export function setTypingInterval(
+  chatId: string,
+  interval: NodeJS.Timeout,
+): void {
   // Evict oldest if at capacity
-  if (typingIntervals.size >= MAX_TYPING_ENTRIES && !typingIntervals.has(chatId)) {
+  if (
+    typingIntervals.size >= MAX_TYPING_ENTRIES &&
+    !typingIntervals.has(chatId)
+  ) {
     const firstKey = typingIntervals.keys().next().value;
     if (firstKey !== undefined) {
       const old = typingIntervals.get(firstKey);

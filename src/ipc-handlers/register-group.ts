@@ -17,7 +17,10 @@ export const RegisterGroupHandler: IpcHandler = {
     }
 
     if (!SAFE_FOLDER_RE.test(data.folder)) {
-      logger.warn({ folder: data.folder }, 'Invalid folder name in register_group IPC');
+      logger.warn(
+        { folder: data.folder },
+        'Invalid folder name in register_group IPC',
+      );
       return;
     }
 

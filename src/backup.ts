@@ -9,7 +9,10 @@ import { logger } from './logger.js';
 
 // Configuration
 const BACKUP_DIR = path.join(STORE_DIR, 'backups');
-const BACKUP_RETENTION_DAYS = parseInt(process.env.BACKUP_RETENTION_DAYS || '7', 10);
+const BACKUP_RETENTION_DAYS = parseInt(
+  process.env.BACKUP_RETENTION_DAYS || '7',
+  10,
+);
 const BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 let backupTimer: ReturnType<typeof setInterval> | null = null;
@@ -66,7 +69,9 @@ function cleanupOldBackups(): void {
     if (!fs.existsSync(BACKUP_DIR)) return;
 
     const cutoff = Date.now() - BACKUP_RETENTION_DAYS * 24 * 60 * 60 * 1000;
-    const files = fs.readdirSync(BACKUP_DIR).filter(f => f.startsWith('messages-') && f.endsWith('.db'));
+    const files = fs
+      .readdirSync(BACKUP_DIR)
+      .filter((f) => f.startsWith('messages-') && f.endsWith('.db'));
 
     for (const file of files) {
       const filePath = path.join(BACKUP_DIR, file);
@@ -87,14 +92,14 @@ function cleanupOldBackups(): void {
 export function startBackupSchedule(): void {
   // Run initial backup after a short delay (don't block startup)
   setTimeout(() => {
-    backupDatabase().catch(err => {
+    backupDatabase().catch((err) => {
       logger.error({ err }, 'Initial backup failed');
     });
   }, 30_000); // 30 seconds after startup
 
   // Schedule daily backups
   backupTimer = setInterval(() => {
-    backupDatabase().catch(err => {
+    backupDatabase().catch((err) => {
       logger.error({ err }, 'Scheduled backup failed');
     });
   }, BACKUP_INTERVAL_MS);

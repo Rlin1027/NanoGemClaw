@@ -7,7 +7,7 @@ const ALLOWED_KEYS = [
   'response_style',
   'interests',
   'timezone',
-  'custom_instructions'
+  'custom_instructions',
 ];
 
 export const SetPreferenceHandler: IpcHandler = {
@@ -23,7 +23,7 @@ export const SetPreferenceHandler: IpcHandler = {
     if (!ALLOWED_KEYS.includes(data.key)) {
       logger.warn(
         { key: data.key, allowedKeys: ALLOWED_KEYS },
-        'set_preference: invalid key'
+        'set_preference: invalid key',
       );
       return;
     }
@@ -41,8 +41,12 @@ export const SetPreferenceHandler: IpcHandler = {
     setPreference(targetGroup, data.key, String(data.value));
 
     logger.info(
-      { groupFolder: targetGroup, key: data.key, sourceGroup: context.sourceGroup },
-      'Preference set via IPC'
+      {
+        groupFolder: targetGroup,
+        key: data.key,
+        sourceGroup: context.sourceGroup,
+      },
+      'Preference set via IPC',
     );
   },
 };

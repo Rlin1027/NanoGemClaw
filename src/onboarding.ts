@@ -5,7 +5,11 @@
  */
 
 import { getUserPreference, setUserPreference } from './db.js';
-import { sendMessage, sendMessageWithButtons, QuickReplyButton } from './telegram-helpers.js';
+import {
+  sendMessage,
+  sendMessageWithButtons,
+  QuickReplyButton,
+} from './telegram-helpers.js';
 import { t, getGroupLang } from './i18n.js';
 
 const ONBOARDING_COMPLETE_KEY = 'onboarding_complete';
@@ -38,7 +42,7 @@ export async function checkAndStartOnboarding(
   await sendMessageWithButtons(
     chatId,
     translations.onboarding_features,
-    buttons
+    buttons,
   );
 
   return true;

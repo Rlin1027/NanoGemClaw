@@ -9,7 +9,10 @@ export const SuggestActionsHandler: IpcHandler = {
     const payload = data as unknown as SuggestActionsPayload;
 
     if (!payload.actions || !Array.isArray(payload.actions)) {
-      logger.warn({ data }, 'suggest_actions: missing or invalid actions array');
+      logger.warn(
+        { data },
+        'suggest_actions: missing or invalid actions array',
+      );
       return;
     }
 
@@ -53,7 +56,7 @@ export const SuggestActionsHandler: IpcHandler = {
     const keyboard: Array<Array<{ text: string; callback_data: string }>> = [];
 
     for (let i = 0; i < payload.actions.length; i += columns) {
-      const row = payload.actions.slice(i, i + columns).map(action => ({
+      const row = payload.actions.slice(i, i + columns).map((action) => ({
         text: action.label,
         callback_data: JSON.stringify({ type: action.type, data: action.data }),
       }));
@@ -75,7 +78,11 @@ export const SuggestActionsHandler: IpcHandler = {
       });
 
       logger.info(
-        { sourceGroup: context.sourceGroup, targetChatId, actionsCount: payload.actions.length },
+        {
+          sourceGroup: context.sourceGroup,
+          targetChatId,
+          actionsCount: payload.actions.length,
+        },
         'Actions suggested via IPC',
       );
     } catch (err) {

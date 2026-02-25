@@ -122,14 +122,17 @@ const translations: Record<Language, Translations> = {
     stt_error: '語音轉寫失敗，請改用文字訊息',
 
     onboarding_welcome: (name) => `歡迎使用 ${name}！我是你的 AI 助手。`,
-    onboarding_features: '以下是我能幫你做的事：\n• 回答問題和聊天\n• 搜尋網路資訊\n• 語音轉文字\n• 排程任務\n\n想試試看嗎？',
+    onboarding_features:
+      '以下是我能幫你做的事：\n• 回答問題和聊天\n• 搜尋網路資訊\n• 語音轉文字\n• 排程任務\n\n想試試看嗎？',
     onboarding_try_it: '試試看',
     onboarding_skip: '跳過',
     onboarding_done: '設定完成！直接傳訊息給我就可以開始了。',
-    onboarding_demo: '好的！試著問我任何問題，例如「今天天氣如何？」或「幫我寫一封信」',
+    onboarding_demo:
+      '好的！試著問我任何問題，例如「今天天氣如何？」或「幫我寫一封信」',
 
     botConnected: 'Telegram bot 已連接',
-    botRunning: (username, groupCount) => `NanoGemClaw 運行中 (@${username})\n已註冊群組: ${groupCount}`,
+    botRunning: (username, groupCount) =>
+      `NanoGemClaw 運行中 (@${username})\n已註冊群組: ${groupCount}`,
     maintenanceMode: '⚙️ 系統維護中，請稍後再試。',
     settingToggled: (setting, value) => `已切換設定: ${setting} = ${value}`,
     unknownAction: (action) => `處理中: ${action}...`,
@@ -183,16 +186,21 @@ const translations: Record<Language, Translations> = {
     stt_error: 'Voice transcription failed, please use text',
 
     onboarding_welcome: (name) => `Welcome to ${name}! I'm your AI assistant.`,
-    onboarding_features: "Here's what I can do:\n• Answer questions and chat\n• Search the web\n• Voice to text\n• Schedule tasks\n\nWant to try?",
+    onboarding_features:
+      "Here's what I can do:\n• Answer questions and chat\n• Search the web\n• Voice to text\n• Schedule tasks\n\nWant to try?",
     onboarding_try_it: 'Try it',
     onboarding_skip: 'Skip',
     onboarding_done: 'Setup complete! Just send me a message to get started.',
-    onboarding_demo: "Great! Try asking me anything, like 'How's the weather?' or 'Help me write a letter'",
+    onboarding_demo:
+      "Great! Try asking me anything, like 'How's the weather?' or 'Help me write a letter'",
 
     botConnected: 'Telegram bot connected',
-    botRunning: (username, groupCount) => `NanoGemClaw running (@${username})\nRegistered groups: ${groupCount}`,
-    maintenanceMode: '⚙️ System maintenance in progress, please try again later.',
-    settingToggled: (setting, value) => `Setting toggled: ${setting} = ${value}`,
+    botRunning: (username, groupCount) =>
+      `NanoGemClaw running (@${username})\nRegistered groups: ${groupCount}`,
+    maintenanceMode:
+      '⚙️ System maintenance in progress, please try again later.',
+    settingToggled: (setting, value) =>
+      `Setting toggled: ${setting} = ${value}`,
     unknownAction: (action) => `Processing: ${action}...`,
     retryFailed: 'Retry failed: original message not found',
     feedbackPrompt: 'Are you satisfied with this response?',

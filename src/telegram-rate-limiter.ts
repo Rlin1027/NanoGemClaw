@@ -119,7 +119,10 @@ export const telegramRateLimiter = new TelegramRateLimiter();
  * - Avoids cutting inside bold (**) or italic (*)
  * - Auto-closes open code blocks if truncated
  */
-export function safeMarkdownTruncate(text: string, maxLength: number = 4096): string {
+export function safeMarkdownTruncate(
+  text: string,
+  maxLength: number = 4096,
+): string {
   if (text.length <= maxLength) {
     return text;
   }
@@ -166,7 +169,10 @@ export function safeMarkdownTruncate(text: string, maxLength: number = 4096): st
     const lastItalicMatch = result.lastIndexOf('*');
     if (lastItalicMatch !== -1) {
       // Make sure it's not part of **
-      if (result[lastItalicMatch - 1] !== '*' && result[lastItalicMatch + 1] !== '*') {
+      if (
+        result[lastItalicMatch - 1] !== '*' &&
+        result[lastItalicMatch + 1] !== '*'
+      ) {
         result = result.substring(0, lastItalicMatch);
       }
     }

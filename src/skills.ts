@@ -21,7 +21,9 @@ const GROUP_SKILLS_FILE = path.join(DATA_DIR, 'group_skills.json');
  * Parse YAML frontmatter from a markdown file.
  * Extracts name and description fields.
  */
-function parseFrontmatter(content: string): { name: string; description: string } | null {
+function parseFrontmatter(
+  content: string,
+): { name: string; description: string } | null {
   const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
   if (!frontmatterMatch) return null;
 
@@ -67,7 +69,10 @@ export function scanAvailableSkills(skillsDir: string): SkillInfo[] {
           });
         }
       } catch (err) {
-        console.warn(`[skills] Failed to parse ${entry.name}:`, err instanceof Error ? err.message : String(err));
+        console.warn(
+          `[skills] Failed to parse ${entry.name}:`,
+          err instanceof Error ? err.message : String(err),
+        );
       }
     } else if (entry.isDirectory()) {
       // Directory-based skill
@@ -86,7 +91,10 @@ export function scanAvailableSkills(skillsDir: string): SkillInfo[] {
             });
           }
         } catch (err) {
-          console.warn(`[skills] Failed to parse ${entry.name}/SKILL.md:`, err instanceof Error ? err.message : String(err));
+          console.warn(
+            `[skills] Failed to parse ${entry.name}/SKILL.md:`,
+            err instanceof Error ? err.message : String(err),
+          );
         }
       }
     }
@@ -124,7 +132,7 @@ export function enableGroupSkill(groupFolder: string, skillId: string): void {
 export function disableGroupSkill(groupFolder: string, skillId: string): void {
   const data = loadJson<GroupSkillsData>(GROUP_SKILLS_FILE, {});
   if (data[groupFolder]) {
-    data[groupFolder] = data[groupFolder].filter(id => id !== skillId);
+    data[groupFolder] = data[groupFolder].filter((id) => id !== skillId);
     saveJson(GROUP_SKILLS_FILE, data);
   }
 }
@@ -133,19 +141,21 @@ export function disableGroupSkill(groupFolder: string, skillId: string): void {
  * Get the content of enabled skills for context injection.
  * Returns concatenated skill file contents, separated by dividers.
  */
-export function getEnabledSkillContents(skillsDir: string, groupFolder: string): string {
+export function getEnabledSkillContents(
+  skillsDir: string,
+  groupFolder: string,
+): string {
   const allSkills = scanAvailableSkills(skillsDir);
   const enabledIds = getGroupSkills(groupFolder);
 
   // Default: all skills enabled if no entry exists
-  const effectiveIds = enabledIds.length > 0
-    ? enabledIds
-    : allSkills.map(s => s.id);
+  const effectiveIds =
+    enabledIds.length > 0 ? enabledIds : allSkills.map((s) => s.id);
 
   const contents: string[] = [];
 
   for (const skillId of effectiveIds) {
-    const skill = allSkills.find(s => s.id === skillId);
+    const skill = allSkills.find((s) => s.id === skillId);
     if (!skill) continue;
 
     const skillPath = path.join(skillsDir, skill.path);
@@ -153,7 +163,10 @@ export function getEnabledSkillContents(skillsDir: string, groupFolder: string):
       const content = fs.readFileSync(skillPath, 'utf-8');
       contents.push(content);
     } catch (err) {
-      console.warn(`[skills] Failed to read ${skill.path}:`, err instanceof Error ? err.message : String(err));
+      console.warn(
+        `[skills] Failed to read ${skill.path}:`,
+        err instanceof Error ? err.message : String(err),
+      );
     }
   }
 

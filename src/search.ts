@@ -19,19 +19,29 @@ export function initSearchIndex(db: Database.Database): void {
   `);
 
   // Check if FTS table needs initial population
-  const ftsCount = db.prepare('SELECT COUNT(*) as cnt FROM messages_fts').get() as { cnt: number };
-  const msgCount = db.prepare('SELECT COUNT(*) as cnt FROM messages').get() as { cnt: number };
+  const ftsCount = db
+    .prepare('SELECT COUNT(*) as cnt FROM messages_fts')
+    .get() as { cnt: number };
+  const msgCount = db.prepare('SELECT COUNT(*) as cnt FROM messages').get() as {
+    cnt: number;
+  };
 
   if (ftsCount.cnt === 0 && msgCount.cnt > 0) {
     // Initial population from existing messages
-    const insertFts = db.prepare('INSERT INTO messages_fts(rowid, content) VALUES (?, ?)');
-    const allMessages = db.prepare('SELECT rowid, content FROM messages WHERE content IS NOT NULL').all() as Array<{ rowid: number; content: string }>;
+    const insertFts = db.prepare(
+      'INSERT INTO messages_fts(rowid, content) VALUES (?, ?)',
+    );
+    const allMessages = db
+      .prepare('SELECT rowid, content FROM messages WHERE content IS NOT NULL')
+      .all() as Array<{ rowid: number; content: string }>;
 
-    const insertMany = db.transaction((messages: Array<{ rowid: number; content: string }>) => {
-      for (const msg of messages) {
-        insertFts.run(msg.rowid, msg.content);
-      }
-    });
+    const insertMany = db.transaction(
+      (messages: Array<{ rowid: number; content: string }>) => {
+        for (const msg of messages) {
+          insertFts.run(msg.rowid, msg.content);
+        }
+      },
+    );
     insertMany(allMessages);
   }
 }
@@ -40,8 +50,15 @@ export function initSearchIndex(db: Database.Database): void {
  * Add a message to the FTS index.
  * Call this after inserting a message into the messages table.
  */
-export function indexMessage(db: Database.Database, rowid: number, content: string): void {
-  db.prepare('INSERT INTO messages_fts(rowid, content) VALUES (?, ?)').run(rowid, content);
+export function indexMessage(
+  db: Database.Database,
+  rowid: number,
+  content: string,
+): void {
+  db.prepare('INSERT INTO messages_fts(rowid, content) VALUES (?, ?)').run(
+    rowid,
+    content,
+  );
 }
 
 /**
@@ -70,7 +87,7 @@ export interface SearchResult {
 export function searchMessages(
   db: Database.Database,
   query: string,
-  options?: { group?: string; limit?: number; offset?: number }
+  options?: { group?: string; limit?: number; offset?: number },
 ): { results: SearchResult[]; total: number } {
   const limit = options?.limit ?? 20;
   const offset = options?.offset ?? 0;
@@ -120,7 +137,9 @@ export function searchMessages(
     LIMIT ? OFFSET ?
   `;
 
-  const results = db.prepare(searchSql).all(...params, limit, offset) as SearchResult[];
+  const results = db
+    .prepare(searchSql)
+    .all(...params, limit, offset) as SearchResult[];
 
   return { results, total };
 }

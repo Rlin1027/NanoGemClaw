@@ -105,7 +105,10 @@ export function startIpcWatcher(): void {
         }
       });
     } catch (err) {
-      logger.error({ err: formatError(err) }, 'Error reading IPC base directory');
+      logger.error(
+        { err: formatError(err) },
+        'Error reading IPC base directory',
+      );
       return;
     }
 
@@ -201,7 +204,10 @@ export function startIpcWatcher(): void {
           }
         }
       } catch (err) {
-        logger.error({ err: formatError(err), sourceGroup }, 'Error reading IPC tasks directory');
+        logger.error(
+          { err: formatError(err), sourceGroup },
+          'Error reading IPC tasks directory',
+        );
       }
     }
   };
@@ -212,16 +218,25 @@ export function startIpcWatcher(): void {
     if (watchedDirs.has(dir)) return;
 
     try {
-      const watcher = fs.watch(dir, { persistent: false }, (eventType, filename) => {
-        if (filename && filename.endsWith('.json')) {
-          scheduleProcess();
-        }
-      });
+      const watcher = fs.watch(
+        dir,
+        { persistent: false },
+        (eventType, filename) => {
+          if (filename && filename.endsWith('.json')) {
+            scheduleProcess();
+          }
+        },
+      );
 
       watcher.on('error', (err) => {
-        logger.debug({ dir, err: formatError(err) }, 'Watch error, will use polling fallback');
+        logger.debug(
+          { dir, err: formatError(err) },
+          'Watch error, will use polling fallback',
+        );
         // Memory fix: close errored watcher and remove from tracking
-        try { watcher.close(); } catch {}
+        try {
+          watcher.close();
+        } catch {}
         const idx = watchers.indexOf(watcher);
         if (idx !== -1) watchers.splice(idx, 1);
         watchedDirs.delete(dir);
@@ -242,14 +257,19 @@ export function startIpcWatcher(): void {
 
     baseWatcher.on('error', (err) => {
       logger.debug({ err: formatError(err) }, 'Base watcher error');
-      try { baseWatcher.close(); } catch {}
+      try {
+        baseWatcher.close();
+      } catch {}
       const idx = watchers.indexOf(baseWatcher);
       if (idx !== -1) watchers.splice(idx, 1);
     });
 
     watchers.push(baseWatcher);
   } catch (err) {
-    logger.warn({ err: formatError(err) }, 'Failed to watch IPC base directory');
+    logger.warn(
+      { err: formatError(err) },
+      'Failed to watch IPC base directory',
+    );
   }
 
   // Initial process and fallback polling (slower interval as safety net)

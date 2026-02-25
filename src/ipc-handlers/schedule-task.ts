@@ -59,10 +59,7 @@ export const ScheduleTaskHandler: IpcHandler = {
     } else if (scheduleType === 'interval') {
       const ms = parseInt(data.schedule_value, 10);
       if (isNaN(ms) || ms <= 0) {
-        logger.warn(
-          { scheduleValue: data.schedule_value },
-          'Invalid interval',
-        );
+        logger.warn({ scheduleValue: data.schedule_value }, 'Invalid interval');
         return;
       }
       nextRun = new Date(Date.now() + ms).toISOString();

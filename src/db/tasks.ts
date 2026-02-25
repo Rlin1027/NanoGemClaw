@@ -161,17 +161,38 @@ export function getTaskRunLogs(taskId: string, limit = 10): TaskRunLog[] {
     .all(taskId, limit) as TaskRunLog[];
 }
 
-export function getAllTasksPaginated(limit: number, offset: number): { rows: ScheduledTask[]; total: number } {
+export function getAllTasksPaginated(
+  limit: number,
+  offset: number,
+): { rows: ScheduledTask[]; total: number } {
   const db = getDatabase();
-  const rows = db.prepare('SELECT * FROM scheduled_tasks ORDER BY created_at DESC LIMIT ? OFFSET ?').all(limit, offset) as ScheduledTask[];
-  const { total } = db.prepare('SELECT COUNT(*) as total FROM scheduled_tasks').get() as { total: number };
+  const rows = db
+    .prepare(
+      'SELECT * FROM scheduled_tasks ORDER BY created_at DESC LIMIT ? OFFSET ?',
+    )
+    .all(limit, offset) as ScheduledTask[];
+  const { total } = db
+    .prepare('SELECT COUNT(*) as total FROM scheduled_tasks')
+    .get() as { total: number };
   return { rows, total };
 }
 
-export function getTasksForGroupPaginated(groupFolder: string, limit: number, offset: number): { rows: ScheduledTask[]; total: number } {
+export function getTasksForGroupPaginated(
+  groupFolder: string,
+  limit: number,
+  offset: number,
+): { rows: ScheduledTask[]; total: number } {
   const db = getDatabase();
-  const rows = db.prepare('SELECT * FROM scheduled_tasks WHERE group_folder = ? ORDER BY created_at DESC LIMIT ? OFFSET ?').all(groupFolder, limit, offset) as ScheduledTask[];
-  const { total } = db.prepare('SELECT COUNT(*) as total FROM scheduled_tasks WHERE group_folder = ?').get(groupFolder) as { total: number };
+  const rows = db
+    .prepare(
+      'SELECT * FROM scheduled_tasks WHERE group_folder = ? ORDER BY created_at DESC LIMIT ? OFFSET ?',
+    )
+    .all(groupFolder, limit, offset) as ScheduledTask[];
+  const { total } = db
+    .prepare(
+      'SELECT COUNT(*) as total FROM scheduled_tasks WHERE group_folder = ?',
+    )
+    .get(groupFolder) as { total: number };
   return { rows, total };
 }
 
@@ -181,11 +202,15 @@ export function getTasksForGroupPaginated(groupFolder: string, limit: number, of
  */
 export function getActiveTaskCountsBatch(): Map<string, number> {
   const db = getDatabase();
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT group_folder, COUNT(*) as cnt
     FROM scheduled_tasks WHERE status = 'active'
     GROUP BY group_folder
-  `).all() as Array<{ group_folder: string; cnt: number }>;
+  `,
+    )
+    .all() as Array<{ group_folder: string; cnt: number }>;
   const map = new Map<string, number>();
   for (const row of rows) map.set(row.group_folder, row.cnt);
   return map;

@@ -20,13 +20,16 @@ import { validateAdditionalMounts } from './mount-security.js';
 import { RegisteredGroup } from './types.js';
 
 // Dashboard event callback - injected by index.ts to avoid circular dependency
-let dashboardEventEmitter: ((event: string, data: unknown) => void) | null = null;
+let dashboardEventEmitter: ((event: string, data: unknown) => void) | null =
+  null;
 
 /**
  * Set the dashboard event emitter callback.
  * Called from index.ts after server initialization.
  */
-export function setDashboardEventEmitter(fn: (event: string, data: unknown) => void): void {
+export function setDashboardEventEmitter(
+  fn: (event: string, data: unknown) => void,
+): void {
   dashboardEventEmitter = fn;
 }
 
@@ -148,9 +151,9 @@ export interface ProgressInfo {
   type: 'tool_use' | 'thinking' | 'message';
   toolName?: string;
   content?: string;
-  contentDelta?: string;    // 增量文字內容
+  contentDelta?: string; // 增量文字內容
   contentSnapshot?: string; // 當前完整累積文字（供 editMessage 使用）
-  isComplete?: boolean;     // 回覆是否完成
+  isComplete?: boolean; // 回覆是否完成
 }
 
 interface VolumeMount {
@@ -441,7 +444,9 @@ Only suggest follow-ups when they genuinely add value. Do not suggest them for s
   fs.writeFileSync(envFilePath, envLines.join('\n') + '\n');
 
   // Ensure the env-dir mount is present (buildVolumeMounts adds it only when .env exists with API keys)
-  const envDirMountExists = mounts.some((m) => m.containerPath === '/workspace/env-dir');
+  const envDirMountExists = mounts.some(
+    (m) => m.containerPath === '/workspace/env-dir',
+  );
   if (!envDirMountExists) {
     mounts.push({
       hostPath: envDir,
@@ -478,9 +483,11 @@ Only suggest follow-ups when they genuinely add value. Do not suggest them for s
         (m) =>
           `${m.hostPath} -> ${m.containerPath}${m.readonly ? ' (ro)' : ''}`,
       ),
-      containerArgs: containerArgs.map(a =>
-        a.startsWith('GEMINI_API_KEY=') ? 'GEMINI_API_KEY=[REDACTED]' : a
-      ).join(' '),
+      containerArgs: containerArgs
+        .map((a) =>
+          a.startsWith('GEMINI_API_KEY=') ? 'GEMINI_API_KEY=[REDACTED]' : a,
+        )
+        .join(' '),
     },
     'Container mount configuration',
   );

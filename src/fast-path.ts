@@ -97,7 +97,9 @@ export async function runFastPath(
     );
   });
   return Promise.race([
-    runFastPathInner(group, input, ipcContext, onProgress).finally(() => clearTimeout(timer!)),
+    runFastPathInner(group, input, ipcContext, onProgress).finally(() =>
+      clearTimeout(timer!),
+    ),
     timeoutPromise,
   ]).catch((err) => {
     const errorMsg = err instanceof Error ? err.message : String(err);

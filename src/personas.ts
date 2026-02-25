@@ -46,7 +46,11 @@ export const PERSONAS: Record<string, Persona> = {
   },
 };
 
-const CUSTOM_PERSONAS_FILE = path.join(process.cwd(), 'data', 'custom_personas.json');
+const CUSTOM_PERSONAS_FILE = path.join(
+  process.cwd(),
+  'data',
+  'custom_personas.json',
+);
 
 let customPersonas: Record<string, Persona> = {};
 
@@ -67,7 +71,10 @@ export function loadCustomPersonas(): void {
 function saveCustomPersonas(): void {
   const dir = path.dirname(CUSTOM_PERSONAS_FILE);
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(CUSTOM_PERSONAS_FILE, JSON.stringify(customPersonas, null, 2));
+  fs.writeFileSync(
+    CUSTOM_PERSONAS_FILE,
+    JSON.stringify(customPersonas, null, 2),
+  );
 }
 
 /**

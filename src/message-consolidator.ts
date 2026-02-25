@@ -30,11 +30,15 @@ export class MessageConsolidator extends EventEmitter {
    * Add message to consolidation buffer
    * @returns true if message was buffered (awaiting merge), false if should process immediately
    */
-  addMessage(chatId: string | number, text: string, options?: {
-    messageId?: number;
-    isMedia?: boolean;
-    debounceMs?: number;
-  }): boolean {
+  addMessage(
+    chatId: string | number,
+    text: string,
+    options?: {
+      messageId?: number;
+      isMedia?: boolean;
+      debounceMs?: number;
+    },
+  ): boolean {
     const key = String(chatId);
 
     // Media messages (photos/voice) always process immediately
@@ -82,7 +86,7 @@ export class MessageConsolidator extends EventEmitter {
       this.timers.delete(chatKey);
     }
 
-    const combinedText = messages.map(m => m.text).join('\n');
+    const combinedText = messages.map((m) => m.text).join('\n');
     const result: ConsolidatedResult = {
       chatId: messages[0].chatId,
       messages,

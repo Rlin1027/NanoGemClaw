@@ -89,13 +89,17 @@ export function initDatabase(): void {
   `);
 
   // Schema migration mechanism using PRAGMA user_version
-  const currentVersion = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version;
+  const currentVersion = (
+    db.prepare('PRAGMA user_version').get() as { user_version: number }
+  ).user_version;
 
   if (currentVersion < 1) {
     db.exec('BEGIN');
     try {
       // Migration v1: composite index + column additions
-      db.exec('CREATE INDEX IF NOT EXISTS idx_messages_chat_timestamp ON messages(chat_jid, timestamp)');
+      db.exec(
+        'CREATE INDEX IF NOT EXISTS idx_messages_chat_timestamp ON messages(chat_jid, timestamp)',
+      );
 
       // Add sender_name column if it doesn't exist
       try {
@@ -106,7 +110,9 @@ export function initDatabase(): void {
 
       // Add context_mode column if it doesn't exist
       try {
-        db.exec(`ALTER TABLE scheduled_tasks ADD COLUMN context_mode TEXT DEFAULT 'isolated'`);
+        db.exec(
+          `ALTER TABLE scheduled_tasks ADD COLUMN context_mode TEXT DEFAULT 'isolated'`,
+        );
       } catch {
         /* column already exists */
       }
@@ -172,6 +178,7 @@ export function closeDatabase(): void {
 }
 
 export function getDatabase(): Database.Database {
-  if (!db) throw new Error('Database not initialized. Call initDatabase() first.');
+  if (!db)
+    throw new Error('Database not initialized. Call initDatabase() first.');
   return db;
 }

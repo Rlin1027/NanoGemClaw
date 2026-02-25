@@ -32,7 +32,9 @@ async function fetchUrl(url: string): Promise<string> {
         return;
       }
       let data = '';
-      res.on('data', (chunk) => { data += chunk; });
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
       res.on('end', () => resolve(data));
     }).on('error', reject);
   });
@@ -67,11 +69,17 @@ function parseICalDate(dateStr: string): { date: Date; isAllDay: boolean } {
 
   // If it ends with Z, it's UTC
   if (cleanStr.endsWith('Z')) {
-    return { date: new Date(Date.UTC(year, month, day, hour, minute, second)), isAllDay: false };
+    return {
+      date: new Date(Date.UTC(year, month, day, hour, minute, second)),
+      isAllDay: false,
+    };
   }
 
   // Otherwise treat as local time
-  return { date: new Date(year, month, day, hour, minute, second), isAllDay: false };
+  return {
+    date: new Date(year, month, day, hour, minute, second),
+    isAllDay: false,
+  };
 }
 
 /**
@@ -119,7 +127,7 @@ function parseICalEvents(content: string): CalendarEvent[] {
           end: currentEvent.end,
           location: currentEvent.location,
           description: currentEvent.description,
-          isAllDay
+          isAllDay,
         });
       }
       currentEvent = null;
@@ -128,11 +136,15 @@ function parseICalEvents(content: string): CalendarEvent[] {
       if (trimmed.startsWith('SUMMARY:')) {
         currentEvent.summary = trimmed.substring(8);
       } else if (trimmed.startsWith('DTSTART')) {
-        const parsed = parseICalDate(trimmed.substring(trimmed.indexOf(':') + 1));
+        const parsed = parseICalDate(
+          trimmed.substring(trimmed.indexOf(':') + 1),
+        );
         currentEvent.start = parsed.date;
         if (parsed.isAllDay) isAllDay = true;
       } else if (trimmed.startsWith('DTEND')) {
-        const parsed = parseICalDate(trimmed.substring(trimmed.indexOf(':') + 1));
+        const parsed = parseICalDate(
+          trimmed.substring(trimmed.indexOf(':') + 1),
+        );
         currentEvent.end = parsed.date;
       } else if (trimmed.startsWith('LOCATION:')) {
         currentEvent.location = trimmed.substring(9);
@@ -150,7 +162,7 @@ function parseICalEvents(content: string): CalendarEvent[] {
  */
 export async function fetchCalendarEvents(
   config: CalendarConfig,
-  daysAhead: number = 7
+  daysAhead: number = 7,
 ): Promise<CalendarEvent[]> {
   try {
     const content = await fetchUrl(config.url);
@@ -158,11 +170,15 @@ export async function fetchCalendarEvents(
 
     // Filter to upcoming events within daysAhead
     const now = new Date();
-    const futureLimit = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000);
+    const futureLimit = new Date(
+      now.getTime() + daysAhead * 24 * 60 * 60 * 1000,
+    );
 
-    return allEvents.filter(event => {
-      return event.start >= now && event.start <= futureLimit;
-    }).sort((a, b) => a.start.getTime() - b.start.getTime());
+    return allEvents
+      .filter((event) => {
+        return event.start >= now && event.start <= futureLimit;
+      })
+      .sort((a, b) => a.start.getTime() - b.start.getTime());
   } catch (error) {
     logger.warn(`Failed to fetch calendar ${config.name}: ${error}`);
     return [];
@@ -186,7 +202,11 @@ export function formatEventsForReport(events: CalendarEvent[]): string {
   const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
 
   for (const event of events) {
-    const eventDate = new Date(event.start.getFullYear(), event.start.getMonth(), event.start.getDate());
+    const eventDate = new Date(
+      event.start.getFullYear(),
+      event.start.getMonth(),
+      event.start.getDate(),
+    );
     const key = eventDate.toISOString().split('T')[0];
     if (!eventsByDay.has(key)) {
       eventsByDay.set(key, []);
@@ -196,7 +216,20 @@ export function formatEventsForReport(events: CalendarEvent[]): string {
 
   // Format each day
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const monthNames = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
 
   const sortedDays = Array.from(eventsByDay.keys()).sort();
 
@@ -223,8 +256,16 @@ export function formatEventsForReport(events: CalendarEvent[]): string {
         const locationStr = event.location ? ` @ ${event.location}` : '';
         lines.push(`• All Day  ${event.summary}${locationStr}`);
       } else {
-        const startTime = event.start.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-        const endTime = event.end.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+        const startTime = event.start.toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        });
+        const endTime = event.end.toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        });
         const locationStr = event.location ? ` @ ${event.location}` : '';
         lines.push(`• ${startTime}-${endTime}  ${event.summary}${locationStr}`);
       }
@@ -251,7 +292,7 @@ export function saveCalendarConfig(config: CalendarConfig): void {
   const configs = getCalendarConfigs();
 
   // Update existing or add new
-  const index = configs.findIndex(c => c.url === config.url);
+  const index = configs.findIndex((c) => c.url === config.url);
   if (index >= 0) {
     configs[index] = config;
   } else {
@@ -267,7 +308,7 @@ export function saveCalendarConfig(config: CalendarConfig): void {
  */
 export function removeCalendarConfig(url: string): boolean {
   const configs = getCalendarConfigs();
-  const index = configs.findIndex(c => c.url === url);
+  const index = configs.findIndex((c) => c.url === url);
 
   if (index >= 0) {
     const removed = configs.splice(index, 1)[0];

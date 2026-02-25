@@ -5,7 +5,10 @@ const handlers = new Map<string, IpcHandler>();
 
 export function registerIpcHandler(handler: IpcHandler): void {
   if (handlers.has(handler.type)) {
-    logger.warn({ type: handler.type }, 'IPC handler already registered, overwriting');
+    logger.warn(
+      { type: handler.type },
+      'IPC handler already registered, overwriting',
+    );
   }
   handlers.set(handler.type, handler);
   logger.debug({ type: handler.type }, 'IPC handler registered');
@@ -25,7 +28,7 @@ export function getAllIpcHandlers(): IpcHandler[] {
  */
 export async function dispatchIpc(
   data: Record<string, any>,
-  context: IpcContext
+  context: IpcContext,
 ): Promise<void> {
   const handler = handlers.get(data.type);
   if (!handler) {
@@ -37,7 +40,7 @@ export async function dispatchIpc(
   if (handler.requiredPermission === 'main' && !context.isMain) {
     logger.warn(
       { type: data.type, sourceGroup: context.sourceGroup },
-      'Unauthorized IPC attempt blocked (requires main)'
+      'Unauthorized IPC attempt blocked (requires main)',
     );
     return;
   }
@@ -45,7 +48,10 @@ export async function dispatchIpc(
   if (handler.requiredPermission === 'own_group' && !context.isMain) {
     const targetGroup = data.groupFolder || data.group;
     if (targetGroup && targetGroup !== context.sourceGroup) {
-      logger.warn({ type: data.type, sourceGroup: context.sourceGroup, targetGroup }, 'Unauthorized IPC: own_group violation');
+      logger.warn(
+        { type: data.type, sourceGroup: context.sourceGroup, targetGroup },
+        'Unauthorized IPC: own_group violation',
+      );
       return;
     }
   }
@@ -54,8 +60,11 @@ export async function dispatchIpc(
     await handler.handle(data, context);
   } catch (err) {
     logger.error(
-      { type: data.type, err: err instanceof Error ? err.message : String(err) },
-      'IPC handler error'
+      {
+        type: data.type,
+        err: err instanceof Error ? err.message : String(err),
+      },
+      'IPC handler error',
     );
   }
 }

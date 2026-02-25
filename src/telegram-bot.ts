@@ -3,27 +3,19 @@
  */
 import TelegramBot from 'node-telegram-bot-api';
 
-import {
-  ASSISTANT_NAME,
-  TELEGRAM_BOT_TOKEN,
-} from './config.js';
-import {
-  storeChatMetadata,
-  storeMessage,
-} from './db.js';
+import { ASSISTANT_NAME, TELEGRAM_BOT_TOKEN } from './config.js';
+import { storeChatMetadata, storeMessage } from './db.js';
 import { logger } from './logger.js';
-import {
-  getBot,
-  setBot,
-  getRegisteredGroups,
-  getSessions,
-} from './state.js';
+import { getBot, setBot, getRegisteredGroups, getSessions } from './state.js';
 import {
   sendMessage,
   sendMessageWithButtons,
   QuickReplyButton,
 } from './telegram-helpers.js';
-import { processMessage, startMediaCleanupScheduler } from './message-handler.js';
+import {
+  processMessage,
+  startMediaCleanupScheduler,
+} from './message-handler.js';
 import { saveState } from './group-manager.js';
 import { startIpcWatcher } from './ipc-watcher.js';
 import { startSchedulerLoop } from './task-scheduler.js';
@@ -35,10 +27,18 @@ import { formatError } from './utils.js';
 
 export async function connectTelegram(): Promise<void> {
   if (!TELEGRAM_BOT_TOKEN) {
-    console.error('\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557');
-    console.error('\u2551  FATAL: TELEGRAM_BOT_TOKEN not set                           \u2551');
-    console.error('\u2551  Run: npm run setup:telegram                                 \u2551');
-    console.error('\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d');
+    console.error(
+      '\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557',
+    );
+    console.error(
+      '\u2551  FATAL: TELEGRAM_BOT_TOKEN not set                           \u2551',
+    );
+    console.error(
+      '\u2551  Run: npm run setup:telegram                                 \u2551',
+    );
+    console.error(
+      '\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d',
+    );
     process.exit(1);
   }
 
@@ -93,8 +93,10 @@ export async function connectTelegram(): Promise<void> {
       const tags: string[] = [];
       if (content.includes('?')) tags.push('#question');
       if (content.startsWith('/')) tags.push('#command');
-      if (content.match(/bug|error|fail|\u932f\u8aa4|\u5931\u6557/i)) tags.push('#alert');
-      if (content.match(/good|great|thanks|\u8b9a|\u8b1d\u8b1d/i)) tags.push('#feedback');
+      if (content.match(/bug|error|fail|\u932f\u8aa4|\u5931\u6557/i))
+        tags.push('#alert');
+      if (content.match(/good|great|thanks|\u8b9a|\u8b1d\u8b1d/i))
+        tags.push('#feedback');
 
       storeMessage(
         msg.message_id.toString(),
@@ -111,11 +113,18 @@ export async function connectTelegram(): Promise<void> {
     if (registeredGroups[chatId]) {
       try {
         // Import consolidator
-        const { messageConsolidator } = await import('./message-consolidator.js');
+        const { messageConsolidator } =
+          await import('./message-consolidator.js');
         const group = registeredGroups[chatId];
 
         // Check if this is a media message
-        const isMedia = !!(msg.photo || msg.voice || msg.audio || msg.video || msg.document);
+        const isMedia = !!(
+          msg.photo ||
+          msg.voice ||
+          msg.audio ||
+          msg.video ||
+          msg.document
+        );
 
         // Get debounce setting (default 500ms, per-group config via consolidateMs)
         const debounceMs = (group as any)?.consolidateMs ?? 500;
@@ -173,7 +182,10 @@ export async function connectTelegram(): Promise<void> {
       const registeredGroups = getRegisteredGroups();
 
       // Handle new action types from suggest_actions
-      if (callbackPayload && ['reply', 'command', 'toggle'].includes(callbackPayload.type)) {
+      if (
+        callbackPayload &&
+        ['reply', 'command', 'toggle'].includes(callbackPayload.type)
+      ) {
         switch (callbackPayload.type) {
           case 'reply': {
             // Send the data as a new message (process as user message)
@@ -182,7 +194,11 @@ export async function connectTelegram(): Promise<void> {
               chat: { id: parseInt(chatId), type: 'group' },
               date: Math.floor(Date.now() / 1000),
               text: callbackPayload.data,
-              from: { id: query.from.id, is_bot: false, first_name: query.from.first_name },
+              from: {
+                id: query.from.id,
+                is_bot: false,
+                first_name: query.from.first_name,
+              },
             };
             await processMessage(fakeMsg);
             break;
@@ -194,7 +210,11 @@ export async function connectTelegram(): Promise<void> {
               chat: { id: parseInt(chatId), type: 'group' },
               date: Math.floor(Date.now() / 1000),
               text: callbackPayload.data,
-              from: { id: query.from.id, is_bot: false, first_name: query.from.first_name },
+              from: {
+                id: query.from.id,
+                is_bot: false,
+                first_name: query.from.first_name,
+              },
             };
             await processMessage(fakeMsg);
             break;
@@ -204,7 +224,10 @@ export async function connectTelegram(): Promise<void> {
             const [setting, value] = callbackPayload.data.split(':');
             const group = registeredGroups[chatId];
             if (group && setting) {
-              logger.info({ chatId, setting, value }, 'Toggle action triggered');
+              logger.info(
+                { chatId, setting, value },
+                'Toggle action triggered',
+              );
               await sendMessage(chatId, t().settingToggled(setting, value));
             }
             break;
@@ -218,7 +241,11 @@ export async function connectTelegram(): Promise<void> {
         const { handleOnboardingCallback } = await import('./onboarding.js');
         const group = registeredGroups[chatId];
         const groupFolder = group?.folder || 'main';
-        const handled = await handleOnboardingCallback(chatId, groupFolder, data);
+        const handled = await handleOnboardingCallback(
+          chatId,
+          groupFolder,
+          data,
+        );
         if (handled) return;
       }
 
@@ -237,7 +264,9 @@ export async function connectTelegram(): Promise<void> {
 
           // Validate originalMsgId is numeric
           if (!/^\d+$/.test(originalMsgId)) {
-            await bot.answerCallbackQuery(query.id, { text: 'Invalid message ID' });
+            await bot.answerCallbackQuery(query.id, {
+              text: 'Invalid message ID',
+            });
             return;
           }
 
@@ -245,7 +274,9 @@ export async function connectTelegram(): Promise<void> {
           const { getMessageById, checkRateLimit } = await import('./db.js');
           const rateCheck = checkRateLimit(`retry:${chatId}`, 5, 60000);
           if (!rateCheck.allowed) {
-            await bot.answerCallbackQuery(query.id, { text: 'Rate limited. Please wait.' });
+            await bot.answerCallbackQuery(query.id, {
+              text: 'Rate limited. Please wait.',
+            });
             return;
           }
 
@@ -259,31 +290,53 @@ export async function connectTelegram(): Promise<void> {
             const fakeMsg: TelegramBot.Message = {
               message_id: parseInt(originalMsgId),
               chat: { id: parseInt(chatId), type: 'group' },
-              date: Math.floor(new Date(originalMsg.timestamp).getTime() / 1000),
+              date: Math.floor(
+                new Date(originalMsg.timestamp).getTime() / 1000,
+              ),
               text: originalMsg.content,
-              from: { id: parseInt(originalMsg.sender), is_bot: false, first_name: originalMsg.sender_name },
+              from: {
+                id: parseInt(originalMsg.sender),
+                is_bot: false,
+                first_name: originalMsg.sender_name,
+              },
             };
 
             await processMessage(fakeMsg);
           } else {
-            await sendMessage(chatId, `\u274c ${t().retrying}\u5931\u6557\uff1a\u627e\u4e0d\u5230\u539f\u59cb\u8a0a\u606f`);
+            await sendMessage(
+              chatId,
+              `\u274c ${t().retrying}\u5931\u6557\uff1a\u627e\u4e0d\u5230\u539f\u59cb\u8a0a\u606f`,
+            );
           }
           break;
         }
         case 'feedback_menu': {
           const buttons: QuickReplyButton[][] = [
             [
-              { text: '\ud83d\udc4d', callbackData: `feedback:up:${params[0]}` },
-              { text: '\ud83d\udc4e', callbackData: `feedback:down:${params[0]}` }
-            ]
+              {
+                text: '\ud83d\udc4d',
+                callbackData: `feedback:up:${params[0]}`,
+              },
+              {
+                text: '\ud83d\udc4e',
+                callbackData: `feedback:down:${params[0]}`,
+              },
+            ],
           ];
-          await sendMessageWithButtons(chatId, '\u60a8\u5c0d\u9019\u500b\u56de\u8986\u6eff\u610f\u55ce\uff1f', buttons);
+          await sendMessageWithButtons(
+            chatId,
+            '\u60a8\u5c0d\u9019\u500b\u56de\u8986\u6eff\u610f\u55ce\uff1f',
+            buttons,
+          );
           break;
         }
         case 'feedback': {
           const rating = params[0];
           logger.info({ chatId, rating }, 'User feedback received');
-          await sendMessage(chatId, rating === 'up' ? t().thanksFeedback : t().willImprove);
+          await sendMessage(
+            chatId,
+            rating === 'up' ? t().thanksFeedback : t().willImprove,
+          );
           break;
         }
         default: {
@@ -325,5 +378,7 @@ export async function connectTelegram(): Promise<void> {
 
   console.log(`\n\u2713 NanoGemClaw running (trigger: @${ASSISTANT_NAME})`);
   console.log(`  Bot: @${me.username}`);
-  console.log(`  Registered groups: ${Object.keys(getRegisteredGroups()).length}\n`);
+  console.log(
+    `  Registered groups: ${Object.keys(getRegisteredGroups()).length}\n`,
+  );
 }

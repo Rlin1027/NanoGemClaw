@@ -349,10 +349,19 @@ export function formatExportAsMarkdown(exp: ConversationExport): string {
   return lines.join('\n');
 }
 
-export function getAllChatsPaginated(limit: number, offset: number): { rows: ChatInfo[]; total: number } {
+export function getAllChatsPaginated(
+  limit: number,
+  offset: number,
+): { rows: ChatInfo[]; total: number } {
   const db = getDatabase();
-  const rows = db.prepare('SELECT jid, name, last_message_time FROM chats ORDER BY last_message_time DESC LIMIT ? OFFSET ?').all(limit, offset) as ChatInfo[];
-  const { total } = db.prepare('SELECT COUNT(*) as total FROM chats').get() as { total: number };
+  const rows = db
+    .prepare(
+      'SELECT jid, name, last_message_time FROM chats ORDER BY last_message_time DESC LIMIT ? OFFSET ?',
+    )
+    .all(limit, offset) as ChatInfo[];
+  const { total } = db.prepare('SELECT COUNT(*) as total FROM chats').get() as {
+    total: number;
+  };
   return { rows, total };
 }
 

@@ -88,19 +88,23 @@ describe('group-manager.ts', () => {
 
   describe('loadState', () => {
     it('should load router_state.json and set last agent timestamp', async () => {
-      vi.mocked(loadJson).mockImplementation((path: string, defaultValue: any) => {
-        if (path.includes('router_state.json')) {
-          return {
-            last_agent_timestamp: { '123': '2024-01-01' },
-            language: 'en',
-          };
-        }
-        return defaultValue;
-      });
+      vi.mocked(loadJson).mockImplementation(
+        (path: string, defaultValue: any) => {
+          if (path.includes('router_state.json')) {
+            return {
+              last_agent_timestamp: { '123': '2024-01-01' },
+              language: 'en',
+            };
+          }
+          return defaultValue;
+        },
+      );
 
       await loadState();
 
-      expect(setLastAgentTimestamp).toHaveBeenCalledWith({ '123': '2024-01-01' });
+      expect(setLastAgentTimestamp).toHaveBeenCalledWith({
+        '123': '2024-01-01',
+      });
       expect(setSessions).toHaveBeenCalled();
       expect(setRegisteredGroups).toHaveBeenCalled();
     });
@@ -141,13 +145,17 @@ describe('group-manager.ts', () => {
 
     it('should load sessions and registered groups', async () => {
       const sessions = { '1': { lastTimestamp: '2024-01-01' } };
-      const groups = { '1': { name: 'Test', folder: 'test', persona: 'default' } };
+      const groups = {
+        '1': { name: 'Test', folder: 'test', persona: 'default' },
+      };
 
-      vi.mocked(loadJson).mockImplementation((path: string, defaultValue: any) => {
-        if (path.includes('sessions.json')) return sessions;
-        if (path.includes('registered_groups.json')) return groups;
-        return defaultValue;
-      });
+      vi.mocked(loadJson).mockImplementation(
+        (path: string, defaultValue: any) => {
+          if (path.includes('sessions.json')) return sessions;
+          if (path.includes('registered_groups.json')) return groups;
+          return defaultValue;
+        },
+      );
 
       await loadState();
 
@@ -159,14 +167,18 @@ describe('group-manager.ts', () => {
   describe('saveState', () => {
     it('should save router_state.json with current state', async () => {
       vi.mocked(getLastAgentTimestamp).mockReturnValue({ '123': '2024-01-01' });
-      vi.mocked(getSessions).mockReturnValue({ '1': { lastTimestamp: '2024-01-01' } });
+      vi.mocked(getSessions).mockReturnValue({
+        '1': { lastTimestamp: '2024-01-01' },
+      });
 
       await saveState();
 
       expect(saveJson).toHaveBeenCalledTimes(2);
       expect(saveJson).toHaveBeenCalledWith(
         expect.stringContaining('router_state.json'),
-        expect.objectContaining({ last_agent_timestamp: { '123': '2024-01-01' } })
+        expect.objectContaining({
+          last_agent_timestamp: { '123': '2024-01-01' },
+        }),
       );
     });
 
@@ -179,7 +191,7 @@ describe('group-manager.ts', () => {
 
       expect(saveJson).toHaveBeenCalledWith(
         expect.stringContaining('sessions.json'),
-        sessions
+        sessions,
       );
     });
   });
@@ -212,15 +224,15 @@ describe('group-manager.ts', () => {
 
       expect(fs.mkdirSync).toHaveBeenCalledWith(
         expect.stringContaining('test-group/logs'),
-        { recursive: true }
+        { recursive: true },
       );
       expect(fs.mkdirSync).toHaveBeenCalledWith(
         expect.stringContaining('test-group/media'),
-        { recursive: true }
+        { recursive: true },
       );
       expect(fs.mkdirSync).toHaveBeenCalledWith(
         expect.stringContaining('test-group/knowledge'),
-        { recursive: true }
+        { recursive: true },
       );
     });
 
@@ -239,7 +251,12 @@ describe('group-manager.ts', () => {
     });
 
     it('should reject folder names with special characters', () => {
-      const invalidFolders = ['test@group', 'test group', 'test/group', 'test\\group'];
+      const invalidFolders = [
+        'test@group',
+        'test group',
+        'test/group',
+        'test\\group',
+      ];
       vi.mocked(getRegisteredGroups).mockReturnValue({});
 
       for (const folder of invalidFolders) {

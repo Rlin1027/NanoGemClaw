@@ -53,7 +53,11 @@ vi.mock('../logger.js', () => ({
 }));
 
 import { closeAllWatchers } from '../ipc-watcher.js';
-import { getBot, getRegisteredGroups, getIpcMessageSentChats } from '../state.js';
+import {
+  getBot,
+  getRegisteredGroups,
+  getIpcMessageSentChats,
+} from '../state.js';
 
 describe('ipc-watcher.ts', () => {
   beforeEach(() => {

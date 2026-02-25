@@ -6,10 +6,7 @@
 import TelegramBot from 'node-telegram-bot-api';
 import path from 'path';
 
-import {
-  ASSISTANT_NAME,
-  TRIGGER_PATTERN,
-} from './config.js';
+import { ASSISTANT_NAME, TRIGGER_PATTERN } from './config.js';
 import { getMessagesSince } from './db.js';
 import { logger } from './logger.js';
 import { isMaintenanceMode } from './maintenance.js';
@@ -57,7 +54,8 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
 
   // Extract content (text or caption)
   let content = msg.text || msg.caption || '';
-  const isMainGroup = group.folder === (await import('./config.js')).MAIN_GROUP_FOLDER;
+  const isMainGroup =
+    group.folder === (await import('./config.js')).MAIN_GROUP_FOLDER;
 
   // Handle admin commands (main group only)
   if (isMainGroup && content.startsWith('/admin')) {

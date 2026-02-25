@@ -8,7 +8,10 @@ import path from 'path';
 import os from 'os';
 import { logger, logEmitter, getLogBuffer } from './logger.js';
 import { safeCompare } from './utils/safe-compare.js';
-import type { ServerToClientEvents, ClientToServerEvents } from './socket-events.js';
+import type {
+  ServerToClientEvents,
+  ClientToServerEvents,
+} from './socket-events.js';
 // Route modules
 import { createAuthRouter } from './routes/auth.js';
 import { createGroupsRouter } from './routes/groups.js';
@@ -47,7 +50,8 @@ const DASHBOARD_API_KEY = process.env.DASHBOARD_API_KEY;
 let io: Server;
 let httpServer: ReturnType<typeof createServer> | null = null;
 let groupsProvider: () => DashboardGroup[] = () => [];
-let groupRegistrar: ((chatId: string, name: string) => DashboardGroup) | null = null;
+let groupRegistrar: ((chatId: string, name: string) => DashboardGroup) | null =
+  null;
 let groupUpdater:
   | ((folder: string, updates: Record<string, any>) => DashboardGroup | null)
   | null = null;
@@ -123,17 +127,17 @@ export function startDashboardServer() {
 
   // Rate limiting
   const apiLimiter = rateLimit({
-    windowMs: 60 * 1000,  // 1 minute
-    max: 100,              // 100 requests/min
+    windowMs: 60 * 1000, // 1 minute
+    max: 100, // 100 requests/min
     standardHeaders: true,
     legacyHeaders: false,
-    message: { error: 'Too many requests, please try again later' }
+    message: { error: 'Too many requests, please try again later' },
   });
 
   const authLimiter = rateLimit({
     windowMs: 60 * 1000,
-    max: 10,               // 10 requests/min
-    message: { error: 'Too many authentication attempts' }
+    max: 10, // 10 requests/min
+    message: { error: 'Too many authentication attempts' },
   });
 
   // Apply rate limiting to all API routes
@@ -240,44 +244,71 @@ export function startDashboardServer() {
   // ================================================================
   // Mount Route Modules
   // ================================================================
-  app.use('/api', createConfigRouter({
-    dashboardHost: DASHBOARD_HOST,
-    dashboardPort: DASHBOARD_PORT,
-    getConnectedClients: () => io ? io.engine.clientsCount : 0,
-    accessCode: ACCESS_CODE,
-  }));
+  app.use(
+    '/api',
+    createConfigRouter({
+      dashboardHost: DASHBOARD_HOST,
+      dashboardPort: DASHBOARD_PORT,
+      getConnectedClients: () => (io ? io.engine.clientsCount : 0),
+      accessCode: ACCESS_CODE,
+    }),
+  );
 
-  app.use('/api', createGroupsRouter({
-    groupsProvider: () => groupsProvider(),
-    get groupRegistrar() { return groupRegistrar; },
-    get groupUpdater() { return groupUpdater; },
-    get chatJidResolver() { return chatJidResolver; },
-    validateFolder,
-    validateNumericParam,
-    emitDashboardEvent,
-  }));
+  app.use(
+    '/api',
+    createGroupsRouter({
+      groupsProvider: () => groupsProvider(),
+      get groupRegistrar() {
+        return groupRegistrar;
+      },
+      get groupUpdater() {
+        return groupUpdater;
+      },
+      get chatJidResolver() {
+        return chatJidResolver;
+      },
+      validateFolder,
+      validateNumericParam,
+      emitDashboardEvent,
+    }),
+  );
 
-  app.use('/api', createTasksRouter({
-    validateFolder,
-    validateNumericParam,
-  }));
+  app.use(
+    '/api',
+    createTasksRouter({
+      validateFolder,
+      validateNumericParam,
+    }),
+  );
 
-  app.use('/api', createKnowledgeRouter({
-    validateFolder,
-    validateNumericParam,
-  }));
+  app.use(
+    '/api',
+    createKnowledgeRouter({
+      validateFolder,
+      validateNumericParam,
+    }),
+  );
 
-  app.use('/api', createCalendarRouter({
-    validateNumericParam,
-  }));
+  app.use(
+    '/api',
+    createCalendarRouter({
+      validateNumericParam,
+    }),
+  );
 
-  app.use('/api', createSkillsRouter({
-    validateFolder,
-  }));
+  app.use(
+    '/api',
+    createSkillsRouter({
+      validateFolder,
+    }),
+  );
 
-  app.use('/api', createAnalyticsRouter({
-    validateFolder,
-  }));
+  app.use(
+    '/api',
+    createAnalyticsRouter({
+      validateFolder,
+    }),
+  );
 
   // ================================================================
   // Static file serving (production dashboard)
@@ -345,7 +376,9 @@ export function setGroupsProvider(provider: () => DashboardGroup[]) {
 /**
  * Inject the group registration function
  */
-export function setGroupRegistrar(fn: (chatId: string, name: string) => DashboardGroup) {
+export function setGroupRegistrar(
+  fn: (chatId: string, name: string) => DashboardGroup,
+) {
   groupRegistrar = fn;
 }
 

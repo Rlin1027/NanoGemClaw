@@ -99,8 +99,8 @@ export function getUsageTimeseries(
 
   // Determine strftime format based on granularity
   const GRANULARITY_FORMATS: Record<string, string> = {
-    'hour': '%Y-%m-%d %H:00',
-    'day': '%Y-%m-%d',
+    hour: '%Y-%m-%d %H:00',
+    day: '%Y-%m-%d',
   };
   const fmt = GRANULARITY_FORMATS[granularity] || GRANULARITY_FORMATS['day'];
 
@@ -163,7 +163,9 @@ export function getUsageTimeseriesDaily(days: number = 30): Array<{
   avg_response_ms: number;
 }> {
   const db = getDatabase();
-  return db.prepare(`
+  return db
+    .prepare(
+      `
     SELECT
       date(timestamp) as date,
       COUNT(*) as request_count,
@@ -173,7 +175,9 @@ export function getUsageTimeseriesDaily(days: number = 30): Array<{
     WHERE timestamp >= datetime('now', ?)
     GROUP BY date(timestamp)
     ORDER BY date ASC
-  `).all(`-${days} days`) as any[];
+  `,
+    )
+    .all(`-${days} days`) as any[];
 }
 
 /** Get per-group token consumption ranking */
@@ -184,7 +188,9 @@ export function getGroupTokenRanking(limit: number = 10): Array<{
   avg_tokens_per_request: number;
 }> {
   const db = getDatabase();
-  return db.prepare(`
+  return db
+    .prepare(
+      `
     SELECT
       group_folder,
       COALESCE(SUM(prompt_tokens + response_tokens), 0) as total_tokens,
@@ -194,7 +200,9 @@ export function getGroupTokenRanking(limit: number = 10): Array<{
     GROUP BY group_folder
     ORDER BY total_tokens DESC
     LIMIT ?
-  `).all(limit) as any[];
+  `,
+    )
+    .all(limit) as any[];
 }
 
 /** Get response time percentiles (P50/P95) */
@@ -205,17 +213,50 @@ export function getResponseTimePercentiles(): {
   count: number;
 } {
   const db = getDatabase();
-  const count = (db.prepare('SELECT COUNT(*) as cnt FROM usage_stats WHERE duration_ms IS NOT NULL').get() as any)?.cnt || 0;
+  const count =
+    (
+      db
+        .prepare(
+          'SELECT COUNT(*) as cnt FROM usage_stats WHERE duration_ms IS NOT NULL',
+        )
+        .get() as any
+    )?.cnt || 0;
   if (count === 0) return { p50: 0, p95: 0, avg: 0, count: 0 };
 
   const p50Idx = Math.floor(count * 0.5);
   const p95Idx = Math.floor(count * 0.95);
 
-  const p50 = (db.prepare('SELECT duration_ms FROM usage_stats WHERE duration_ms IS NOT NULL ORDER BY duration_ms ASC LIMIT 1 OFFSET ?').get(p50Idx) as any)?.duration_ms || 0;
-  const p95 = (db.prepare('SELECT duration_ms FROM usage_stats WHERE duration_ms IS NOT NULL ORDER BY duration_ms ASC LIMIT 1 OFFSET ?').get(p95Idx) as any)?.duration_ms || 0;
-  const avg = (db.prepare('SELECT AVG(duration_ms) as avg FROM usage_stats WHERE duration_ms IS NOT NULL').get() as any)?.avg || 0;
+  const p50 =
+    (
+      db
+        .prepare(
+          'SELECT duration_ms FROM usage_stats WHERE duration_ms IS NOT NULL ORDER BY duration_ms ASC LIMIT 1 OFFSET ?',
+        )
+        .get(p50Idx) as any
+    )?.duration_ms || 0;
+  const p95 =
+    (
+      db
+        .prepare(
+          'SELECT duration_ms FROM usage_stats WHERE duration_ms IS NOT NULL ORDER BY duration_ms ASC LIMIT 1 OFFSET ?',
+        )
+        .get(p95Idx) as any
+    )?.duration_ms || 0;
+  const avg =
+    (
+      db
+        .prepare(
+          'SELECT AVG(duration_ms) as avg FROM usage_stats WHERE duration_ms IS NOT NULL',
+        )
+        .get() as any
+    )?.avg || 0;
 
-  return { p50: Math.round(p50), p95: Math.round(p95), avg: Math.round(avg), count };
+  return {
+    p50: Math.round(p50),
+    p95: Math.round(p95),
+    avg: Math.round(avg),
+    count,
+  };
 }
 
 /** Get error rate timeseries */
@@ -228,7 +269,9 @@ export function getErrorRateTimeseries(days: number = 30): Array<{
   const db = getDatabase();
   // Note: usage_stats doesn't have a status column currently, so we'll create a placeholder structure
   // This will return data once the table schema is extended
-  return db.prepare(`
+  return db
+    .prepare(
+      `
     SELECT
       date(timestamp) as date,
       COUNT(*) as total,
@@ -238,7 +281,9 @@ export function getErrorRateTimeseries(days: number = 30): Array<{
     WHERE timestamp >= datetime('now', ?)
     GROUP BY date(timestamp)
     ORDER BY date ASC
-  `).all(`-${days} days`) as any[];
+  `,
+    )
+    .all(`-${days} days`) as any[];
 }
 
 // ============================================================================

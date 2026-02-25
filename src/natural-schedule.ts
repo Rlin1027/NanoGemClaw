@@ -8,7 +8,9 @@ export function parseNaturalSchedule(text: string): ParsedSchedule | null {
   const normalized = text.trim().toLowerCase();
 
   // Chinese patterns: 每天早上/下午/晚上 N點
-  const dailyChineseMatch = normalized.match(/每天(早上|上午|下午|晚上)(\d{1,2})點/);
+  const dailyChineseMatch = normalized.match(
+    /每天(早上|上午|下午|晚上)(\d{1,2})點/,
+  );
   if (dailyChineseMatch) {
     const period = dailyChineseMatch[1];
     let hour = parseInt(dailyChineseMatch[2], 10);
@@ -23,12 +25,14 @@ export function parseNaturalSchedule(text: string): ParsedSchedule | null {
     return {
       schedule_type: 'cron',
       schedule_value: `0 ${hour} * * *`,
-      description: `每天${dailyChineseMatch[1]} ${hour % 12 || 12}:00`
+      description: `每天${dailyChineseMatch[1]} ${hour % 12 || 12}:00`,
     };
   }
 
   // English patterns: every day at Xam/Xpm
-  const dailyEnglishMatch = normalized.match(/every\s+day\s+at\s+(\d{1,2})(am|pm)/);
+  const dailyEnglishMatch = normalized.match(
+    /every\s+day\s+at\s+(\d{1,2})(am|pm)/,
+  );
   if (dailyEnglishMatch) {
     let hour = parseInt(dailyEnglishMatch[1], 10);
     const period = dailyEnglishMatch[2];
@@ -43,7 +47,7 @@ export function parseNaturalSchedule(text: string): ParsedSchedule | null {
     return {
       schedule_type: 'cron',
       schedule_value: `0 ${hour} * * *`,
-      description: `Every day at ${dailyEnglishMatch[1]}${period.toUpperCase()}`
+      description: `Every day at ${dailyEnglishMatch[1]}${period.toUpperCase()}`,
     };
   }
 
@@ -52,7 +56,7 @@ export function parseNaturalSchedule(text: string): ParsedSchedule | null {
     return {
       schedule_type: 'interval',
       schedule_value: '3600000',
-      description: '每小時'
+      description: '每小時',
     };
   }
 
@@ -61,7 +65,7 @@ export function parseNaturalSchedule(text: string): ParsedSchedule | null {
     return {
       schedule_type: 'interval',
       schedule_value: '3600000',
-      description: 'Every hour'
+      description: 'Every hour',
     };
   }
 
@@ -75,12 +79,14 @@ export function parseNaturalSchedule(text: string): ParsedSchedule | null {
     return {
       schedule_type: 'interval',
       schedule_value: String(ms),
-      description: `每 ${num} ${unit}`
+      description: `每 ${num} ${unit}`,
     };
   }
 
   // English: every N hours / every N minutes
-  const intervalEnglishMatch = normalized.match(/every\s+(\d+)\s+(hour|minute)s?/);
+  const intervalEnglishMatch = normalized.match(
+    /every\s+(\d+)\s+(hour|minute)s?/,
+  );
   if (intervalEnglishMatch) {
     const num = parseInt(intervalEnglishMatch[1], 10);
     const unit = intervalEnglishMatch[2];
@@ -89,16 +95,24 @@ export function parseNaturalSchedule(text: string): ParsedSchedule | null {
     return {
       schedule_type: 'interval',
       schedule_value: String(ms),
-      description: `Every ${num} ${unit}${num > 1 ? 's' : ''}`
+      description: `Every ${num} ${unit}${num > 1 ? 's' : ''}`,
     };
   }
 
   // Chinese: 每週X (with optional time)
   const weekdayChineseMap: Record<string, number> = {
-    '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '日': 0
+    一: 1,
+    二: 2,
+    三: 3,
+    四: 4,
+    五: 5,
+    六: 6,
+    日: 0,
   };
 
-  const weeklyChineseMatch = normalized.match(/每週([一二三四五六日])(早上|上午|下午|晚上)?(\d{1,2})?點?/);
+  const weeklyChineseMatch = normalized.match(
+    /每週([一二三四五六日])(早上|上午|下午|晚上)?(\d{1,2})?點?/,
+  );
   if (weeklyChineseMatch) {
     const dayChar = weeklyChineseMatch[1];
     const period = weeklyChineseMatch[2];
@@ -121,17 +135,24 @@ export function parseNaturalSchedule(text: string): ParsedSchedule | null {
     return {
       schedule_type: 'cron',
       schedule_value: `0 ${hour} * * ${dayOfWeek}`,
-      description: `每週${dayNames[dayOfWeek]} ${hour}:00`
+      description: `每週${dayNames[dayOfWeek]} ${hour}:00`,
     };
   }
 
   // English: every monday/tuesday/... (with optional time)
   const weekdayEnglishMap: Record<string, number> = {
-    'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4,
-    'friday': 5, 'saturday': 6, 'sunday': 0
+    monday: 1,
+    tuesday: 2,
+    wednesday: 3,
+    thursday: 4,
+    friday: 5,
+    saturday: 6,
+    sunday: 0,
   };
 
-  const weeklyEnglishMatch = normalized.match(/every\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\s+at\s+(\d{1,2})(am|pm))?/);
+  const weeklyEnglishMatch = normalized.match(
+    /every\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\s+at\s+(\d{1,2})(am|pm))?/,
+  );
   if (weeklyEnglishMatch) {
     const dayName = weeklyEnglishMatch[1];
     const hourStr = weeklyEnglishMatch[2];
@@ -154,7 +175,7 @@ export function parseNaturalSchedule(text: string): ParsedSchedule | null {
     return {
       schedule_type: 'cron',
       schedule_value: `0 ${hour} * * ${dayOfWeek}`,
-      description: `Every ${dayNameCap} at ${hour % 12 || 12}:00 ${hour >= 12 ? 'PM' : 'AM'}`
+      description: `Every ${dayNameCap} at ${hour % 12 || 12}:00 ${hour >= 12 ? 'PM' : 'AM'}`,
     };
   }
 
@@ -166,19 +187,21 @@ export function parseNaturalSchedule(text: string): ParsedSchedule | null {
     return {
       schedule_type: 'cron',
       schedule_value: `0 9 ${day} * *`,
-      description: `每月 ${day} 號 9:00`
+      description: `每月 ${day} 號 9:00`,
     };
   }
 
   // English: every month on the Xst/Xnd/Xrd/Xth
-  const monthlyEnglishMatch = normalized.match(/every\s+month\s+on\s+the\s+(\d{1,2})(st|nd|rd|th)/);
+  const monthlyEnglishMatch = normalized.match(
+    /every\s+month\s+on\s+the\s+(\d{1,2})(st|nd|rd|th)/,
+  );
   if (monthlyEnglishMatch) {
     const day = parseInt(monthlyEnglishMatch[1], 10);
 
     return {
       schedule_type: 'cron',
       schedule_value: `0 9 ${day} * *`,
-      description: `Every month on the ${monthlyEnglishMatch[1]}${monthlyEnglishMatch[2]} at 9:00 AM`
+      description: `Every month on the ${monthlyEnglishMatch[1]}${monthlyEnglishMatch[2]} at 9:00 AM`,
     };
   }
 
@@ -193,7 +216,7 @@ export function parseNaturalSchedule(text: string): ParsedSchedule | null {
     return {
       schedule_type: 'once',
       schedule_value: targetTime,
-      description: `${num} ${unit}後`
+      description: `${num} ${unit}後`,
     };
   }
 
@@ -208,7 +231,7 @@ export function parseNaturalSchedule(text: string): ParsedSchedule | null {
     return {
       schedule_type: 'once',
       schedule_value: targetTime,
-      description: `In ${num} ${unit}${num > 1 ? 's' : ''}`
+      description: `In ${num} ${unit}${num > 1 ? 's' : ''}`,
     };
   }
 
@@ -232,7 +255,7 @@ export function parseNaturalSchedule(text: string): ParsedSchedule | null {
     return {
       schedule_type: 'once',
       schedule_value: tomorrow.toISOString(),
-      description: `Tomorrow at ${tomorrowMatch[1]}${period.toUpperCase()}`
+      description: `Tomorrow at ${tomorrowMatch[1]}${period.toUpperCase()}`,
     };
   }
 

@@ -66,7 +66,9 @@ describe('message-consolidator.ts', () => {
       vi.advanceTimersByTime(2000);
 
       expect(listener).toHaveBeenCalledOnce();
-      expect(listener.mock.calls[0][0].combinedText).toBe('Message 1\nMessage 2');
+      expect(listener.mock.calls[0][0].combinedText).toBe(
+        'Message 1\nMessage 2',
+      );
       expect(consolidator.hasPending('123')).toBe(false);
     });
 

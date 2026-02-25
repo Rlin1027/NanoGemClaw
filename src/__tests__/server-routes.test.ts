@@ -183,14 +183,14 @@ describe('server-routes.test.ts', () => {
     it('should validate required fields in body', async () => {
       app.post('/api/test/validate', (req, res) => {
         if (!req.body.name) {
-          return res.status(400).json({ error: 'Missing required field: name' });
+          return res
+            .status(400)
+            .json({ error: 'Missing required field: name' });
         }
         res.json({ data: 'ok' });
       });
 
-      const response = await request(app)
-        .post('/api/test/validate')
-        .send({});
+      const response = await request(app).post('/api/test/validate').send({});
 
       expect(response.status).toBe(400);
       expect(response.body.error).toContain('Missing required field');
@@ -199,7 +199,9 @@ describe('server-routes.test.ts', () => {
     it('should accept valid request body', async () => {
       app.post('/api/test/validate', (req, res) => {
         if (!req.body.name) {
-          return res.status(400).json({ error: 'Missing required field: name' });
+          return res
+            .status(400)
+            .json({ error: 'Missing required field: name' });
         }
         res.json({ data: 'ok' });
       });
