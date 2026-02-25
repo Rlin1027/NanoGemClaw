@@ -89,14 +89,16 @@ export async function runFastPath(
 ): Promise<ContainerOutput> {
   // Wrap in timeout to prevent indefinite hangs
   const timeoutMs = FAST_PATH.TIMEOUT_MS;
+  let timer: NodeJS.Timeout;
+  const timeoutPromise = new Promise<ContainerOutput>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`Fast path timed out after ${timeoutMs}ms`)),
+      timeoutMs,
+    );
+  });
   return Promise.race([
-    runFastPathInner(group, input, ipcContext, onProgress),
-    new Promise<ContainerOutput>((_, reject) =>
-      setTimeout(
-        () => reject(new Error(`Fast path timed out after ${timeoutMs}ms`)),
-        timeoutMs,
-      ),
-    ),
+    runFastPathInner(group, input, ipcContext, onProgress).finally(() => clearTimeout(timer!)),
+    timeoutPromise,
   ]).catch((err) => {
     const errorMsg = err instanceof Error ? err.message : String(err);
     logger.error(

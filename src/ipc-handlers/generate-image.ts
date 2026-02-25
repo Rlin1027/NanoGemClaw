@@ -41,7 +41,8 @@ export const GenerateImageHandler: IpcHandler = {
         'Image generated and sent'
       );
     } else {
-      await context.sendMessage(data.chatJid, `❌ Image generation failed: ${result.error}`);
+      logger.error({ err: result.error, prompt: data.prompt?.substring(0, 100) }, 'Image generation failed');
+      await context.sendMessage(data.chatJid, '❌ 圖片生成失敗，請稍後再試。');
     }
   },
 };

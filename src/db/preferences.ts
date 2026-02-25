@@ -74,11 +74,12 @@ export function setPreference(groupFolder: string, key: string, value: string): 
 }
 
 /**
- * Get a single preference value for a group (convenience wrapper)
+ * Get a single preference value for a group (direct single-key query)
  */
 export function getUserPreference(groupFolder: string, key: string): string | null {
-  const prefs = getPreferences(groupFolder);
-  return prefs[key] || null;
+  const db = getDatabase();
+  const row = db.prepare('SELECT value FROM preferences WHERE group_folder = ? AND key = ?').get(groupFolder, key) as { value: string } | undefined;
+  return row?.value ?? null;
 }
 
 /**

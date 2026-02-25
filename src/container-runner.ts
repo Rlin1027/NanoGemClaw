@@ -207,15 +207,15 @@ function buildVolumeMounts(
   }
 
   // Global Gemini directory for OAuth credentials and session data
-  // Read-write: Apple Container doesn't support nested overlapping bind mounts
-  // (a writable child under a readonly parent), so we mount as read-write.
-  // Container is ephemeral (--rm) so no persistent changes to host credentials.
+  // Read-only: protect OAuth credentials from being modified by container code.
+  // The per-group sessions directory below overrides /home/node/.gemini/tmp
+  // with a writable mount for session isolation.
   const hostGeminiDir = path.join(homeDir, '.gemini');
   if (fs.existsSync(hostGeminiDir)) {
     mounts.push({
       hostPath: hostGeminiDir,
       containerPath: '/home/node/.gemini',
-      readonly: false,
+      readonly: true, // Security: prevent container from modifying OAuth credentials
     });
   }
 
@@ -421,19 +421,43 @@ Only suggest follow-ups when they genuinely add value. Do not suggest them for s
     systemPrompt = (systemPrompt || '') + followUpInstruction;
   }
 
+  // Sanitize system prompt - remove newlines and control characters that could affect env var parsing
+  const sanitizedPrompt = (systemPrompt || '').replace(/[\n\r\0]/g, ' ').trim();
+
+  // Write GEMINI_SYSTEM_PROMPT to the per-group env file instead of passing via -e CLI arg.
+  // This avoids exposing potentially large/sensitive prompt content in the process argument list
+  // and keeps all runtime env vars in the already-mounted /workspace/env-dir.
+  const envDir = path.join(DATA_DIR, 'env', group.folder);
+  fs.mkdirSync(envDir, { recursive: true });
+  const envFilePath = path.join(envDir, 'env');
+  const existingEnvContent = fs.existsSync(envFilePath)
+    ? fs.readFileSync(envFilePath, 'utf-8')
+    : '';
+  // Remove any existing GEMINI_SYSTEM_PROMPT line, then append the current value
+  const envLines = existingEnvContent
+    .split('\n')
+    .filter((l) => l.trim() && !l.startsWith('GEMINI_SYSTEM_PROMPT='));
+  envLines.push(`GEMINI_SYSTEM_PROMPT=${sanitizedPrompt}`);
+  fs.writeFileSync(envFilePath, envLines.join('\n') + '\n');
+
+  // Ensure the env-dir mount is present (buildVolumeMounts adds it only when .env exists with API keys)
+  const envDirMountExists = mounts.some((m) => m.containerPath === '/workspace/env-dir');
+  if (!envDirMountExists) {
+    mounts.push({
+      hostPath: envDir,
+      containerPath: '/workspace/env-dir',
+      readonly: true,
+    });
+  }
+
   // Build base args including mounts
   const baseArgs = buildContainerArgs(mounts);
 
   // Extract image (last argument)
   const image = baseArgs.pop();
 
-  // Sanitize system prompt - remove newlines and control characters that could affect env var parsing
-  const sanitizedPrompt = (systemPrompt || '').replace(/[\n\r\0]/g, ' ').trim();
-
-  // Inject environment variables before the image argument
+  // Inject environment variables before the image argument (GEMINI_SYSTEM_PROMPT is now in env file)
   baseArgs.push(
-    '-e',
-    `GEMINI_SYSTEM_PROMPT=${sanitizedPrompt}`,
     '-e',
     `GEMINI_ENABLE_SEARCH=${input.enableWebSearch !== false ? 'true' : 'false'}`,
     '-e',

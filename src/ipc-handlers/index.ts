@@ -42,8 +42,12 @@ export async function dispatchIpc(
     return;
   }
 
-  if (handler.requiredPermission === 'own_group') {
-    // Handler must verify group ownership internally
+  if (handler.requiredPermission === 'own_group' && !context.isMain) {
+    const targetGroup = data.groupFolder || data.group;
+    if (targetGroup && targetGroup !== context.sourceGroup) {
+      logger.warn({ type: data.type, sourceGroup: context.sourceGroup, targetGroup }, 'Unauthorized IPC: own_group violation');
+      return;
+    }
   }
 
   try {

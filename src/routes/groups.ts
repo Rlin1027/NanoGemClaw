@@ -33,11 +33,13 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
     });
 
     // GET /api/groups/discover
-    router.get('/groups/discover', async (_req, res) => {
+    router.get('/groups/discover', async (req, res) => {
         try {
-            const { getAllChats } = await import('../db.js');
-            const chats = getAllChats();
-            res.json({ data: chats });
+            const { getAllChatsPaginated } = await import('../db.js');
+            const { parsePagination } = await import('../utils/pagination.js');
+            const { limit, offset } = parsePagination(req.query);
+            const { rows, total } = getAllChatsPaginated(limit, offset);
+            res.json({ data: rows, pagination: { total, limit, offset, hasMore: offset + rows.length < total } });
         } catch {
             res.status(500).json({ error: 'Failed to discover groups' });
         }
@@ -189,8 +191,9 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
             saveCustomPersona(key, { name, description: description || '', systemPrompt });
             res.json({ data: { key } });
         } catch (err) {
-            const message = err instanceof Error ? err.message : 'Failed to create persona';
-            res.status(400).json({ error: message });
+            const { logger } = await import('../logger.js');
+            logger.error({ err }, 'Persona operation failed');
+            res.status(500).json({ error: 'Failed to create persona' });
         }
     });
 
@@ -210,8 +213,9 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
             }
             res.json({ data: { success: true } });
         } catch (err) {
-            const message = err instanceof Error ? err.message : 'Failed to delete persona';
-            res.status(400).json({ error: message });
+            const { logger } = await import('../logger.js');
+            logger.error({ err }, 'Persona operation failed');
+            res.status(500).json({ error: 'Failed to delete persona' });
         }
     });
 

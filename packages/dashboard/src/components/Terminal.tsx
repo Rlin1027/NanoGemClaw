@@ -40,6 +40,7 @@ export function Terminal({ logs, isLoading, className, autoScroll = true }: Term
     const containerRef = useRef<HTMLDivElement>(null);
     const terminalRef = useRef<XTerm | null>(null);
     const fitAddonRef = useRef<FitAddon | null>(null);
+    const prevLogsLengthRef = useRef(0);
 
     // Initialize Terminal
     useEffect(() => {
@@ -77,13 +78,22 @@ export function Terminal({ logs, isLoading, className, autoScroll = true }: Term
         };
     }, []);
 
-    // Write logs
+    // Write logs (delta only; full clear only when logs shrink)
     useEffect(() => {
         const term = terminalRef.current;
-        if (!term || logs.length === 0) return;
+        if (!term) return;
 
-        term.clear();
-        logs.forEach(log => term.writeln(log));
+        if (logs.length < prevLogsLengthRef.current) {
+            // Logs were cleared — redraw from scratch
+            term.clear();
+            logs.forEach(log => term.writeln(log));
+        } else {
+            // Append only new entries
+            const newEntries = logs.slice(prevLogsLengthRef.current);
+            newEntries.forEach(log => term.writeln(log));
+        }
+
+        prevLogsLengthRef.current = logs.length;
 
         if (autoScroll) {
             term.scrollToBottom();

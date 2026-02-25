@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, X, Loader2 } from 'lucide-react';
+import DOMPurify from 'dompurify';
 import { useSearch, type SearchResult } from '../hooks/useSearch';
 import { useSocket } from '../hooks/useSocket';
 
@@ -172,7 +173,7 @@ function SearchResultItem({ result, isSelected }: { result: SearchResult; isSele
             </div>
             <div
                 className="text-sm text-slate-400 line-clamp-2 [&_mark]:bg-yellow-500/30 [&_mark]:text-yellow-200 [&_mark]:rounded-sm [&_mark]:px-0.5"
-                dangerouslySetInnerHTML={{ __html: result.snippet || result.content }}
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(result.snippet || result.content, { ALLOWED_TAGS: ['mark'], ALLOWED_ATTR: [] }) }}
             />
         </div>
     );

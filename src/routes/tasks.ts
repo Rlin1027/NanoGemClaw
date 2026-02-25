@@ -10,10 +10,13 @@ export function createTasksRouter(deps: TasksRouterDeps): Router {
     const { validateFolder, validateNumericParam } = deps;
 
     // GET /api/tasks
-    router.get('/tasks', async (_req, res) => {
+    router.get('/tasks', async (req, res) => {
         try {
-            const { getAllTasks } = await import('../db.js');
-            res.json({ data: getAllTasks() });
+            const { getAllTasksPaginated } = await import('../db.js');
+            const { parsePagination } = await import('../utils/pagination.js');
+            const { limit, offset } = parsePagination(req.query);
+            const { rows, total } = getAllTasksPaginated(limit, offset);
+            res.json({ data: rows, pagination: { total, limit, offset, hasMore: offset + rows.length < total } });
         } catch {
             res.status(500).json({ error: 'Failed to fetch tasks' });
         }
@@ -27,8 +30,11 @@ export function createTasksRouter(deps: TasksRouterDeps): Router {
             return;
         }
         try {
-            const { getTasksForGroup } = await import('../db.js');
-            res.json({ data: getTasksForGroup(groupFolder) });
+            const { getTasksForGroupPaginated } = await import('../db.js');
+            const { parsePagination } = await import('../utils/pagination.js');
+            const { limit, offset } = parsePagination(req.query);
+            const { rows, total } = getTasksForGroupPaginated(groupFolder, limit, offset);
+            res.json({ data: rows, pagination: { total, limit, offset, hasMore: offset + rows.length < total } });
         } catch {
             res.status(500).json({ error: 'Failed to fetch tasks' });
         }
@@ -123,7 +129,7 @@ export function createTasksRouter(deps: TasksRouterDeps): Router {
                 created_at: new Date().toISOString(),
             });
 
-            res.json({ data: { id: taskId } });
+            res.status(201).json({ data: { id: taskId } });
         } catch {
             res.status(500).json({ error: 'Failed to create task' });
         }
@@ -146,7 +152,14 @@ export function createTasksRouter(deps: TasksRouterDeps): Router {
             if (prompt !== undefined) updates.prompt = prompt;
             if (schedule_type !== undefined) updates.schedule_type = schedule_type;
             if (schedule_value !== undefined) updates.schedule_value = schedule_value;
-            if (status !== undefined) updates.status = status;
+            if (status !== undefined) {
+                const VALID_STATUSES = ['active', 'paused', 'completed'];
+                if (!VALID_STATUSES.includes(status)) {
+                    res.status(400).json({ error: 'Invalid status. Must be one of: active, paused, completed' });
+                    return;
+                }
+                updates.status = status;
+            }
 
             // Recalculate next_run if schedule changed
             if (schedule_type || schedule_value) {

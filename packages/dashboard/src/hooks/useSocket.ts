@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { AgentStatus } from '../components/StatusCard';
+import { DashboardGroupData, DashboardLogEntry } from '../types/socket-events';
 
 const SERVER_URL = import.meta.env.VITE_API_URL || window.location.origin;
 
@@ -22,7 +23,7 @@ const LEVEL_ANSI: Record<string, string> = {
 const RESET = '\x1b[0m';
 const DIM = '\x1b[90m';
 
-function formatLogEntry(entry: any): string {
+function formatLogEntry(entry: DashboardLogEntry | string): string {
     if (typeof entry === 'string') return entry;
     const ts = entry.timestamp
         ? new Date(entry.timestamp).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -39,7 +40,11 @@ export function useSocket() {
     const [logs, setLogs] = useState<string[]>([]);
 
     useEffect(() => {
-        const socketInstance = io(SERVER_URL);
+        const socketInstance = io(SERVER_URL, {
+            auth: { accessCode: localStorage.getItem('nanogemclaw_access_code') || '' },
+            reconnectionDelayMax: 30000,
+            randomizationFactor: 0.5,
+        });
 
         socketInstance.on('connect', () => {
             console.log('Connected to Dashboard Server');
@@ -51,17 +56,20 @@ export function useSocket() {
             setIsConnected(false);
         });
 
-        socketInstance.on('groups:update', (data: GroupData[]) => {
+        socketInstance.on('groups:update', (data: DashboardGroupData[]) => {
             console.log('Received groups update:', data);
-            setGroups(data);
+            setGroups(data as unknown as GroupData[]);
         });
 
-        socketInstance.on('logs:history', (history: any[]) => {
+        socketInstance.on('logs:history', (history: DashboardLogEntry[]) => {
             setLogs(history.map(formatLogEntry));
         });
 
-        socketInstance.on('logs:entry', (entry: any) => {
-            setLogs(prev => [...prev, formatLogEntry(entry)]);
+        socketInstance.on('logs:entry', (entry: DashboardLogEntry) => {
+            setLogs(prev => {
+                const next = [...prev, formatLogEntry(entry)];
+                return next.length > 5000 ? next.slice(-5000) : next;
+            });
         });
 
         setSocket(socketInstance);

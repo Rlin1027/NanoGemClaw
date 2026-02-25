@@ -8,6 +8,7 @@ import path from 'path';
 import os from 'os';
 import { logger, logEmitter, getLogBuffer } from './logger.js';
 import { safeCompare } from './utils/safe-compare.js';
+import type { ServerToClientEvents, ClientToServerEvents } from './socket-events.js';
 // Route modules
 import { createAuthRouter } from './routes/auth.js';
 import { createGroupsRouter } from './routes/groups.js';
@@ -153,29 +154,38 @@ export function startDashboardServer() {
     // Skip auth for public endpoints
     if (PUBLIC_PATHS.includes(req.path)) return next();
 
-    // If ACCESS_CODE is set, require it for all endpoints
+    // If neither auth method is configured, allow all requests
+    if (!ACCESS_CODE && !DASHBOARD_API_KEY) {
+      return next();
+    }
+
+    // OR logic: authenticated if either credential matches
+    let authenticated = false;
+
     if (ACCESS_CODE) {
       const code = req.headers['x-access-code'];
-      if (!safeCompare(String(code || ''), ACCESS_CODE)) {
-        res.status(401).json({ error: 'Authentication required' });
-        return;
+      if (safeCompare(String(code || ''), ACCESS_CODE)) {
+        authenticated = true;
       }
     }
 
-    // If DASHBOARD_API_KEY is set, require it for all endpoints
-    if (DASHBOARD_API_KEY) {
+    if (!authenticated && DASHBOARD_API_KEY) {
       const apiKey = req.headers['x-api-key'];
-      if (!safeCompare(String(apiKey || ''), DASHBOARD_API_KEY)) {
-        res.status(401).json({ error: 'Unauthorized' });
-        return;
+      if (safeCompare(String(apiKey || ''), DASHBOARD_API_KEY)) {
+        authenticated = true;
       }
+    }
+
+    if (!authenticated) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
     }
 
     next();
   });
 
   // Socket.io Setup
-  io = new Server(server, {
+  io = new Server<ClientToServerEvents, ServerToClientEvents>(server, {
     cors: {
       origin: ALLOWED_ORIGINS,
       methods: ['GET', 'POST'],

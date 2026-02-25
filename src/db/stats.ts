@@ -98,7 +98,11 @@ export function getUsageTimeseries(
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
   // Determine strftime format based on granularity
-  const fmt = granularity === 'hour' ? '%Y-%m-%d %H:00' : '%Y-%m-%d';
+  const GRANULARITY_FORMATS: Record<string, string> = {
+    'hour': '%Y-%m-%d %H:00',
+    'day': '%Y-%m-%d',
+  };
+  const fmt = GRANULARITY_FORMATS[granularity] || GRANULARITY_FORMATS['day'];
 
   let query = `
     SELECT strftime('${fmt}', timestamp) as bucket,

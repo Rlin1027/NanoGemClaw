@@ -30,6 +30,7 @@ export interface SchedulerDependencies {
 async function runTask(
   task: ScheduledTask,
   deps: SchedulerDependencies,
+  cachedTasks?: ScheduledTask[],
 ): Promise<void> {
   const startTime = Date.now();
   const groupDir = path.join(GROUPS_DIR, task.group_folder);
@@ -70,7 +71,7 @@ async function runTask(
 
   // Update tasks snapshot for container to read (filtered by group)
   const isMain = task.group_folder === MAIN_GROUP_FOLDER;
-  const tasks = getAllTasks();
+  const tasks = cachedTasks ?? getAllTasks();
   writeTasksSnapshot(
     task.group_folder,
     isMain,
@@ -177,6 +178,9 @@ export function startSchedulerLoop(deps: SchedulerDependencies): {
         logger.info({ count: dueTasks.length }, 'Found due tasks');
       }
 
+      // Fetch all tasks once per tick and pass cached list to each runTask call
+      const allTasksSnapshot = dueTasks.length > 0 ? getAllTasks() : [];
+
       for (const task of dueTasks) {
         if (stopped) break;
 
@@ -188,7 +192,7 @@ export function startSchedulerLoop(deps: SchedulerDependencies): {
 
         // Isolate each task - one failure shouldn't block others
         try {
-          await runTask(currentTask, deps);
+          await runTask(currentTask, deps, allTasksSnapshot);
         } catch (taskErr) {
           logger.error(
             {

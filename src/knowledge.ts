@@ -232,6 +232,25 @@ export function getKnowledgeDocs(
 }
 
 /**
+ * Get knowledge documents for a group with pagination.
+ */
+export function getKnowledgeDocsPaginated(
+  db: Database.Database,
+  groupFolder: string,
+  limit: number,
+  offset: number,
+): { rows: KnowledgeDoc[]; total: number } {
+  const rows = db.prepare(`
+    SELECT * FROM knowledge_docs
+    WHERE group_folder = ?
+    ORDER BY updated_at DESC
+    LIMIT ? OFFSET ?
+  `).all(groupFolder, limit, offset) as KnowledgeDoc[];
+  const { total } = db.prepare('SELECT COUNT(*) as total FROM knowledge_docs WHERE group_folder = ?').get(groupFolder) as { total: number };
+  return { rows, total };
+}
+
+/**
  * Get a single knowledge document by ID.
  */
 export function getKnowledgeDoc(

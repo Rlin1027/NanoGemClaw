@@ -18,11 +18,13 @@ export function createKnowledgeRouter(deps: KnowledgeRouterDeps): Router {
         }
 
         try {
-            const { getKnowledgeDocs } = await import('../knowledge.js');
+            const { getKnowledgeDocsPaginated } = await import('../knowledge.js');
             const { getDatabase } = await import('../db.js');
+            const { parsePagination } = await import('../utils/pagination.js');
             const db = getDatabase();
-            const docs = getKnowledgeDocs(db, folder);
-            res.json({ data: docs });
+            const { limit, offset } = parsePagination(req.query);
+            const { rows, total } = getKnowledgeDocsPaginated(db, folder, limit, offset);
+            res.json({ data: rows, pagination: { total, limit, offset, hasMore: offset + rows.length < total } });
         } catch {
             res.status(500).json({ error: 'Failed to fetch knowledge documents' });
         }
@@ -52,7 +54,7 @@ export function createKnowledgeRouter(deps: KnowledgeRouterDeps): Router {
             const { getDatabase } = await import('../db.js');
             const db = getDatabase();
             const doc = addKnowledgeDoc(db, folder, filename, title, content);
-            res.json({ data: doc });
+            res.status(201).json({ data: doc });
         } catch {
             res.status(500).json({ error: 'Failed to create knowledge document' });
         }

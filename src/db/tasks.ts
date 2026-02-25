@@ -161,6 +161,20 @@ export function getTaskRunLogs(taskId: string, limit = 10): TaskRunLog[] {
     .all(taskId, limit) as TaskRunLog[];
 }
 
+export function getAllTasksPaginated(limit: number, offset: number): { rows: ScheduledTask[]; total: number } {
+  const db = getDatabase();
+  const rows = db.prepare('SELECT * FROM scheduled_tasks ORDER BY created_at DESC LIMIT ? OFFSET ?').all(limit, offset) as ScheduledTask[];
+  const { total } = db.prepare('SELECT COUNT(*) as total FROM scheduled_tasks').get() as { total: number };
+  return { rows, total };
+}
+
+export function getTasksForGroupPaginated(groupFolder: string, limit: number, offset: number): { rows: ScheduledTask[]; total: number } {
+  const db = getDatabase();
+  const rows = db.prepare('SELECT * FROM scheduled_tasks WHERE group_folder = ? ORDER BY created_at DESC LIMIT ? OFFSET ?').all(groupFolder, limit, offset) as ScheduledTask[];
+  const { total } = db.prepare('SELECT COUNT(*) as total FROM scheduled_tasks WHERE group_folder = ?').get(groupFolder) as { total: number };
+  return { rows, total };
+}
+
 /**
  * Batch: Get active task counts for all groups at once.
  * Returns Map<folder, activeCount>

@@ -19,7 +19,7 @@ export function createAuthRouter(deps: AuthRouterDeps): Router {
             res.status(401).json({ error: 'Invalid access code' });
             return;
         }
-        res.json({ success: true });
+        res.json({ data: { success: true } });
     });
 
     return router;

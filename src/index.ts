@@ -160,15 +160,16 @@ async function main(): Promise<void> {
 
     const [chatId, group] = entry;
 
-    // Apply updates
-    if (updates.persona !== undefined) group.persona = updates.persona;
+    // Apply updates to a shallow copy for atomicity
+    const updated = { ...group };
+    if (updates.persona !== undefined) updated.persona = updates.persona;
     if (updates.enableWebSearch !== undefined)
-      group.enableWebSearch = updates.enableWebSearch;
+      updated.enableWebSearch = updates.enableWebSearch;
     if (updates.requireTrigger !== undefined)
-      group.requireTrigger = updates.requireTrigger;
-    if (updates.name !== undefined) group.name = updates.name;
+      updated.requireTrigger = updates.requireTrigger;
+    if (updates.name !== undefined) updated.name = updates.name;
     if (updates.enableFastPath !== undefined)
-      group.enableFastPath = updates.enableFastPath;
+      updated.enableFastPath = updates.enableFastPath;
 
     // Invalidate context cache if relevant settings changed
     if (
@@ -182,8 +183,8 @@ async function main(): Promise<void> {
         .catch(() => {});
     }
 
-    // Save
-    registeredGroups[chatId] = group;
+    // Commit atomically then save
+    registeredGroups[chatId] = updated;
     saveJson(path.join(DATA_DIR, 'registered_groups.json'), registeredGroups);
 
     return { ...group, id: folder };
@@ -217,6 +218,7 @@ main().catch((err) => {
 
 async function gracefulShutdown(signal: string): Promise<void> {
   console.log(`\n${signal} received, shutting down gracefully...`);
+  let shutdownError = false;
   try {
     // Stop health check server
     const { stopHealthCheckServer } = await import('./health-check.js');
@@ -254,8 +256,9 @@ async function gracefulShutdown(signal: string): Promise<void> {
     console.log('State saved & database closed. Goodbye!');
   } catch (err) {
     console.error('Error during shutdown:', err);
+    shutdownError = true;
   }
-  process.exit(0);
+  process.exit(shutdownError ? 1 : 0);
 }
 
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));

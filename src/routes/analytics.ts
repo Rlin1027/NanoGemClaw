@@ -126,6 +126,18 @@ export function createAnalyticsRouter(deps: AnalyticsRouterDeps): Router {
             const granularity = (req.query.granularity as string) || 'day';
             const groupFolder = req.query.groupFolder as string | undefined;
 
+            const VALID_PERIODS = ['1d', '7d', '30d', '90d'];
+            if (req.query.period && !VALID_PERIODS.includes(period)) {
+                res.status(400).json({ error: 'Invalid period. Must be one of: 1d, 7d, 30d, 90d' });
+                return;
+            }
+
+            const VALID_GRANULARITIES = ['hour', 'day'];
+            if (req.query.granularity && !VALID_GRANULARITIES.includes(granularity)) {
+                res.status(400).json({ error: 'Invalid granularity. Must be one of: hour, day' });
+                return;
+            }
+
             if (groupFolder && !validateFolder(groupFolder)) {
                 res.status(400).json({ error: 'Invalid group folder' });
                 return;
@@ -153,7 +165,7 @@ export function createAnalyticsRouter(deps: AnalyticsRouterDeps): Router {
     router.get('/analytics/timeseries', async (req, res) => {
         try {
             const { getUsageTimeseriesDaily } = await import('../db.js');
-            const days = parseInt(req.query.days as string) || 30;
+            const days = Math.max(1, Math.min(365, parseInt(req.query.days as string) || 30));
             res.json({ data: getUsageTimeseriesDaily(days) });
         } catch {
             res.status(500).json({ error: 'Failed to fetch timeseries data' });
@@ -164,7 +176,7 @@ export function createAnalyticsRouter(deps: AnalyticsRouterDeps): Router {
     router.get('/analytics/token-ranking', async (req, res) => {
         try {
             const { getGroupTokenRanking } = await import('../db.js');
-            const limit = parseInt(req.query.limit as string) || 10;
+            const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string) || 10));
             res.json({ data: getGroupTokenRanking(limit) });
         } catch {
             res.status(500).json({ error: 'Failed to fetch token ranking' });
@@ -185,7 +197,7 @@ export function createAnalyticsRouter(deps: AnalyticsRouterDeps): Router {
     router.get('/analytics/error-rate', async (req, res) => {
         try {
             const { getErrorRateTimeseries } = await import('../db.js');
-            const days = parseInt(req.query.days as string) || 30;
+            const days = Math.max(1, Math.min(365, parseInt(req.query.days as string) || 30));
             res.json({ data: getErrorRateTimeseries(days) });
         } catch {
             res.status(500).json({ error: 'Failed to fetch error rate' });

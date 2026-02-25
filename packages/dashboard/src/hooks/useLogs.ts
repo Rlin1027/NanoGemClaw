@@ -1,16 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { DashboardLogEntry } from '../types/socket-events';
 
 const SERVER_URL = import.meta.env.VITE_API_URL || '';
 const MAX_LOG_ENTRIES = 2000;
 
-export interface LogEntry {
-    id: number;
-    timestamp: string;
-    level: string;
-    message: string;
-    data?: unknown;
-}
+export type LogEntry = DashboardLogEntry;
 
 export function useLogs() {
     const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -18,6 +13,11 @@ export function useLogs() {
     const [isConnected, setIsConnected] = useState(false);
     const bufferRef = useRef<LogEntry[]>([]);
     const socketRef = useRef<Socket | null>(null);
+    const pausedRef = useRef(false);
+
+    useEffect(() => {
+        pausedRef.current = paused;
+    }, [paused]);
 
     useEffect(() => {
         const socket = io(SERVER_URL || window.location.origin);
@@ -35,7 +35,7 @@ export function useLogs() {
         // Receive streaming log entries
         socket.on('logs:entry', (entry: LogEntry) => {
             bufferRef.current = [...bufferRef.current, entry].slice(-MAX_LOG_ENTRIES);
-            if (!paused) {
+            if (!pausedRef.current) {
                 setLogs(bufferRef.current);
             }
         });

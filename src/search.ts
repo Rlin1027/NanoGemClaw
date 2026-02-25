@@ -75,11 +75,13 @@ export function searchMessages(
   const limit = options?.limit ?? 20;
   const offset = options?.offset ?? 0;
 
-  // Escape FTS5 special characters - wrap in quotes to treat as literal phrase
-  const escapedQuery = `"${query.replace(/"/g, '""')}"`;
   if (!query.trim()) {
     return { results: [], total: 0 };
   }
+
+  // Strip FTS5 special characters to prevent query injection, then wrap as literal phrase
+  const sanitized = query.replace(/[*^{}():\-]/g, '');
+  const escapedQuery = `"${sanitized.replace(/"/g, '""')}"`;
 
   // Build WHERE clause for optional group filter
   let groupFilter = '';

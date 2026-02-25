@@ -13,7 +13,7 @@ export function ExportButton({ groupFolder }: { groupFolder: string }) {
         setOpen(false);
         try {
             const accessCode = localStorage.getItem('nanogemclaw_access_code') || '';
-            const res = await fetch(`${API_BASE}/api/groups/${groupFolder}/export?format=${format}`, {
+            const res = await fetch(`${API_BASE}/api/groups/${encodeURIComponent(groupFolder)}/export?format=${format}`, {
                 headers: { 'x-access-code': accessCode },
             });
             if (!res.ok) throw new Error(`Export failed: ${res.statusText}`);
