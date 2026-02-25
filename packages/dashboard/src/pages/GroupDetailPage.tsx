@@ -1,5 +1,6 @@
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useGroupDetail } from '../hooks/useGroupDetail';
 import { PersonaSelector } from '../components/PersonaSelector';
 import { ToggleSwitch } from '../components/ToggleSwitch';
@@ -10,18 +11,20 @@ import { showToast } from '../hooks/useToast';
 import { useAvailableSkills, useGroupSkills, useToggleSkill } from '../hooks/useSkills';
 import { PreferencesPanel } from '../components/PreferencesPanel';
 import { ExportButton } from '../components/ExportButton';
+import { useLocale } from '../hooks/useLocale';
 
 function SkillsPanel({ groupFolder }: { groupFolder: string }) {
+    const { t } = useTranslation('groups');
     const { data: allSkills, isLoading: loadingAll } = useAvailableSkills();
     const { data: enabledSkills, isLoading: loadingEnabled, refetch } = useGroupSkills(groupFolder);
     const { mutate: toggleSkill } = useToggleSkill(groupFolder);
 
     if (loadingAll || loadingEnabled) {
-        return <div className="text-slate-500 text-sm">Loading skills...</div>;
+        return <div className="text-slate-500 text-sm">{t('loadingSkills')}</div>;
     }
 
     if (!allSkills || allSkills.length === 0) {
-        return <div className="text-slate-500 text-sm">No skills available</div>;
+        return <div className="text-slate-500 text-sm">{t('noSkills')}</div>;
     }
 
     const enabledSet = new Set(enabledSkills || []);
@@ -30,9 +33,9 @@ function SkillsPanel({ groupFolder }: { groupFolder: string }) {
         try {
             await toggleSkill({ skillId, enabled: !currentlyEnabled });
             refetch();
-            showToast(`Skill ${!currentlyEnabled ? 'enabled' : 'disabled'} successfully`, 'success');
+            showToast(t(!currentlyEnabled ? 'skillEnabled' : 'skillDisabled'), 'success');
         } catch (err) {
-            showToast(err instanceof Error ? err.message : 'Failed to toggle skill');
+            showToast(err instanceof Error ? err.message : t('failedToToggleSkill'));
         }
     };
 
@@ -61,7 +64,7 @@ function SkillsPanel({ groupFolder }: { groupFolder: string }) {
                                     : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                             }`}
                         >
-                            {isEnabled ? 'Enabled' : 'Disabled'}
+                            {isEnabled ? t('enabled') : t('disabled')}
                         </button>
                     </div>
                 );
@@ -76,6 +79,8 @@ interface GroupDetailPageProps {
 }
 
 export function GroupDetailPage({ groupFolder, onBack }: GroupDetailPageProps) {
+    const { t } = useTranslation('groups');
+    const locale = useLocale();
     const { group, loading, error, refetch, updateSettings } = useGroupDetail(groupFolder);
     const [showTaskForm, setShowTaskForm] = useState(false);
     const [editingTask, setEditingTask] = useState<any>(null);
@@ -85,9 +90,9 @@ export function GroupDetailPage({ groupFolder, onBack }: GroupDetailPageProps) {
         setSaving(true);
         try {
             await updateSettings(updates);
-            showToast('Settings updated successfully', 'success');
+            showToast(t('settingsUpdated'), 'success');
         } catch (err) {
-            showToast(err instanceof Error ? err.message : 'Failed to update settings');
+            showToast(err instanceof Error ? err.message : t('failedToUpdateSettings'));
         } finally {
             setSaving(false);
         }
@@ -96,7 +101,7 @@ export function GroupDetailPage({ groupFolder, onBack }: GroupDetailPageProps) {
     if (loading) {
         return (
             <div className="flex items-center justify-center py-20 text-slate-500">
-                <Loader2 className="animate-spin mr-2" /> Loading...
+                <Loader2 className="animate-spin mr-2" /> {t('loading')}
             </div>
         );
     }
@@ -104,9 +109,9 @@ export function GroupDetailPage({ groupFolder, onBack }: GroupDetailPageProps) {
     if (error || !group) {
         return (
             <div className="text-center py-20">
-                <p className="text-red-400 mb-4">{error || 'Group not found'}</p>
+                <p className="text-red-400 mb-4">{error || t('groupNotFound')}</p>
                 <button onClick={onBack} className="text-blue-400 hover:text-blue-300">
-                    Back to Overview
+                    {t('backToOverview')}
                 </button>
             </div>
         );
@@ -142,15 +147,15 @@ export function GroupDetailPage({ groupFolder, onBack }: GroupDetailPageProps) {
 
             {/* Stats */}
             <StatsCards stats={[
-                { label: 'Total Requests', value: group.usage.total_requests },
-                { label: 'Avg Response', value: avgResponseTime },
-                { label: 'Total Tokens', value: (group.usage.total_prompt_tokens + group.usage.total_response_tokens).toLocaleString() },
-                { label: 'Messages', value: group.messageCount },
+                { label: t('totalRequests'), value: group.usage.total_requests },
+                { label: t('avgResponse'), value: avgResponseTime },
+                { label: t('totalTokens'), value: (group.usage.total_prompt_tokens + group.usage.total_response_tokens).toLocaleString(locale) },
+                { label: t('messages'), value: group.messageCount },
             ]} />
 
             {/* Settings */}
             <div className="space-y-2">
-                <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider">Settings</h3>
+                <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider">{t('settings')}</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                     <PersonaSelector
                         value={group.persona}
@@ -158,32 +163,32 @@ export function GroupDetailPage({ groupFolder, onBack }: GroupDetailPageProps) {
                         disabled={saving}
                     />
                     <ToggleSwitch
-                        label="Trigger Mode"
-                        description="Require @trigger prefix"
+                        label={t('triggerMode')}
+                        description={t('triggerModeDesc')}
                         enabled={group.requireTrigger !== false}
                         onChange={val => handleSettingChange({ requireTrigger: val })}
                         disabled={saving}
                     />
                     <ToggleSwitch
-                        label="Web Search"
-                        description="Enable Google Search"
+                        label={t('webSearch')}
+                        description={t('webSearchDesc')}
                         enabled={group.enableWebSearch !== false}
                         onChange={val => handleSettingChange({ enableWebSearch: val })}
                         disabled={saving}
                     />
                     {/* Model Selector */}
                     <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-800">
-                        <label className="block text-sm font-medium text-slate-200 mb-2">AI Model</label>
+                        <label className="block text-sm font-medium text-slate-200 mb-2">{t('aiModel')}</label>
                         <select
                             value={(group as any).geminiModel || 'gemini-3-flash-preview'}
                             onChange={e => handleSettingChange({ geminiModel: e.target.value })}
                             disabled={saving}
                             className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                         >
-                            <option value="gemini-3-flash-preview">Gemini 3 Flash (Fast)</option>
-                            <option value="gemini-3-pro-preview">Gemini 3 Pro (Smart)</option>
-                            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                            <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                            <option value="gemini-3-flash-preview">{t('geminiFlash')}</option>
+                            <option value="gemini-3-pro-preview">{t('geminiPro')}</option>
+                            <option value="gemini-2.5-flash">{t('gemini25Flash')}</option>
+                            <option value="gemini-2.5-pro">{t('gemini25Pro')}</option>
                         </select>
                     </div>
                 </div>
@@ -191,25 +196,25 @@ export function GroupDetailPage({ groupFolder, onBack }: GroupDetailPageProps) {
 
             {/* Skills */}
             <div className="space-y-2">
-                <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider">Skills</h3>
+                <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider">{t('skills')}</h3>
                 <SkillsPanel groupFolder={groupFolder} />
             </div>
 
             {/* Preferences */}
             <div className="space-y-2">
-                <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider">Preferences</h3>
+                <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider">{t('preferences')}</h3>
                 <PreferencesPanel groupFolder={groupFolder} />
             </div>
 
             {/* Scheduled Tasks */}
             <div>
                 <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider">Scheduled Tasks</h3>
+                    <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider">{t('scheduledTasks')}</h3>
                     <button
                         onClick={() => setShowTaskForm(true)}
                         className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors"
                     >
-                        + New Task
+                        + {t('newTask')}
                     </button>
                 </div>
                 <TaskList
@@ -223,9 +228,9 @@ export function GroupDetailPage({ groupFolder, onBack }: GroupDetailPageProps) {
             {/* Errors */}
             {group.errorState && group.errorState.consecutiveFailures > 0 && (
                 <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
-                    <h3 className="text-sm font-medium text-red-400 mb-2">Recent Errors</h3>
+                    <h3 className="text-sm font-medium text-red-400 mb-2">{t('recentErrors')}</h3>
                     <div className="text-sm text-red-300">
-                        {group.errorState.consecutiveFailures} consecutive failures
+                        {t('consecutiveFailures', { count: group.errorState.consecutiveFailures })}
                     </div>
                     {group.errorState.lastError && (
                         <div className="text-xs text-red-400/70 mt-1 font-mono truncate">

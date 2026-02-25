@@ -21,7 +21,8 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "check:i18n": "tsx scripts/check-i18n.ts"
   },
   "dependencies": {
     "@google-cloud/speech": "^7.2.1",

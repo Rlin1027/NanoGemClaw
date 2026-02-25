@@ -45,7 +45,8 @@ interface AdminCommandContext {
     formatExportAsMarkdown: any;
   };
   i18n: {
-    t: any;
+    t?: any;
+    tf: any;
     setLanguage: any;
     availableLanguages: string[];
     getLanguage: any;
@@ -143,16 +144,16 @@ async function handleStatsCommand(
   const avgDuration =
     usage.total_requests > 0 ? Math.round(usage.avg_duration_ms / 1000) : 0;
 
-  return `${ctx.i18n.t().statsTitle}
+  return `${ctx.i18n.tf('statsTitle')}
 
-• ${ctx.i18n.t().registeredGroups}: ${groupCount}
-• ${ctx.i18n.t().uptime}: ${uptimeHours}h ${uptimeMinutes}m
-• ${ctx.i18n.t().memory}: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB
+• ${ctx.i18n.tf('registeredGroups')}: ${groupCount}
+• ${ctx.i18n.tf('uptime')}: ${uptimeHours}h ${uptimeMinutes}m
+• ${ctx.i18n.tf('memory')}: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB
 
-${ctx.i18n.t().usageAnalytics}
-• ${ctx.i18n.t().totalRequests}: ${usage.total_requests}
-• ${ctx.i18n.t().avgResponseTime}: ${avgDuration}s
-• ${ctx.i18n.t().totalTokens}: ${usage.total_prompt_tokens + usage.total_response_tokens}`;
+${ctx.i18n.tf('usageAnalytics')}
+• ${ctx.i18n.tf('totalRequests')}: ${usage.total_requests}
+• ${ctx.i18n.tf('avgResponseTime')}: ${avgDuration}s
+• ${ctx.i18n.tf('totalTokens')}: ${usage.total_prompt_tokens + usage.total_response_tokens}`;
 }
 
 async function handleGroupsCommand(
@@ -175,7 +176,7 @@ async function handleGroupsCommand(
     })
     .join('\n');
 
-  return `📁 **${ctx.i18n.t().registeredGroups}** (${groups.length})
+  return `📁 **${ctx.i18n.tf('registeredGroups')}** (${groups.length})
 
 ${groupList}
 
@@ -220,7 +221,7 @@ async function handleErrorsCommand(
   const errorStates = ctx.db.getAllErrorStates();
 
   if (errorStates.length === 0) {
-    return ctx.i18n.t().noErrors;
+    return ctx.i18n.tf('noErrors');
   }
 
   const errorList = errorStates
@@ -237,8 +238,8 @@ async function handleErrorsCommand(
     .join('\n');
 
   return errorList
-    ? `${ctx.i18n.t().groupsWithErrors}\n\n${errorList}`
-    : ctx.i18n.t().noActiveErrors;
+    ? `${ctx.i18n.tf('groupsWithErrors')}\n\n${errorList}`
+    : ctx.i18n.tf('noActiveErrors');
 }
 
 async function handleReportCommand(
@@ -312,7 +313,7 @@ async function handleLanguageCommand(
   args: string[],
   ctx: AdminCommandContext,
 ): Promise<string> {
-  type Language = import('./i18n.js').Language;
+  type Language = import('./i18n/index.js').Language;
   const lang = args[0] as Language;
   if (ctx.i18n.availableLanguages.includes(lang)) {
     ctx.i18n.setLanguage(lang);
@@ -330,11 +331,11 @@ async function handleHelpCommand(
     .map(([cmd, desc]) => `• \`/admin ${cmd}\` - ${desc}`)
     .join('\n');
 
-  return `${ctx.i18n.t().adminCommandsTitle}
+  return `${ctx.i18n.tf('adminCommandsTitle')}
 
 ${commandList}
 
-${ctx.i18n.t().adminOnlyNote}`;
+${ctx.i18n.tf('adminOnlyNote')}`;
 }
 
 // Command map
@@ -367,8 +368,8 @@ export async function handleAdminCommand(
     getConversationExport,
     formatExportAsMarkdown,
   } = await import('./db.js');
-  const { t, setLanguage, availableLanguages, getLanguage } =
-    await import('./i18n.js');
+  const { tf, setLanguage, availableLanguages, getLanguage } =
+    await import('./i18n/index.js');
   const { getAllPersonas } = await import('./personas.js');
 
   const context: AdminCommandContext = {
@@ -381,7 +382,7 @@ export async function handleAdminCommand(
       formatExportAsMarkdown,
     },
     i18n: {
-      t,
+      tf,
       setLanguage,
       availableLanguages,
       getLanguage,

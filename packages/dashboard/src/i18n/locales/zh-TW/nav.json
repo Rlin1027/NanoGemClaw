@@ -1,0 +1,17 @@
+{
+    "main": "主選單",
+    "overview": "總覽",
+    "logs": "日誌",
+    "management": "管理",
+    "memory": "記憶體",
+    "knowledge": "知識庫",
+    "tasks": "任務",
+    "calendar": "行事曆",
+    "monitoring": "監控",
+    "analytics": "分析",
+    "system": "系統",
+    "settings": "設定",
+    "addGroup": "新增群組",
+    "dashboard": "儀表板",
+    "realTimeCommandCenter": "即時命令中心"
+}

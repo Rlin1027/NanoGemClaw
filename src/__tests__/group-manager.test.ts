@@ -47,10 +47,15 @@ vi.mock('../utils.js', () => ({
   saveJson: vi.fn(),
 }));
 
-// Mock i18n module
+// Mock i18n module (both shim and new path)
 vi.mock('../i18n.js', () => ({
   setLanguage: vi.fn(),
-  availableLanguages: ['en', 'zh-TW', 'ja'],
+  availableLanguages: ['en', 'zh-TW', 'zh-CN', 'es', 'ja', 'ko', 'pt', 'ru'],
+  getLanguage: vi.fn(() => 'en'),
+}));
+vi.mock('../i18n/index.js', () => ({
+  setLanguage: vi.fn(),
+  availableLanguages: ['en', 'zh-TW', 'zh-CN', 'es', 'ja', 'ko', 'pt', 'ru'],
   getLanguage: vi.fn(() => 'en'),
 }));
 
@@ -71,7 +76,7 @@ import {
 } from '../state.js';
 import { getAllChats } from '../db.js';
 import { loadJson, saveJson } from '../utils.js';
-import { setLanguage } from '../i18n.js';
+import { setLanguage } from '../i18n/index.js';
 
 describe('group-manager.ts', () => {
   beforeEach(() => {

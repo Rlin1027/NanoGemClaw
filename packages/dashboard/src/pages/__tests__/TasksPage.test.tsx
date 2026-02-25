@@ -63,7 +63,8 @@ describe('TasksPage', () => {
         const { TasksPage } = await import('../TasksPage');
         render(<TasksPage />);
         await user.click(screen.getByRole('button', { name: /New Task/i }));
-        expect(screen.getByText('Create Scheduled Task')).toBeInTheDocument();
+        // createTask key resolves to "Create Task"; heading and button share this text
+        expect(screen.getByRole('heading', { name: 'Create Task' })).toBeInTheDocument();
     });
 
     it('renders group and status filter dropdowns', async () => {

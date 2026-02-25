@@ -1,0 +1,23 @@
+{
+    "title": "記憶體",
+    "selectGroup": "選擇群組",
+    "selectGroupPrompt": "選擇群組以檢視記憶體",
+    "noMemory": "無記憶體摘要",
+    "loadingMemory": "載入中...",
+    "editMemory": "編輯記憶體",
+    "saveMemory": "儲存",
+    "saving": "儲存中...",
+    "cancelEdit": "還原",
+    "memoryContent": "記憶體內容",
+    "lastUpdated": "最後更新",
+    "characters": "個字元",
+    "placeholder": "輸入記憶體內容（支援 Markdown）...",
+    "promptPlaceholder": "輸入此群組的系統提示詞...",
+    "saveSuccess": "記憶體儲存成功",
+    "saveFailed": "記憶體儲存失敗",
+    "systemPrompt": "系統提示詞",
+    "messagesArchived": "已封存訊息數",
+    "charsArchived": "已封存字元數",
+    "summary": "摘要",
+    "unsavedChanges": "有未儲存的變更 — Cmd+S 儲存"
+}

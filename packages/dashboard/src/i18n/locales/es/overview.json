@@ -1,0 +1,12 @@
+{
+    "filterGroups": "Filter groups...",
+    "discover": "Discover",
+    "hidden": "Hidden",
+    "hiddenCount": "{{count}} Hidden",
+    "noActiveGroups": "No active groups found.",
+    "discoverGroups": "Discover Groups",
+    "connectingToServer": "Connecting to server...",
+    "discoverGroup": "Discover Group",
+    "hiddenGroups": "Hidden Groups",
+    "showGroup": "Show group"
+}

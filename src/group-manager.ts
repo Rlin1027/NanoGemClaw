@@ -33,8 +33,8 @@ export async function loadState(): Promise<void> {
   setLastAgentTimestamp(state.last_agent_timestamp || {});
 
   if (state.language) {
-    const { setLanguage, availableLanguages } = await import('./i18n.js');
-    type Language = import('./i18n.js').Language;
+    const { setLanguage, availableLanguages } = await import('./i18n/index.js');
+    type Language = import('./i18n/index.js').Language;
     if (availableLanguages.includes(state.language as Language)) {
       setLanguage(state.language as Language);
     }
@@ -51,7 +51,7 @@ export async function loadState(): Promise<void> {
 }
 
 export async function saveState(): Promise<void> {
-  const { getLanguage } = await import('./i18n.js');
+  const { getLanguage } = await import('./i18n/index.js');
   saveJson(path.join(DATA_DIR, 'router_state.json'), {
     last_timestamp: '',
     last_agent_timestamp: getLastAgentTimestamp(),

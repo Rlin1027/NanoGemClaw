@@ -1,5 +1,7 @@
 import { LayoutDashboard, TerminalSquare, Settings, Database, Plus, CalendarClock, BarChart3, BookOpen, Calendar, Search } from "lucide-react";
+import { useTranslation } from 'react-i18next';
 import { cn } from "@/lib/utils";
+import { LanguageSwitcher } from './LanguageSwitcher';
 
 interface DashboardLayoutProps {
     children: React.ReactNode;
@@ -10,6 +12,7 @@ interface DashboardLayoutProps {
 }
 
 export function DashboardLayout({ children, activeTab = 'overview', onTabChange, onSearchOpen, onAddGroup }: DashboardLayoutProps) {
+    const { t } = useTranslation('nav');
 
     return (
         <div className="min-h-screen bg-slate-950 text-slate-200 flex font-sans selection:bg-blue-500/30">
@@ -25,68 +28,68 @@ export function DashboardLayout({ children, activeTab = 'overview', onTabChange,
 
                 <nav className="flex-1 p-2 mt-4 overflow-y-auto">
                     {/* Main */}
-                    <NavGroupLabel label="Main" />
+                    <NavGroupLabel label={t('main')} />
                     <div className="space-y-1 mb-3">
                         <NavItem
                             icon={<LayoutDashboard size={20} />}
-                            label="Overview"
+                            label={t('overview')}
                             active={activeTab === 'overview' || activeTab === 'group-detail'}
                             onClick={() => onTabChange?.('overview')}
                         />
                         <NavItem
                             icon={<TerminalSquare size={20} />}
-                            label="Logs"
+                            label={t('logs')}
                             active={activeTab === 'logs'}
                             onClick={() => onTabChange?.('logs')}
                         />
                     </div>
 
                     {/* Management */}
-                    <NavGroupLabel label="Management" />
+                    <NavGroupLabel label={t('management')} />
                     <div className="space-y-1 mb-3">
                         <NavItem
                             icon={<Database size={20} />}
-                            label="Memory"
+                            label={t('memory')}
                             active={activeTab === 'memory'}
                             onClick={() => onTabChange?.('memory')}
                         />
                         <NavItem
                             icon={<BookOpen size={20} />}
-                            label="Knowledge"
+                            label={t('knowledge')}
                             active={activeTab === 'knowledge'}
                             onClick={() => onTabChange?.('knowledge')}
                         />
                         <NavItem
                             icon={<CalendarClock size={20} />}
-                            label="Tasks"
+                            label={t('tasks')}
                             active={activeTab === 'tasks'}
                             onClick={() => onTabChange?.('tasks')}
                         />
                         <NavItem
                             icon={<Calendar size={20} />}
-                            label="Calendar"
+                            label={t('calendar')}
                             active={activeTab === 'calendar'}
                             onClick={() => onTabChange?.('calendar')}
                         />
                     </div>
 
                     {/* Monitoring */}
-                    <NavGroupLabel label="Monitoring" />
+                    <NavGroupLabel label={t('monitoring')} />
                     <div className="space-y-1 mb-3">
                         <NavItem
                             icon={<BarChart3 size={20} />}
-                            label="Analytics"
+                            label={t('analytics')}
                             active={activeTab === 'analytics'}
                             onClick={() => onTabChange?.('analytics')}
                         />
                     </div>
 
                     {/* System */}
-                    <NavGroupLabel label="System" />
+                    <NavGroupLabel label={t('system')} />
                     <div className="space-y-1">
                         <NavItem
                             icon={<Settings size={20} />}
-                            label="Settings"
+                            label={t('settings')}
                             active={activeTab === 'settings'}
                             onClick={() => onTabChange?.('settings')}
                         />
@@ -98,7 +101,7 @@ export function DashboardLayout({ children, activeTab = 'overview', onTabChange,
                         onClick={onAddGroup}
                         className="flex items-center gap-2 w-full bg-blue-600 hover:bg-blue-500 text-white p-2 rounded-lg text-sm font-medium transition-colors shadow-lg shadow-blue-900/20"
                     >
-                        <Plus size={16} /> Add Group
+                        <Plus size={16} /> {t('addGroup')}
                     </button>
                 </div>
             </aside>
@@ -107,8 +110,8 @@ export function DashboardLayout({ children, activeTab = 'overview', onTabChange,
             <main className="flex-1 ml-16 lg:ml-64 p-4 lg:p-8 overflow-y-auto">
                 <header className="flex justify-between items-center mb-8">
                     <div>
-                        <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-                        <p className="text-slate-400 text-sm mt-1">Real-time Command Center</p>
+                        <h1 className="text-2xl font-bold text-white">{t('dashboard')}</h1>
+                        <p className="text-slate-400 text-sm mt-1">{t('realTimeCommandCenter')}</p>
                     </div>
                     <div className="flex items-center gap-3">
                         {onSearchOpen && (
@@ -118,13 +121,14 @@ export function DashboardLayout({ children, activeTab = 'overview', onTabChange,
                                 title="Search (Cmd+K)"
                             >
                                 <Search size={14} />
-                                <span className="hidden lg:inline">Search</span>
+                                <span className="hidden lg:inline">{t('search', { ns: 'common' })}</span>
                                 <kbd className="hidden lg:inline ml-1 px-1.5 py-0.5 bg-slate-900 rounded text-[10px] border border-slate-700">⌘K</kbd>
                             </button>
                         )}
+                        <LanguageSwitcher />
                         <div className="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 border border-green-500/20 rounded-full text-green-400 text-xs font-mono">
                             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                            ONLINE
+                            {t('online', { ns: 'common' })}
                         </div>
                     </div>
                 </header>

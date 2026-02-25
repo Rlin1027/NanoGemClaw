@@ -48,7 +48,12 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
 
   // Maintenance mode: auto-reply and skip processing
   if (isMaintenanceMode()) {
-    await bot.sendMessage(parseInt(chatId), '⚙️ 系統維護中，請稍後再試。');
+    const { tf: i18nTf, getGroupLang: i18nGetGroupLang } =
+      await import('./i18n/index.js');
+    await bot.sendMessage(
+      parseInt(chatId),
+      i18nTf('maintenanceMode', undefined, i18nGetGroupLang(group.folder)),
+    );
     return;
   }
 
@@ -95,7 +100,7 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
   // Rate limiting check
   const { checkRateLimit } = await import('./db.js');
   const { RATE_LIMIT } = await import('./config.js');
-  const { t } = await import('./i18n.js');
+  const { tf, getGroupLang } = await import('./i18n/index.js');
 
   if (RATE_LIMIT.ENABLED) {
     const rateLimitKey = `group:${chatId}`;
@@ -112,9 +117,10 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
         { chatId, remaining: result.remaining, waitMinutes },
         'Rate limited',
       );
+      const groupLang = getGroupLang(group.folder);
       await sendMessage(
         chatId,
-        `${t().rateLimited} ${t().retryIn(waitMinutes)}`,
+        `${tf('rateLimited', undefined, groupLang)} ${tf('retryIn', { minutes: waitMinutes }, groupLang)}`,
       );
       return;
     }
@@ -139,16 +145,25 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
   let mediaPath: string | null = null;
   let statusMsg: TelegramBot.Message | null = null;
 
+  const groupLang = getGroupLang(group.folder);
+
   // Send status message for processing requests
-  statusMsg = await bot.sendMessage(chatId, `⏳ ${t().processing}...`, {
-    reply_to_message_id: msg.message_id,
-  });
+  statusMsg = await bot.sendMessage(
+    chatId,
+    `⏳ ${tf('processing', undefined, groupLang)}...`,
+    {
+      reply_to_message_id: msg.message_id,
+    },
+  );
 
   if (mediaInfo) {
-    await bot.editMessageText(`📥 ${t().downloadingMedia}...`, {
-      chat_id: chatId,
-      message_id: statusMsg.message_id,
-    });
+    await bot.editMessageText(
+      `📥 ${tf('downloadingMedia', undefined, groupLang)}...`,
+      {
+        chat_id: chatId,
+        message_id: statusMsg.message_id,
+      },
+    );
 
     mediaPath = await downloadMedia(
       mediaInfo.fileId,
@@ -162,17 +177,23 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
       if (mediaInfo.type === 'voice') {
         // Check voice duration (Telegram provides this in msg.voice.duration)
         if (msg.voice?.duration && msg.voice.duration > 300) {
-          await bot.editMessageText(`⚠️ ${t().stt_too_long}`, {
-            chat_id: chatId,
-            message_id: statusMsg.message_id,
-          });
+          await bot.editMessageText(
+            `⚠️ ${tf('stt_too_long', undefined, groupLang)}`,
+            {
+              chat_id: chatId,
+              message_id: statusMsg.message_id,
+            },
+          );
           return;
         }
 
-        await bot.editMessageText(`🧠 ${t().transcribing}...`, {
-          chat_id: chatId,
-          message_id: statusMsg.message_id,
-        });
+        await bot.editMessageText(
+          `🧠 ${tf('transcribing', undefined, groupLang)}...`,
+          {
+            chat_id: chatId,
+            message_id: statusMsg.message_id,
+          },
+        );
 
         const { transcribeAudio } = await import('./stt.js');
         let transcription: string;
@@ -181,17 +202,20 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
           // Echo transcription back to user
           await sendMessage(
             chatId,
-            `🎤 ${t().stt_transcribed}: "${transcription}"`,
+            `🎤 ${tf('stt_transcribed', undefined, groupLang)}: "${transcription}"`,
           );
           logger.info(
             { chatId, transcription: transcription.slice(0, 100) },
             'Voice message transcribed',
           );
         } catch (err) {
-          await bot.editMessageText(`❌ ${t().stt_error}`, {
-            chat_id: chatId,
-            message_id: statusMsg.message_id,
-          });
+          await bot.editMessageText(
+            `❌ ${tf('stt_error', undefined, groupLang)}`,
+            {
+              chat_id: chatId,
+              message_id: statusMsg.message_id,
+            },
+          );
           logger.error({ err, chatId }, 'Voice transcription failed');
           return;
         }
@@ -202,7 +226,7 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
     }
   }
 
-  await bot.editMessageText(`🤖 ${t().thinking}...`, {
+  await bot.editMessageText(`🤖 ${tf('thinking', undefined, groupLang)}...`, {
     chat_id: chatId,
     message_id: statusMsg.message_id,
   });
@@ -267,9 +291,12 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
       // Build buttons: always include retry/feedback, add follow-ups if present
       const buttons: QuickReplyButton[][] = [
         [
-          { text: `🔄 ${t().retry}`, callbackData: `retry:${msg.message_id}` },
           {
-            text: `💬 ${t().feedback}`,
+            text: `🔄 ${tf('retry', undefined, groupLang)}`,
+            callbackData: `retry:${msg.message_id}`,
+          },
+          {
+            text: `💬 ${tf('feedback', undefined, groupLang)}`,
             callbackData: `feedback_menu:${msg.message_id}`,
           },
         ],
@@ -300,7 +327,7 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
     } else if (statusMsg) {
       // If no response, update status message to error with retry button
       await bot
-        .editMessageText(`❌ ${t().errorOccurred}`, {
+        .editMessageText(`❌ ${tf('errorOccurred', undefined, groupLang)}`, {
           chat_id: parseInt(chatId),
           message_id: statusMsg.message_id,
           reply_markup: {

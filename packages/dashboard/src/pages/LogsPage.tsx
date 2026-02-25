@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Pause, Play, Trash2, Search } from 'lucide-react';
 import { useLogs } from '../hooks/useLogs';
+import { useLocale } from '../hooks/useLocale';
 
 const LEVEL_COLORS: Record<string, string> = {
     debug: 'text-slate-400 bg-slate-800',
@@ -11,6 +13,8 @@ const LEVEL_COLORS: Record<string, string> = {
 };
 
 export function LogsPage() {
+    const { t } = useTranslation('logs');
+    const locale = useLocale();
     const { logs, paused, togglePause, clearLogs, isConnected } = useLogs();
     const [searchParams] = useSearchParams();
     const [search, setSearch] = useState(searchParams.get('group') || '');
@@ -53,7 +57,7 @@ export function LogsPage() {
 
     const formatTime = (ts: string) => {
         try {
-            return new Date(ts).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 } as Intl.DateTimeFormatOptions);
+            return new Date(ts).toLocaleTimeString(locale, { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 } as Intl.DateTimeFormatOptions);
         } catch { return ts; }
     };
 
@@ -72,7 +76,7 @@ export function LogsPage() {
                                 : 'text-slate-600 bg-slate-900 opacity-50'
                         }`}
                     >
-                        {level.toUpperCase()}
+                        {t(level)}
                     </button>
                 ))}
 
@@ -80,7 +84,7 @@ export function LogsPage() {
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
                     <input
                         type="text"
-                        placeholder="Search logs..."
+                        placeholder={t('searchLogs')}
                         value={search}
                         onChange={e => setSearch(e.target.value)}
                         className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-9 pr-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
@@ -95,13 +99,13 @@ export function LogsPage() {
                         }`}
                     >
                         {paused ? <Play size={14} /> : <Pause size={14} />}
-                        {paused ? 'Resume' : 'Pause'}
+                        {paused ? t('resumeLive') : t('pauseLive')}
                     </button>
                     <button
                         onClick={clearLogs}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors"
                     >
-                        <Trash2 size={14} /> Clear
+                        <Trash2 size={14} /> {t('clearLogs')}
                     </button>
                 </div>
             </div>
@@ -110,7 +114,7 @@ export function LogsPage() {
             <div className="flex-1 overflow-y-auto bg-slate-900/50 rounded-lg border border-slate-800 font-mono text-sm">
                 {filteredLogs.length === 0 ? (
                     <div className="flex items-center justify-center h-full text-slate-500">
-                        {logs.length === 0 ? 'Waiting for log entries...' : 'No logs match current filters'}
+                        {logs.length === 0 ? t('waitingForLogs') : t('noLogsFound')}
                     </div>
                 ) : (
                     <div className="divide-y divide-slate-800/50">
@@ -147,11 +151,11 @@ export function LogsPage() {
             <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
                 <div className={`flex items-center gap-1.5 ${isConnected ? 'text-green-500' : 'text-red-500'}`}>
                     <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
-                    {isConnected ? 'Connected' : 'Disconnected'}
+                    {isConnected ? t('connected') : t('disconnected')}
                 </div>
-                <span>{filteredLogs.length} entries</span>
-                {paused && <span className="text-yellow-400">Paused</span>}
-                {!paused && isConnected && <span>Streaming...</span>}
+                <span>{filteredLogs.length} {t('entries')}</span>
+                {paused && <span className="text-yellow-400">{t('paused')}</span>}
+                {!paused && isConnected && <span>{t('streaming')}</span>}
             </div>
         </div>
     );

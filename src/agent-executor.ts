@@ -72,24 +72,31 @@ export async function runAgent(
   const { telegramRateLimiter, safeMarkdownTruncate } =
     await import('./telegram-rate-limiter.js');
 
+  // Import i18n for progress messages
+  const { tf: i18nTf, getGroupLang: i18nGetGroupLang } =
+    await import('./i18n/index.js');
+  const groupLang = i18nGetGroupLang(group.folder);
+
   // Create progress callback that updates Telegram statusMsg with streaming support
   const onProgress = async (info: ProgressInfo) => {
     if (!statusMsg) return;
     try {
-      let progressText = '🤖 思考中...';
+      let progressText = `🤖 ${i18nTf('thinking', undefined, groupLang)}...`;
       if (info.type === 'tool_use') {
-        const toolEmoji: Record<string, string> = {
-          google_search: '🔍 正在搜尋網路...',
-          web_search: '🔍 正在搜尋網路...',
-          read_file: '📄 正在讀取檔案...',
-          write_file: '✍️ 正在寫入...',
-          generate_image: '🎨 正在生成圖片...',
-          execute_code: '⚙️ 正在執行程式...',
-          schedule_task: '📅 正在排程任務...',
-          set_preference: '⚙️ 正在設定偏好...',
+        const toolKeyMap: Record<string, string> = {
+          google_search: 'searching',
+          web_search: 'searching',
+          read_file: 'readingFile',
+          write_file: 'writingFile',
+          generate_image: 'generatingImage',
+          execute_code: 'executingCode',
+          schedule_task: 'executingCode',
+          set_preference: 'executingCode',
         };
-        progressText =
-          toolEmoji[info.toolName || ''] || `🔧 使用工具: ${info.toolName}...`;
+        const toolKey = toolKeyMap[info.toolName || ''];
+        progressText = toolKey
+          ? i18nTf(toolKey, undefined, groupLang)
+          : i18nTf('usingTool', { toolName: info.toolName || '' }, groupLang);
         await bot
           .editMessageText(progressText, {
             chat_id: chatId,
@@ -114,7 +121,7 @@ export async function runAgent(
           }
         } else if (info.content || info.contentSnapshot) {
           // Short response or fallback
-          progressText = `💬 回應中...`;
+          progressText = i18nTf('responding', undefined, groupLang);
           await bot
             .editMessageText(progressText, {
               chat_id: chatId,

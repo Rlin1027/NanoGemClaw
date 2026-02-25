@@ -52,7 +52,7 @@ describe('KnowledgePage', () => {
     it('renders search input', async () => {
         const { KnowledgePage } = await import('../KnowledgePage');
         render(<KnowledgePage />);
-        expect(screen.getByPlaceholderText(/Search documents/i)).toBeInTheDocument();
+        expect(screen.getByPlaceholderText('Search documents... (3+ chars for full-text)')).toBeInTheDocument();
     });
 
     it('shows select a group prompt when no group selected', async () => {

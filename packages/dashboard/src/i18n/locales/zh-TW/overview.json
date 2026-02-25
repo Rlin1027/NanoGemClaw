@@ -1,0 +1,12 @@
+{
+    "filterGroups": "篩選群組...",
+    "discover": "探索",
+    "hidden": "已隱藏",
+    "hiddenCount": "{{count}} 個已隱藏",
+    "noActiveGroups": "找不到活躍群組。",
+    "discoverGroups": "探索群組",
+    "connectingToServer": "連線到伺服器中...",
+    "discoverGroup": "探索群組",
+    "hiddenGroups": "已隱藏的群組",
+    "showGroup": "顯示群組"
+}

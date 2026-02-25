@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Lock, Loader2, ArrowRight } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 const API_BASE = import.meta.env.VITE_API_URL || window.location.origin;
 
@@ -8,6 +9,7 @@ interface LoginScreenProps {
 }
 
 export function LoginScreen({ onSuccess }: LoginScreenProps) {
+    const { t } = useTranslation('auth');
     const [accessCode, setAccessCode] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
@@ -32,10 +34,10 @@ export function LoginScreen({ onSuccess }: LoginScreenProps) {
                 localStorage.setItem('nanogemclaw_access_code', accessCode);
                 onSuccess();
             } else {
-                setError('Invalid access code');
+                setError(t('invalidAccessCode'));
             }
         } catch (err) {
-            setError('Connection failed');
+            setError(t('connectionFailed'));
         } finally {
             setLoading(false);
         }
@@ -48,8 +50,8 @@ export function LoginScreen({ onSuccess }: LoginScreenProps) {
                     <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4 ring-4 ring-slate-800/50">
                         <Lock className="text-blue-500 w-8 h-8" />
                     </div>
-                    <h1 className="text-2xl font-bold text-white">NanoGemClaw</h1>
-                    <p className="text-slate-400 mt-2">Protected Dashboard</p>
+                    <h1 className="text-2xl font-bold text-white">{t('title')}</h1>
+                    <p className="text-slate-400 mt-2">{t('subtitle')}</p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -58,7 +60,7 @@ export function LoginScreen({ onSuccess }: LoginScreenProps) {
                             type="password"
                             value={accessCode}
                             onChange={(e) => setAccessCode(e.target.value)}
-                            placeholder="Enter Access Code"
+                            placeholder={t('accessCodePlaceholder')}
                             className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-slate-200 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all placeholder:text-slate-600"
                             autoFocus
                         />
@@ -75,7 +77,7 @@ export function LoginScreen({ onSuccess }: LoginScreenProps) {
                         disabled={loading || !accessCode}
                         className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-medium py-3 rounded-xl transition-all shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2"
                     >
-                        {loading ? <Loader2 className="animate-spin" /> : <>Access Dashboard <ArrowRight size={18} /></>}
+                        {loading ? <Loader2 className="animate-spin" /> : <>{t('accessDashboard')} <ArrowRight size={18} /></>}
                     </button>
                 </form>
             </div>

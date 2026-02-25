@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Save, Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useApiQuery, apiFetch } from '../hooks/useApi';
 import { showToast } from '../hooks/useToast';
 
@@ -14,16 +15,8 @@ interface Preferences {
 
 const STYLE_OPTIONS = ['formal', 'casual', 'technical', 'friendly'] as const;
 
-const PREF_FIELDS: { key: keyof Preferences; label: string; type: 'text' | 'select' | 'textarea'; placeholder: string }[] = [
-    { key: 'language', label: 'Language', type: 'text', placeholder: 'e.g. zh-TW, en' },
-    { key: 'nickname', label: 'Nickname', type: 'text', placeholder: 'How the bot calls this group' },
-    { key: 'response_style', label: 'Response Style', type: 'select', placeholder: '' },
-    { key: 'interests', label: 'Interests', type: 'textarea', placeholder: 'Topics this group is interested in' },
-    { key: 'timezone', label: 'Timezone', type: 'text', placeholder: 'e.g. Asia/Taipei' },
-    { key: 'custom_instructions', label: 'Custom Instructions', type: 'textarea', placeholder: 'Additional instructions for the bot' },
-];
-
 export function PreferencesPanel({ groupFolder }: { groupFolder: string }) {
+    const { t } = useTranslation('common');
     const { data: prefs, isLoading } = useApiQuery<Preferences>(`/api/groups/${groupFolder}/preferences`);
     const [localPrefs, setLocalPrefs] = useState<Preferences>({});
     const [saving, setSaving] = useState<string | null>(null);
@@ -39,16 +32,25 @@ export function PreferencesPanel({ groupFolder }: { groupFolder: string }) {
                 method: 'PUT',
                 body: JSON.stringify({ key, value: localPrefs[key] || '' }),
             });
-            showToast('Preference saved', 'success');
+            showToast(t('preferenceSaved'), 'success');
         } catch {
-            showToast('Failed to save preference');
+            showToast(t('failedToSavePreference'));
         } finally {
             setSaving(null);
         }
     };
 
+    const PREF_FIELDS: { key: keyof Preferences; label: string; type: 'text' | 'select' | 'textarea'; placeholder: string }[] = [
+        { key: 'language', label: 'Language', type: 'text', placeholder: 'e.g. zh-TW, en' },
+        { key: 'nickname', label: 'Nickname', type: 'text', placeholder: 'How the bot calls this group' },
+        { key: 'response_style', label: 'Response Style', type: 'select', placeholder: '' },
+        { key: 'interests', label: 'Interests', type: 'textarea', placeholder: 'Topics this group is interested in' },
+        { key: 'timezone', label: 'Timezone', type: 'text', placeholder: 'e.g. Asia/Taipei' },
+        { key: 'custom_instructions', label: 'Custom Instructions', type: 'textarea', placeholder: 'Additional instructions for the bot' },
+    ];
+
     if (isLoading) {
-        return <div className="text-slate-500 text-sm">Loading preferences...</div>;
+        return <div className="text-slate-500 text-sm">{t('loadingPreferences')}</div>;
     }
 
     return (
@@ -68,7 +70,7 @@ export function PreferencesPanel({ groupFolder }: { groupFolder: string }) {
                                     className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors disabled:opacity-50"
                                 >
                                     {saving === field.key ? <Loader2 size={10} className="animate-spin" /> : <Save size={10} />}
-                                    Save
+                                    {t('save')}
                                 </button>
                             )}
                         </div>
@@ -81,7 +83,7 @@ export function PreferencesPanel({ groupFolder }: { groupFolder: string }) {
                                 onBlur={() => { if (changed) handleSave(field.key); }}
                                 className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
                             >
-                                <option value="">Not set</option>
+                                <option value="">{t('notSet')}</option>
                                 {STYLE_OPTIONS.map(opt => (
                                     <option key={opt} value={opt}>{opt}</option>
                                 ))}

@@ -10,7 +10,7 @@ import {
   sendMessageWithButtons,
   QuickReplyButton,
 } from './telegram-helpers.js';
-import { t, getGroupLang } from './i18n.js';
+import { tf, getGroupLang } from './i18n/index.js';
 
 const ONBOARDING_COMPLETE_KEY = 'onboarding_complete';
 
@@ -27,21 +27,29 @@ export async function checkAndStartOnboarding(
   if (completed === 'true') return false;
 
   const lang = getGroupLang(groupFolder);
-  const translations = t();
 
   // Step 1: Welcome message
-  await sendMessage(chatId, translations.onboarding_welcome(groupName));
+  await sendMessage(
+    chatId,
+    tf('onboarding_welcome', { name: groupName }, lang),
+  );
 
   // Step 2: Feature showcase with buttons
   const buttons: QuickReplyButton[][] = [
     [
-      { text: translations.onboarding_try_it, callbackData: 'onboard_demo' },
-      { text: translations.onboarding_skip, callbackData: 'onboard_skip' },
+      {
+        text: tf('onboarding_try_it', undefined, lang),
+        callbackData: 'onboard_demo',
+      },
+      {
+        text: tf('onboarding_skip', undefined, lang),
+        callbackData: 'onboard_skip',
+      },
     ],
   ];
   await sendMessageWithButtons(
     chatId,
-    translations.onboarding_features,
+    tf('onboarding_features', undefined, lang),
     buttons,
   );
 
@@ -59,16 +67,15 @@ export async function handleOnboardingCallback(
   if (!action.startsWith('onboard_')) return false;
 
   const lang = getGroupLang(groupFolder);
-  const translations = t();
 
   if (action === 'onboard_skip' || action === 'onboard_complete') {
     setUserPreference(chatId, ONBOARDING_COMPLETE_KEY, 'true');
-    await sendMessage(chatId, translations.onboarding_done);
+    await sendMessage(chatId, tf('onboarding_done', undefined, lang));
     return true;
   }
 
   if (action === 'onboard_demo') {
-    await sendMessage(chatId, translations.onboarding_demo);
+    await sendMessage(chatId, tf('onboarding_demo', undefined, lang));
     // Mark as complete after demo
     setUserPreference(chatId, ONBOARDING_COMPLETE_KEY, 'true');
     return true;

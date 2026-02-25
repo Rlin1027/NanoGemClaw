@@ -4,8 +4,11 @@ import {
   setLanguage,
   getLanguage,
   t,
+  tf,
   getTranslation,
   availableLanguages,
+  interpolate,
+  SUPPORTED_LANGUAGES,
 } from '../i18n.js';
 
 describe('i18n', () => {
@@ -30,7 +33,18 @@ describe('i18n', () => {
     it('should include zh-TW and en in availableLanguages', () => {
       expect(availableLanguages).toContain('zh-TW');
       expect(availableLanguages).toContain('en');
-      expect(availableLanguages).toHaveLength(2);
+    });
+
+    it('should support all 8 languages', () => {
+      expect(availableLanguages).toContain('zh-TW');
+      expect(availableLanguages).toContain('zh-CN');
+      expect(availableLanguages).toContain('en');
+      expect(availableLanguages).toContain('es');
+      expect(availableLanguages).toContain('ja');
+      expect(availableLanguages).toContain('ko');
+      expect(availableLanguages).toContain('pt');
+      expect(availableLanguages).toContain('ru');
+      expect(availableLanguages).toHaveLength(8);
     });
   });
 
@@ -87,25 +101,56 @@ describe('i18n', () => {
     });
   });
 
-  describe('retryIn Function', () => {
+  describe('retryIn via tf()', () => {
     it('should format retry message correctly in zh-TW', () => {
       setLanguage('zh-TW');
-      expect(t().retryIn(5)).toBe('(5 分鐘後重試)');
-      expect(t().retryIn(10)).toBe('(10 分鐘後重試)');
-      expect(t().retryIn(1)).toBe('(1 分鐘後重試)');
+      expect(tf('retryIn', { minutes: 5 })).toBe('（5 分鐘後重試）');
+      expect(tf('retryIn', { minutes: 10 })).toBe('（10 分鐘後重試）');
+      expect(tf('retryIn', { minutes: 1 })).toBe('（1 分鐘後重試）');
     });
 
     it('should format retry message correctly in en', () => {
       setLanguage('en');
-      expect(t().retryIn(5)).toBe('(Retry in 5 minutes)');
-      expect(t().retryIn(10)).toBe('(Retry in 10 minutes)');
-      expect(t().retryIn(1)).toBe('(Retry in 1 minutes)');
+      expect(tf('retryIn', { minutes: 5 })).toBe('Retry in 5 minutes');
+      expect(tf('retryIn', { minutes: 10 })).toBe('Retry in 10 minutes');
+      expect(tf('retryIn', { minutes: 1 })).toBe('Retry in 1 minutes');
     });
 
     it('should handle edge case values', () => {
       setLanguage('zh-TW');
-      expect(t().retryIn(0)).toBe('(0 分鐘後重試)');
-      expect(t().retryIn(60)).toBe('(60 分鐘後重試)');
+      expect(tf('retryIn', { minutes: 0 })).toBe('（0 分鐘後重試）');
+      expect(tf('retryIn', { minutes: 60 })).toBe('（60 分鐘後重試）');
+    });
+
+    it('should support explicit lang parameter', () => {
+      setLanguage('zh-TW');
+      expect(tf('retryIn', { minutes: 5 }, 'en')).toBe('Retry in 5 minutes');
+    });
+  });
+
+  describe('interpolate()', () => {
+    it('should replace {key} placeholders', () => {
+      expect(interpolate('Hello {name}!', { name: 'World' })).toBe(
+        'Hello World!',
+      );
+    });
+
+    it('should replace multiple placeholders', () => {
+      expect(
+        interpolate('{greeting} {name}, you have {count} messages', {
+          greeting: 'Hi',
+          name: 'Alice',
+          count: 3,
+        }),
+      ).toBe('Hi Alice, you have 3 messages');
+    });
+
+    it('should leave unknown keys as-is', () => {
+      expect(interpolate('Hello {unknown}!', {})).toBe('Hello {unknown}!');
+    });
+
+    it('should handle numeric values', () => {
+      expect(interpolate('Count: {n}', { n: 42 })).toBe('Count: 42');
     });
   });
 
@@ -118,7 +163,7 @@ describe('i18n', () => {
     });
 
     it('should have all string translations defined', () => {
-      const languages: Language[] = ['zh-TW', 'en'];
+      const languages: Language[] = [...SUPPORTED_LANGUAGES];
 
       languages.forEach((lang) => {
         const translations = getTranslation(lang);
@@ -156,15 +201,20 @@ describe('i18n', () => {
         expect(translations.retry).toBeTruthy();
         expect(translations.feedback).toBeTruthy();
         expect(translations.errorOccurred).toBeTruthy();
+
+        // retryIn is now a template string (not a function)
+        expect(typeof translations.retryIn).toBe('string');
+        expect(translations.retryIn).toContain('{minutes}');
       });
     });
 
-    it('should have retryIn as a function in all languages', () => {
-      const languages: Language[] = ['zh-TW', 'en'];
+    it('should have retryIn as a string template in all languages', () => {
+      const languages: Language[] = [...SUPPORTED_LANGUAGES];
 
       languages.forEach((lang) => {
         const translations = getTranslation(lang);
-        expect(typeof translations.retryIn).toBe('function');
+        expect(typeof translations.retryIn).toBe('string');
+        expect(translations.retryIn).toContain('{minutes}');
       });
     });
   });

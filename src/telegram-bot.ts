@@ -178,7 +178,7 @@ export async function connectTelegram(): Promise<void> {
         // Fall through to legacy format handling
       }
 
-      const { t } = await import('./i18n.js');
+      const { tf } = await import('./i18n/index.js');
       const registeredGroups = getRegisteredGroups();
 
       // Handle new action types from suggest_actions
@@ -228,7 +228,10 @@ export async function connectTelegram(): Promise<void> {
                 { chatId, setting, value },
                 'Toggle action triggered',
               );
-              await sendMessage(chatId, t().settingToggled(setting, value));
+              await sendMessage(
+                chatId,
+                tf('settingToggled', { setting, value }),
+              );
             }
             break;
           }
@@ -254,10 +257,10 @@ export async function connectTelegram(): Promise<void> {
 
       switch (action) {
         case 'confirm':
-          await sendMessage(chatId, t().confirmed);
+          await sendMessage(chatId, tf('confirmed'));
           break;
         case 'cancel':
-          await sendMessage(chatId, t().cancelled);
+          await sendMessage(chatId, tf('cancelled'));
           break;
         case 'retry': {
           const originalMsgId = params[0];
@@ -284,7 +287,7 @@ export async function connectTelegram(): Promise<void> {
 
           if (originalMsg) {
             // Re-trigger the processing logic
-            await sendMessage(chatId, `\ud83d\udd04 ${t().retrying}`);
+            await sendMessage(chatId, tf('retrying'));
 
             // Construct a skeletal Telegram message for processMessage
             const fakeMsg: TelegramBot.Message = {
@@ -303,10 +306,7 @@ export async function connectTelegram(): Promise<void> {
 
             await processMessage(fakeMsg);
           } else {
-            await sendMessage(
-              chatId,
-              `\u274c ${t().retrying}\u5931\u6557\uff1a\u627e\u4e0d\u5230\u539f\u59cb\u8a0a\u606f`,
-            );
+            await sendMessage(chatId, tf('retryFailed'));
           }
           break;
         }
@@ -323,11 +323,7 @@ export async function connectTelegram(): Promise<void> {
               },
             ],
           ];
-          await sendMessageWithButtons(
-            chatId,
-            '\u60a8\u5c0d\u9019\u500b\u56de\u8986\u6eff\u610f\u55ce\uff1f',
-            buttons,
-          );
+          await sendMessageWithButtons(chatId, tf('feedbackPrompt'), buttons);
           break;
         }
         case 'feedback': {
@@ -335,7 +331,7 @@ export async function connectTelegram(): Promise<void> {
           logger.info({ chatId, rating }, 'User feedback received');
           await sendMessage(
             chatId,
-            rating === 'up' ? t().thanksFeedback : t().willImprove,
+            rating === 'up' ? tf('thanksFeedback') : tf('willImprove'),
           );
           break;
         }
@@ -343,7 +339,7 @@ export async function connectTelegram(): Promise<void> {
           // Pass through to agent if unknown action
           const group = registeredGroups[chatId];
           if (group) {
-            await sendMessage(chatId, `\u8655\u7406\u4e2d: ${data}...`);
+            await sendMessage(chatId, tf('unknownAction', { action: data }));
           }
         }
       }

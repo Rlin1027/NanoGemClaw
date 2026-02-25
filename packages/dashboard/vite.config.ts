@@ -18,6 +18,7 @@ export default defineConfig({
                     'vendor-monaco': ['@monaco-editor/react'],
                     'vendor-charts': ['recharts'],
                     'vendor-terminal': ['xterm', 'xterm-addon-fit', 'xterm-addon-web-links'],
+                    'vendor-i18n': ['i18next', 'react-i18next', 'i18next-browser-languagedetector'],
                 },
             },
         },

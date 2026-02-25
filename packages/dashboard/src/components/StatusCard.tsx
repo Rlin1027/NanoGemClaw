@@ -1,4 +1,5 @@
 import { Terminal, Brain, EyeOff, Bot } from "lucide-react";
+import { useTranslation } from 'react-i18next';
 import { cn } from "@/lib/utils";
 
 export type AgentStatus = 'idle' | 'thinking' | 'syncing' | 'error';
@@ -26,13 +27,6 @@ const statusColors: Record<AgentStatus, string> = {
     error: "border-red-500 shadow-[0_0_15px_-3px_rgba(239,68,68,0.6)]",
 };
 
-const statusLabels: Record<AgentStatus, string> = {
-    idle: "Idle",
-    thinking: "Thinking...",
-    syncing: "Syncing",
-    error: "Error",
-};
-
 export function StatusCard({
     name,
     status,
@@ -46,6 +40,15 @@ export function StatusCard({
     onViewMemory,
     onClick,
 }: StatusCardProps) {
+    const { t } = useTranslation('groups');
+
+    const statusLabels: Record<AgentStatus, string> = {
+        idle: t('statusIdle'),
+        thinking: t('statusThinking'),
+        syncing: t('statusSyncing'),
+        error: t('statusError'),
+    };
+
     return (
         <div
             className={cn(
@@ -96,7 +99,7 @@ export function StatusCard({
                     <button
                         onClick={onHide}
                         className="text-slate-500 hover:text-slate-300 transition-colors"
-                        title="Hide Card"
+                        title={t('hideCard')}
                     >
                         <EyeOff size={18} />
                     </button>
@@ -106,11 +109,11 @@ export function StatusCard({
             {/* Stats Grid */}
             <div className="grid grid-cols-2 gap-3 mb-4">
                 <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800">
-                    <div className="text-slate-500 text-xs mb-1">Messages</div>
+                    <div className="text-slate-500 text-xs mb-1">{t('messages')}</div>
                     <div className="text-slate-200 font-mono font-bold text-lg">{messageCount}</div>
                 </div>
                 <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800">
-                    <div className="text-slate-500 text-xs mb-1">Active Tasks</div>
+                    <div className="text-slate-500 text-xs mb-1">{t('activeTasks')}</div>
                     <div className="text-slate-200 font-mono font-bold text-lg">{activeTasks}</div>
                 </div>
             </div>
@@ -121,13 +124,13 @@ export function StatusCard({
                     onClick={onOpenTerminal}
                     className="flex-1 flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium py-2 rounded-lg transition-colors border border-slate-700"
                 >
-                    <Terminal size={16} /> Console
+                    <Terminal size={16} /> {t('console')}
                 </button>
                 <button
                     onClick={onViewMemory}
                     className="flex-1 flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium py-2 rounded-lg transition-colors border border-slate-700"
                 >
-                    <Brain size={16} /> Memory
+                    <Brain size={16} /> {t('title', { ns: 'memory' })}
                 </button>
             </div>
         </div>

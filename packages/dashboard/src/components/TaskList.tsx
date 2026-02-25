@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Play, Pause, Trash2, Pencil, ChevronDown, ChevronRight, Loader2, Clock, Zap, CalendarClock } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { apiFetch } from '../hooks/useApi';
 import { showToast } from '../hooks/useToast';
 import { cn } from '@/lib/utils';
@@ -34,6 +35,7 @@ interface TaskListProps {
 }
 
 export function TaskList({ tasks, onRefresh, onEdit, showGroup = true }: TaskListProps) {
+    const { t } = useTranslation('tasks');
     const [expandedTask, setExpandedTask] = useState<string | null>(null);
     const [runLogs, setRunLogs] = useState<Record<string, TaskRunLog[]>>({});
     const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -49,7 +51,7 @@ export function TaskList({ tasks, onRefresh, onEdit, showGroup = true }: TaskLis
                 const res = await apiFetch<TaskRunLog[]>(`/api/tasks/${taskId}/runs`);
                 setRunLogs(prev => ({ ...prev, [taskId]: res }));
             } catch (err) {
-                showToast(err instanceof Error ? err.message : 'Failed to load run logs');
+                showToast(err instanceof Error ? err.message : t('failedToLoadRunLogs'));
             }
         }
     };
@@ -63,20 +65,20 @@ export function TaskList({ tasks, onRefresh, onEdit, showGroup = true }: TaskLis
             });
             onRefresh();
         } catch (err) {
-            showToast(err instanceof Error ? err.message : 'Failed to update task status');
+            showToast(err instanceof Error ? err.message : t('failedToUpdateStatus'));
         } finally {
             setActionLoading(null);
         }
     };
 
     const handleDelete = async (taskId: string) => {
-        if (!confirm('Delete this task?')) return;
+        if (!confirm(t('deleteConfirm'))) return;
         setActionLoading(taskId);
         try {
             await apiFetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
             onRefresh();
         } catch (err) {
-            showToast(err instanceof Error ? err.message : 'Failed to delete task');
+            showToast(err instanceof Error ? err.message : t('failedToDelete'));
         } finally {
             setActionLoading(null);
         }
@@ -92,7 +94,7 @@ export function TaskList({ tasks, onRefresh, onEdit, showGroup = true }: TaskLis
     };
 
     if (tasks.length === 0) {
-        return <div className="text-slate-500 text-sm text-center py-8">No tasks found</div>;
+        return <div className="text-slate-500 text-sm text-center py-8">{t('noTasksFound')}</div>;
     }
 
     return (
@@ -110,7 +112,7 @@ export function TaskList({ tasks, onRefresh, onEdit, showGroup = true }: TaskLis
                             <div className="text-xs text-slate-500 mt-1 flex items-center gap-3 flex-wrap">
                                 {showGroup && <span>📁 {task.group_folder}</span>}
                                 <span className="flex items-center gap-1">{scheduleIcon(task.schedule_type)} {task.schedule_type}: {task.schedule_value}</span>
-                                {task.next_run && <span>Next: {new Date(task.next_run).toLocaleString()}</span>}
+                                {task.next_run && <span>{t('nextRun')}: {new Date(task.next_run).toLocaleString()}</span>}
                             </div>
                         </div>
 
@@ -132,7 +134,7 @@ export function TaskList({ tasks, onRefresh, onEdit, showGroup = true }: TaskLis
                                         <button
                                             onClick={() => onEdit(task)}
                                             className="p-1.5 text-slate-400 hover:text-blue-400 transition-colors"
-                                            title="Edit"
+                                            title={t('edit', { ns: 'common' })}
                                         >
                                             <Pencil size={16} />
                                         </button>
@@ -141,7 +143,7 @@ export function TaskList({ tasks, onRefresh, onEdit, showGroup = true }: TaskLis
                                         <button
                                             onClick={() => handleStatusChange(task.id, 'paused')}
                                             className="p-1.5 text-slate-400 hover:text-yellow-400 transition-colors"
-                                            title="Pause"
+                                            title={t('pause')}
                                         >
                                             <Pause size={16} />
                                         </button>
@@ -149,7 +151,7 @@ export function TaskList({ tasks, onRefresh, onEdit, showGroup = true }: TaskLis
                                         <button
                                             onClick={() => handleStatusChange(task.id, 'active')}
                                             className="p-1.5 text-slate-400 hover:text-green-400 transition-colors"
-                                            title="Resume"
+                                            title={t('resume')}
                                         >
                                             <Play size={16} />
                                         </button>
@@ -157,7 +159,7 @@ export function TaskList({ tasks, onRefresh, onEdit, showGroup = true }: TaskLis
                                     <button
                                         onClick={() => handleDelete(task.id)}
                                         className="p-1.5 text-slate-400 hover:text-red-400 transition-colors"
-                                        title="Delete"
+                                        title={t('delete', { ns: 'common' })}
                                     >
                                         <Trash2 size={16} />
                                     </button>
@@ -171,35 +173,35 @@ export function TaskList({ tasks, onRefresh, onEdit, showGroup = true }: TaskLis
                         <div className="border-t border-slate-800 bg-slate-950/50">
                             {/* Task Details */}
                             <div className="p-4 border-b border-slate-800/50">
-                                <div className="text-xs font-medium text-slate-400 mb-2">Task Details</div>
+                                <div className="text-xs font-medium text-slate-400 mb-2">{t('taskDetails')}</div>
                                 <div className="grid grid-cols-2 gap-3 text-xs">
                                     <div>
-                                        <span className="text-slate-500">Schedule:</span>
+                                        <span className="text-slate-500">{t('schedule')}:</span>
                                         <span className="ml-2 text-slate-300 font-mono">{task.schedule_type}: {task.schedule_value}</span>
                                     </div>
                                     <div>
-                                        <span className="text-slate-500">Context:</span>
+                                        <span className="text-slate-500">{t('context')}:</span>
                                         <span className="ml-2 text-slate-300">{task.context_mode}</span>
                                     </div>
                                     <div>
-                                        <span className="text-slate-500">Created:</span>
+                                        <span className="text-slate-500">{t('created')}:</span>
                                         <span className="ml-2 text-slate-300">{new Date(task.created_at).toLocaleString()}</span>
                                     </div>
                                     {task.last_run && (
                                         <div>
-                                            <span className="text-slate-500">Last run:</span>
+                                            <span className="text-slate-500">{t('lastRun')}:</span>
                                             <span className="ml-2 text-slate-300">{new Date(task.last_run).toLocaleString()}</span>
                                         </div>
                                     )}
                                     {task.next_run && (
                                         <div>
-                                            <span className="text-slate-500">Next run:</span>
+                                            <span className="text-slate-500">{t('nextRun')}:</span>
                                             <span className="ml-2 text-slate-300">{new Date(task.next_run).toLocaleString()}</span>
                                         </div>
                                     )}
                                 </div>
                                 <div className="mt-3">
-                                    <span className="text-slate-500 text-xs">Prompt:</span>
+                                    <span className="text-slate-500 text-xs">{t('prompt')}:</span>
                                     <div className="mt-1 text-sm text-slate-300 bg-slate-900 rounded-lg p-3 whitespace-pre-wrap break-words">
                                         {task.prompt}
                                     </div>
@@ -208,9 +210,9 @@ export function TaskList({ tasks, onRefresh, onEdit, showGroup = true }: TaskLis
 
                             {/* Run History */}
                             <div className="p-4">
-                                <div className="text-xs font-medium text-slate-400 mb-3">Run History</div>
+                                <div className="text-xs font-medium text-slate-400 mb-3">{t('runHistory')}</div>
                                 {(runLogs[task.id] || []).length === 0 ? (
-                                    <div className="text-xs text-slate-600">No runs yet</div>
+                                    <div className="text-xs text-slate-600">{t('noRunsYet')}</div>
                                 ) : (
                                     <div className="space-y-1.5">
                                         {(runLogs[task.id] || []).slice(0, 10).map((log, i) => (
@@ -236,7 +238,7 @@ export function TaskList({ tasks, onRefresh, onEdit, showGroup = true }: TaskLis
                                         ))}
                                         {(runLogs[task.id] || []).length > 10 && (
                                             <div className="text-[10px] text-slate-600 px-2.5">
-                                                +{(runLogs[task.id] || []).length - 10} more runs
+                                                {t('moreRuns', { count: (runLogs[task.id] || []).length - 10 })}
                                             </div>
                                         )}
                                     </div>

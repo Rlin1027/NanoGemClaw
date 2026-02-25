@@ -93,14 +93,8 @@ export function generateDailyReport(): DailyReport {
 /**
  * Format a daily report as a markdown message
  */
-// ... imports
-import { t } from './i18n.js';
+import { tf } from './i18n/index.js';
 
-// ... (other code)
-
-/**
- * Format a daily report as a markdown message
- */
 export function formatDailyReport(report: DailyReport): string {
   const avgSeconds = Math.round(report.usage.avg_duration_ms / 1000);
 
@@ -113,18 +107,18 @@ export function formatDailyReport(report: DailyReport): string {
 
   const errorStatus =
     report.errors.groups_with_errors > 0
-      ? `${t().groupsWithErrors}: ${report.errors.groups_with_errors} (${report.errors.total_failures} failures)`
-      : t().noErrors;
+      ? `${tf('groupsWithErrors')}: ${report.errors.groups_with_errors} (${report.errors.total_failures} failures)`
+      : tf('noErrors');
 
-  return `${t().statsTitle} (Daily Report)
+  return `${tf('statsTitle')} (Daily Report)
 _${new Date(report.period.start).toLocaleDateString()} ~ ${new Date(report.period.end).toLocaleDateString()}_
 
 ---
 
-${t().usageAnalytics}
-• ${t().totalRequests}: ${report.usage.total_requests}
-• ${t().avgResponseTime}: ${avgSeconds}s
-• ${t().totalTokens}: ${report.usage.total_tokens.toLocaleString()}
+${tf('usageAnalytics')}
+• ${tf('totalRequests')}: ${report.usage.total_requests}
+• ${tf('avgResponseTime')}: ${avgSeconds}s
+• ${tf('totalTokens')}: ${report.usage.total_tokens.toLocaleString()}
 
 **🏆 Top Groups**
 ${topGroupsList}

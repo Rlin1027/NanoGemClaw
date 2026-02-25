@@ -1,0 +1,23 @@
+{
+    "title": "Memory",
+    "selectGroup": "Select a group",
+    "selectGroupPrompt": "Select a group to view memory",
+    "noMemory": "No memory summary available",
+    "loadingMemory": "Loading...",
+    "editMemory": "Edit Memory",
+    "saveMemory": "Save",
+    "saving": "Saving...",
+    "cancelEdit": "Revert",
+    "memoryContent": "Memory Content",
+    "lastUpdated": "Last Updated",
+    "characters": "characters",
+    "placeholder": "Enter memory content (Markdown supported)...",
+    "promptPlaceholder": "Enter system prompt for this group...",
+    "saveSuccess": "Memory saved successfully",
+    "saveFailed": "Failed to save memory",
+    "systemPrompt": "System Prompt",
+    "messagesArchived": "Messages Archived",
+    "charsArchived": "Chars Archived",
+    "summary": "Summary",
+    "unsavedChanges": "Unsaved changes — Cmd+S to save"
+}

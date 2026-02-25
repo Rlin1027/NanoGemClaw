@@ -69,7 +69,7 @@ describe('SearchOverlay', () => {
         const input = screen.getByPlaceholderText('Search messages...');
         await user.type(input, 'xyz');
         await waitFor(() => {
-            expect(screen.getByText(/No results found/)).toBeInTheDocument();
+            expect(screen.getByText(/No results found for/)).toBeInTheDocument();
         }, { timeout: 1000 });
     });
 

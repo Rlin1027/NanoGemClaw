@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Search, X, Loader2 } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import { useSearch, type SearchResult } from '../hooks/useSearch';
 import { useSocket } from '../hooks/useSocket';
+import { useLocale } from '../hooks/useLocale';
 
 interface SearchOverlayProps {
     isOpen: boolean;
@@ -10,6 +12,8 @@ interface SearchOverlayProps {
 }
 
 export function SearchOverlay({ isOpen, onClose }: SearchOverlayProps) {
+    const { t } = useTranslation('common');
+    const locale = useLocale();
     const { groups } = useSocket();
     const { search, results, total, isLoading, clear } = useSearch();
     const [query, setQuery] = useState('');
@@ -90,7 +94,7 @@ export function SearchOverlay({ isOpen, onClose }: SearchOverlayProps) {
                         type="text"
                         value={query}
                         onChange={e => handleQueryChange(e.target.value)}
-                        placeholder="Search messages..."
+                        placeholder={t('searchMessages')}
                         className="flex-1 bg-transparent text-slate-200 text-sm placeholder:text-slate-500 focus:outline-none"
                     />
                     {query && (
@@ -103,13 +107,13 @@ export function SearchOverlay({ isOpen, onClose }: SearchOverlayProps) {
                 {/* Group Filter */}
                 {groups.length > 1 && (
                     <div className="px-4 py-2 border-b border-slate-800/50 flex items-center gap-2">
-                        <span className="text-[10px] text-slate-500 uppercase tracking-wider">Group:</span>
+                        <span className="text-[10px] text-slate-500 uppercase tracking-wider">{t('group')}:</span>
                         <select
                             value={groupFilter}
                             onChange={e => setGroupFilter(e.target.value)}
                             className="bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-xs text-slate-300 focus:outline-none"
                         >
-                            <option value="">All groups</option>
+                            <option value="">{t('allGroups')}</option>
                             {groups.map(g => (
                                 <option key={g.id} value={g.id}>{g.name}</option>
                             ))}
@@ -121,11 +125,11 @@ export function SearchOverlay({ isOpen, onClose }: SearchOverlayProps) {
                 <div className="max-h-[50vh] overflow-y-auto">
                     {query.length < 2 ? (
                         <div className="px-4 py-8 text-center text-slate-500 text-sm">
-                            Type at least 2 characters to search
+                            {t('searchMinChars')}
                         </div>
                     ) : results.length === 0 && !isLoading ? (
                         <div className="px-4 py-8 text-center text-slate-500 text-sm">
-                            No results found for &quot;{query}&quot;
+                            {t('noResultsFor', { query })}
                         </div>
                     ) : (
                         results.map((result, index) => (
@@ -133,6 +137,7 @@ export function SearchOverlay({ isOpen, onClose }: SearchOverlayProps) {
                                 key={result.id}
                                 result={result}
                                 isSelected={index === selectedIndex}
+                                locale={locale}
                             />
                         ))
                     )}
@@ -141,10 +146,10 @@ export function SearchOverlay({ isOpen, onClose }: SearchOverlayProps) {
                 {/* Footer */}
                 {results.length > 0 && (
                     <div className="px-4 py-2 border-t border-slate-800 flex items-center justify-between text-[10px] text-slate-500">
-                        <span>{total} result{total !== 1 ? 's' : ''}</span>
+                        <span>{total} {t('result', { count: total })}</span>
                         <div className="flex items-center gap-3">
-                            <span><kbd className="px-1 py-0.5 bg-slate-800 rounded border border-slate-700">↑↓</kbd> navigate</span>
-                            <span><kbd className="px-1 py-0.5 bg-slate-800 rounded border border-slate-700">esc</kbd> close</span>
+                            <span><kbd className="px-1 py-0.5 bg-slate-800 rounded border border-slate-700">↑↓</kbd> {t('navigate')}</span>
+                            <span><kbd className="px-1 py-0.5 bg-slate-800 rounded border border-slate-700">esc</kbd> {t('close')}</span>
                         </div>
                     </div>
                 )}
@@ -153,8 +158,8 @@ export function SearchOverlay({ isOpen, onClose }: SearchOverlayProps) {
     );
 }
 
-function SearchResultItem({ result, isSelected }: { result: SearchResult; isSelected: boolean }) {
-    const time = new Date(result.timestamp).toLocaleString();
+function SearchResultItem({ result, isSelected, locale }: { result: SearchResult; isSelected: boolean; locale: string }) {
+    const time = new Date(result.timestamp).toLocaleString(locale);
 
     return (
         <div

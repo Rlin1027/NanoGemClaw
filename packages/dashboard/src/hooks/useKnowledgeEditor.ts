@@ -15,10 +15,10 @@ export function useKnowledgeEditor(groupFolder: string) {
     const updateMutation = useUpdateKnowledgeDoc(groupFolder, selectedDoc?.id || 0);
     const deleteMutation = useDeleteKnowledgeDoc(groupFolder, selectedDoc?.id || 0);
 
-    const handleSelectDoc = (doc: KnowledgeDoc) => {
+    const handleSelectDoc = (doc: KnowledgeDoc | null) => {
         setSelectedDoc(doc);
-        setEditTitle(doc.title);
-        setEditContent(doc.content);
+        setEditTitle(doc?.title ?? '');
+        setEditContent(doc?.content ?? '');
         setIsEditing(false);
     };
 

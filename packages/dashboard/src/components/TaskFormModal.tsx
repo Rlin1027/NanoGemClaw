@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { apiFetch } from '../hooks/useApi';
 import { cn } from '@/lib/utils';
 
@@ -21,6 +22,7 @@ interface TaskFormModalProps {
 }
 
 export function TaskFormModal({ groups, defaultGroup, editTask, onClose, onCreated }: TaskFormModalProps) {
+    const { t } = useTranslation('tasks');
     const isEdit = !!editTask;
 
     const [form, setForm] = useState({
@@ -56,10 +58,16 @@ export function TaskFormModal({ groups, defaultGroup, editTask, onClose, onCreat
             onCreated();
             onClose();
         } catch (err) {
-            setError(err instanceof Error ? err.message : `Failed to ${isEdit ? 'update' : 'create'} task`);
+            setError(err instanceof Error ? err.message : (isEdit ? t('failedToUpdateStatus') : t('failedToDelete')));
         } finally {
             setLoading(false);
         }
+    };
+
+    const scheduleValueLabel = () => {
+        if (form.schedule_type === 'cron') return 'Cron Expression';
+        if (form.schedule_type === 'interval') return t('interval') + ' (ms)';
+        return 'Run At (ISO)';
     };
 
     return (
@@ -67,7 +75,7 @@ export function TaskFormModal({ groups, defaultGroup, editTask, onClose, onCreat
             <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-lg mx-4 shadow-2xl">
                 <div className="flex items-center justify-between p-4 border-b border-slate-800">
                     <h2 className="text-lg font-bold text-slate-100">
-                        {isEdit ? 'Edit Task' : 'Create Scheduled Task'}
+                        {isEdit ? t('editTask') : t('createTask')}
                     </h2>
                     <button onClick={onClose} className="text-slate-500 hover:text-slate-300">
                         <X size={20} />
@@ -77,7 +85,7 @@ export function TaskFormModal({ groups, defaultGroup, editTask, onClose, onCreat
                 <form onSubmit={handleSubmit} className="p-4 space-y-4">
                     {/* Group */}
                     <div>
-                        <label className="text-sm text-slate-400 block mb-1">Group</label>
+                        <label className="text-sm text-slate-400 block mb-1">{t('groupFolder')}</label>
                         <select
                             value={form.group_folder}
                             onChange={e => setForm(f => ({ ...f, group_folder: e.target.value }))}
@@ -95,7 +103,7 @@ export function TaskFormModal({ groups, defaultGroup, editTask, onClose, onCreat
 
                     {/* Prompt */}
                     <div>
-                        <label className="text-sm text-slate-400 block mb-1">Prompt</label>
+                        <label className="text-sm text-slate-400 block mb-1">{t('prompt')}</label>
                         <textarea
                             value={form.prompt}
                             onChange={e => setForm(f => ({ ...f, prompt: e.target.value }))}
@@ -108,7 +116,7 @@ export function TaskFormModal({ groups, defaultGroup, editTask, onClose, onCreat
 
                     {/* Schedule Type */}
                     <div>
-                        <label className="text-sm text-slate-400 block mb-1">Schedule Type</label>
+                        <label className="text-sm text-slate-400 block mb-1">{t('scheduleType')}</label>
                         <div className="flex gap-2">
                             {(['cron', 'interval', 'once'] as const).map(type => (
                                 <button
@@ -131,8 +139,7 @@ export function TaskFormModal({ groups, defaultGroup, editTask, onClose, onCreat
                     {/* Schedule Value */}
                     <div>
                         <label className="text-sm text-slate-400 block mb-1">
-                            {form.schedule_type === 'cron' ? 'Cron Expression' :
-                             form.schedule_type === 'interval' ? 'Interval (ms)' : 'Run At (ISO)'}
+                            {scheduleValueLabel()}
                         </label>
                         {form.schedule_type === 'cron' && (
                             <div className="flex gap-1.5 mb-2 flex-wrap">
@@ -173,7 +180,7 @@ export function TaskFormModal({ groups, defaultGroup, editTask, onClose, onCreat
                     {/* Context Mode */}
                     {!isEdit && (
                         <div>
-                            <label className="text-sm text-slate-400 block mb-1">Context Mode</label>
+                            <label className="text-sm text-slate-400 block mb-1">{t('contextMode')}</label>
                             <div className="flex gap-2">
                                 {(['isolated', 'group'] as const).map(mode => (
                                     <button
@@ -198,10 +205,13 @@ export function TaskFormModal({ groups, defaultGroup, editTask, onClose, onCreat
 
                     <div className="flex gap-3 pt-2">
                         <button type="button" onClick={onClose} className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 py-2 rounded-lg text-sm font-medium transition-colors">
-                            Cancel
+                            {t('cancel', { ns: 'common' })}
                         </button>
                         <button type="submit" disabled={loading} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
-                            {loading ? (isEdit ? 'Saving...' : 'Creating...') : (isEdit ? 'Save Changes' : 'Create Task')}
+                            {loading
+                                ? (isEdit ? 'Saving...' : 'Creating...')
+                                : (isEdit ? t('save', { ns: 'common' }) : t('createTask'))
+                            }
                         </button>
                     </div>
                 </form>

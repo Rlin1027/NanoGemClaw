@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Shield, Clock, Wifi, AlertTriangle, Trash2, RefreshCw, Key } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useApiQuery, useApiMutation } from '../hooks/useApi';
 
 interface ConfigData {
@@ -18,6 +19,7 @@ interface SecretInfo {
 }
 
 export function SettingsPage() {
+    const { t } = useTranslation('settings');
     const { data: config, isLoading, refetch } = useApiQuery<ConfigData>('/api/config');
     const { data: secrets } = useApiQuery<SecretInfo[]>('/api/config/secrets');
     const { mutate: updateConfig } = useApiMutation<any, Partial<ConfigData>>('/api/config', 'PUT');
@@ -54,7 +56,7 @@ export function SettingsPage() {
     if (isLoading) {
         return (
             <div className="flex items-center justify-center py-20 text-slate-500">
-                Loading settings...
+                {t('loadingSettings')}
             </div>
         );
     }
@@ -64,14 +66,14 @@ export function SettingsPage() {
             {/* Runtime Flags */}
             <section>
                 <h2 className="text-lg font-bold text-slate-100 mb-4 flex items-center gap-2">
-                    <Shield size={20} className="text-blue-400" /> Runtime Flags
+                    <Shield size={20} className="text-blue-400" /> {t('runtimeFlags')}
                 </h2>
                 <div className="space-y-3">
                     {/* Maintenance Mode */}
                     <div className="flex items-center justify-between bg-slate-900/50 border border-slate-800 rounded-lg p-4">
                         <div>
-                            <div className="font-medium text-slate-200">Maintenance Mode</div>
-                            <div className="text-xs text-slate-400 mt-0.5">Pause all agents. Auto-reply &quot;system maintenance&quot; to Telegram.</div>
+                            <div className="font-medium text-slate-200">{t('maintenanceMode')}</div>
+                            <div className="text-xs text-slate-400 mt-0.5">{t('maintenanceModeDesc')}</div>
                         </div>
                         <button
                             onClick={toggleMaintenance}
@@ -84,8 +86,8 @@ export function SettingsPage() {
                     {/* Debug Logging */}
                     <div className="flex items-center justify-between bg-slate-900/50 border border-slate-800 rounded-lg p-4">
                         <div>
-                            <div className="font-medium text-slate-200">Debug Logging</div>
-                            <div className="text-xs text-slate-400 mt-0.5">Show debug-level logs. Takes effect immediately.</div>
+                            <div className="font-medium text-slate-200">{t('debugLogging')}</div>
+                            <div className="text-xs text-slate-400 mt-0.5">{t('debugLoggingDesc')}</div>
                         </div>
                         <button
                             onClick={toggleDebugLog}
@@ -100,19 +102,19 @@ export function SettingsPage() {
             {/* Connection Info */}
             <section>
                 <h2 className="text-lg font-bold text-slate-100 mb-4 flex items-center gap-2">
-                    <Wifi size={20} className="text-green-400" /> Connection Info
+                    <Wifi size={20} className="text-green-400" /> {t('connectionInfo')}
                 </h2>
                 <div className="grid grid-cols-3 gap-3">
                     <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
-                        <div className="text-xs text-slate-500 mb-1 flex items-center gap-1"><Clock size={12} /> Uptime</div>
+                        <div className="text-xs text-slate-500 mb-1 flex items-center gap-1"><Clock size={12} /> {t('uptime')}</div>
                         <div className="text-slate-200 font-mono font-bold">{config ? formatUptime(config.uptime) : '-'}</div>
                     </div>
                     <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
-                        <div className="text-xs text-slate-500 mb-1">Host</div>
+                        <div className="text-xs text-slate-500 mb-1">{t('host')}</div>
                         <div className="text-slate-200 font-mono text-sm">{config?.dashboardHost}:{config?.dashboardPort}</div>
                     </div>
                     <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
-                        <div className="text-xs text-slate-500 mb-1">Clients</div>
+                        <div className="text-xs text-slate-500 mb-1">{t('clients')}</div>
                         <div className="text-slate-200 font-mono font-bold">{config?.connectedClients ?? 0}</div>
                     </div>
                 </div>
@@ -121,7 +123,7 @@ export function SettingsPage() {
             {/* Secrets Status */}
             <section>
                 <h2 className="text-lg font-bold text-slate-100 mb-4 flex items-center gap-2">
-                    <Key size={20} className="text-purple-400" /> Secrets Status
+                    <Key size={20} className="text-purple-400" /> {t('secretsStatus')}
                 </h2>
                 <div className="bg-slate-900/50 border border-slate-800 rounded-lg divide-y divide-slate-800">
                     {secrets?.map(secret => (
@@ -131,10 +133,10 @@ export function SettingsPage() {
                                 {secret.configured ? (
                                     <>
                                         <span className="text-xs text-slate-500 font-mono">{secret.masked}</span>
-                                        <span className="text-xs bg-green-500/20 text-green-300 px-2 py-0.5 rounded-full">Configured</span>
+                                        <span className="text-xs bg-green-500/20 text-green-300 px-2 py-0.5 rounded-full">{t('configured')}</span>
                                     </>
                                 ) : (
-                                    <span className="text-xs bg-red-500/20 text-red-300 px-2 py-0.5 rounded-full">Not set</span>
+                                    <span className="text-xs bg-red-500/20 text-red-300 px-2 py-0.5 rounded-full">{t('notSet')}</span>
                                 )}
                             </div>
                         </div>
@@ -145,32 +147,32 @@ export function SettingsPage() {
             {/* Danger Zone */}
             <section>
                 <h2 className="text-lg font-bold text-slate-100 mb-4 flex items-center gap-2">
-                    <AlertTriangle size={20} className="text-red-400" /> Danger Zone
+                    <AlertTriangle size={20} className="text-red-400" /> {t('dangerZone')}
                 </h2>
                 <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-4 space-y-3">
                     <div className="flex items-center justify-between">
                         <div>
-                            <div className="font-medium text-slate-200">Clear Error States</div>
-                            <div className="text-xs text-slate-400">Reset all group error counters.</div>
+                            <div className="font-medium text-slate-200">{t('clearErrorStates')}</div>
+                            <div className="text-xs text-slate-400">{t('clearErrorStatesDesc')}</div>
                         </div>
                         <button
                             onClick={() => clearErrors(undefined as void)}
                             disabled={clearingErrors}
                             className="flex items-center gap-2 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg text-sm transition-colors disabled:opacity-50"
                         >
-                            <Trash2 size={14} /> Clear Errors
+                            <Trash2 size={14} /> {t('clearErrors')}
                         </button>
                     </div>
                     <div className="flex items-center justify-between">
                         <div>
-                            <div className="font-medium text-slate-200">Force Refresh Groups</div>
-                            <div className="text-xs text-slate-400">Reload all group data from server.</div>
+                            <div className="font-medium text-slate-200">{t('forceRefreshGroups')}</div>
+                            <div className="text-xs text-slate-400">{t('forceRefreshGroupsDesc')}</div>
                         </div>
                         <button
                             onClick={() => refetch()}
                             className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm transition-colors"
                         >
-                            <RefreshCw size={14} /> Refresh
+                            <RefreshCw size={14} /> {t('forceRefreshGroups', { ns: 'common' }) || 'Refresh'}
                         </button>
                     </div>
                 </div>

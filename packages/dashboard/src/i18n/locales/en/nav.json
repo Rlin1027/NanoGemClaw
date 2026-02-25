@@ -1,0 +1,17 @@
+{
+    "main": "Main",
+    "overview": "Overview",
+    "logs": "Logs",
+    "management": "Management",
+    "memory": "Memory",
+    "knowledge": "Knowledge",
+    "tasks": "Tasks",
+    "calendar": "Calendar",
+    "monitoring": "Monitoring",
+    "analytics": "Analytics",
+    "system": "System",
+    "settings": "Settings",
+    "addGroup": "Add Group",
+    "dashboard": "Dashboard",
+    "realTimeCommandCenter": "Real-time Command Center"
+}

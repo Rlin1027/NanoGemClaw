@@ -29,7 +29,8 @@ describe('TaskFormModal — create mode', () => {
 
     it('renders Create Scheduled Task heading', () => {
         render(<TaskFormModal groups={defaultGroups} onClose={onClose} onCreated={onCreated} />);
-        expect(screen.getByText('Create Scheduled Task')).toBeInTheDocument();
+        // heading and button both use t('createTask') = "Create Task"; query by role
+        expect(screen.getByRole('heading', { name: 'Create Task' })).toBeInTheDocument();
     });
 
     it('renders prompt textarea', () => {
@@ -114,7 +115,7 @@ describe('TaskFormModal — edit mode', () => {
                 onCreated={onCreated}
             />
         );
-        expect(screen.getByText('Edit Task')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Edit Task' })).toBeInTheDocument();
     });
 
     it('populates prompt field with existing value', () => {
@@ -163,6 +164,6 @@ describe('TaskFormModal — edit mode', () => {
                 onCreated={onCreated}
             />
         );
-        expect(screen.getByRole('button', { name: 'Save Changes' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
     });
 });

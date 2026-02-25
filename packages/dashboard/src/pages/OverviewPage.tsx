@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Loader2, Plus, Eye, EyeOff } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { StatusCard } from '../components/StatusCard';
 import { GroupDiscoveryModal } from '../components/GroupDiscoveryModal';
 import { GroupData } from '../hooks/useSocket';
@@ -11,6 +12,8 @@ interface OverviewPageProps {
 }
 
 export function OverviewPage({ groups, isConnected }: OverviewPageProps) {
+    const { t } = useTranslation('overview');
+    const { t: tc } = useTranslation('common');
     const navigate = useNavigate();
     const [filter, setFilter] = useState('');
     const [hiddenGroups, setHiddenGroups] = useState<string[]>(() => {
@@ -47,7 +50,7 @@ export function OverviewPage({ groups, isConnected }: OverviewPageProps) {
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
                     <input
                         type="text"
-                        placeholder="Filter groups..."
+                        placeholder={t('filterGroups')}
                         value={filter}
                         onChange={e => setFilter(e.target.value)}
                         className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-10 pr-4 py-2 text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
@@ -58,7 +61,7 @@ export function OverviewPage({ groups, isConnected }: OverviewPageProps) {
                     onClick={() => setShowDiscovery(true)}
                     className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors"
                 >
-                    <Plus size={16} /> Discover
+                    <Plus size={16} /> {t('discover')}
                 </button>
 
                 {hiddenGroupsList.length > 0 && (
@@ -71,7 +74,7 @@ export function OverviewPage({ groups, isConnected }: OverviewPageProps) {
                         }`}
                     >
                         <EyeOff size={16} />
-                        {hiddenGroupsList.length} Hidden
+                        {t('hiddenCount', { count: hiddenGroupsList.length })}
                     </button>
                 )}
 
@@ -80,12 +83,12 @@ export function OverviewPage({ groups, isConnected }: OverviewPageProps) {
                     {isConnected ? (
                         <>
                             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                            Connected
+                            {tc('connected')}
                         </>
                     ) : (
                         <>
                             <div className="w-2 h-2 rounded-full bg-red-500" />
-                            Reconnecting...
+                            {tc('reconnecting')}
                         </>
                     )}
                 </div>
@@ -93,12 +96,12 @@ export function OverviewPage({ groups, isConnected }: OverviewPageProps) {
 
             {filteredGroups.length === 0 && isConnected ? (
                 <div className="flex flex-col items-center justify-center py-20 text-slate-500">
-                    <p className="mb-2">No active groups found.</p>
-                    <button onClick={() => setShowDiscovery(true)} className="text-blue-500 hover:text-blue-400">Discover Groups</button>
+                    <p className="mb-2">{t('noActiveGroups')}</p>
+                    <button onClick={() => setShowDiscovery(true)} className="text-blue-500 hover:text-blue-400">{t('discoverGroups')}</button>
                 </div>
             ) : filteredGroups.length === 0 && !isConnected ? (
                 <div className="flex items-center justify-center py-20 text-slate-500 gap-2">
-                    <Loader2 className="animate-spin" /> Connecting to server...
+                    <Loader2 className="animate-spin" /> {tc('reconnecting')}
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
@@ -120,7 +123,7 @@ export function OverviewPage({ groups, isConnected }: OverviewPageProps) {
                         <div className="w-12 h-12 rounded-full bg-slate-900 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                             <span className="text-2xl">+</span>
                         </div>
-                        <span className="font-medium">Discover Group</span>
+                        <span className="font-medium">{t('discoverGroup')}</span>
                     </button>
                 </div>
             )}
@@ -130,7 +133,7 @@ export function OverviewPage({ groups, isConnected }: OverviewPageProps) {
                 <div className="mt-8">
                     <div className="flex items-center gap-3 mb-4">
                         <div className="h-px flex-1 bg-slate-800" />
-                        <span className="text-sm text-slate-500 font-medium">Hidden Groups</span>
+                        <span className="text-sm text-slate-500 font-medium">{t('hiddenGroups')}</span>
                         <div className="h-px flex-1 bg-slate-800" />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 opacity-60">
@@ -145,7 +148,7 @@ export function OverviewPage({ groups, isConnected }: OverviewPageProps) {
                                 <button
                                     onClick={() => unhideGroup(group.id)}
                                     className="absolute top-3 right-3 p-1.5 rounded-lg bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 transition-colors"
-                                    title="Show group"
+                                    title={t('showGroup')}
                                 >
                                     <Eye size={16} />
                                 </button>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { FileText, Plus, Trash2, Save, Search, BookOpen, Edit, X, Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { useSocket } from '../hooks/useSocket';
 import { useKnowledgeEditor } from '../hooks/useKnowledgeEditor';
@@ -8,6 +9,7 @@ import { CreateDocumentModal } from '../components/knowledge/CreateDocumentModal
 import { DeleteConfirmModal } from '../components/knowledge/DeleteConfirmModal';
 
 export function KnowledgePage() {
+    const { t } = useTranslation('knowledge');
     const { groups } = useSocket();
     const [selectedGroupFolder, setSelectedGroupFolder] = useState<string>(groups[0]?.id || '');
     const [searchQuery, setSearchQuery] = useState('');
@@ -41,10 +43,10 @@ export function KnowledgePage() {
                 <div>
                     <h2 className="text-xl font-bold text-white flex items-center gap-2">
                         <BookOpen size={24} className="text-blue-400" />
-                        Knowledge Base
+                        {t('title')}
                     </h2>
                     <p className="text-slate-400 text-sm mt-1">
-                        {totalSize.toLocaleString()} chars across {(editor.docs || []).length} documents
+                        {t('subtitle', { chars: totalSize.toLocaleString(), count: (editor.docs || []).length })}
                     </p>
                 </div>
                 <button
@@ -52,7 +54,7 @@ export function KnowledgePage() {
                     disabled={!selectedGroupFolder}
                     className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                    <Plus size={16} /> New Document
+                    <Plus size={16} /> {t('newDocument')}
                 </button>
             </div>
 
@@ -62,11 +64,11 @@ export function KnowledgePage() {
                     value={selectedGroupFolder}
                     onChange={e => {
                         setSelectedGroupFolder(e.target.value);
-                        editor.handleSelectDoc(null as any);
+                        editor.handleSelectDoc(null);
                     }}
                     className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200"
                 >
-                    <option value="">Select a group</option>
+                    <option value="">{t('selectGroup')}</option>
                     {groups.map(g => (
                         <option key={g.id} value={g.id}>{g.name}</option>
                     ))}
@@ -81,7 +83,7 @@ export function KnowledgePage() {
                         type="text"
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
-                        placeholder="Search documents... (3+ chars for full-text)"
+                        placeholder={t('searchPlaceholder')}
                         className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-10 pr-4 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                     />
                 </div>
@@ -90,18 +92,18 @@ export function KnowledgePage() {
             {/* Main Content */}
             {!selectedGroupFolder ? (
                 <div className="flex items-center justify-center py-20 text-slate-500 bg-slate-900/30 rounded-xl border-2 border-dashed border-slate-800">
-                    Select a group to view knowledge base
+                    {t('selectGroupPrompt')}
                 </div>
             ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-20rem)]">
                     {/* Document List */}
                     <div className="lg:col-span-1 bg-slate-900 border border-slate-800 rounded-xl p-4 overflow-y-auto">
-                        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">Documents</h3>
+                        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">{t('documents')}</h3>
                         {editor.isLoading ? (
-                            <div className="text-slate-500 text-center py-8 text-sm">Loading...</div>
+                            <div className="text-slate-500 text-center py-8 text-sm">{t('loading')}</div>
                         ) : filteredDocs.length === 0 ? (
                             <div className="text-slate-500 text-center py-8 text-sm">
-                                {searchQuery ? 'No matching documents' : 'No documents yet'}
+                                {searchQuery ? t('noMatchingDocuments') : t('noDocumentsYet')}
                             </div>
                         ) : (
                             <div className="space-y-2">
@@ -122,7 +124,7 @@ export function KnowledgePage() {
                                                 <div className="font-medium text-sm truncate">{doc.title}</div>
                                                 <div className="text-xs opacity-70 mt-1 truncate">{doc.filename}</div>
                                                 <div className="text-xs opacity-60 mt-1">
-                                                    {doc.size_chars.toLocaleString()} chars
+                                                    {doc.size_chars.toLocaleString()} {t('chars')}
                                                 </div>
                                             </div>
                                         </div>
@@ -136,7 +138,7 @@ export function KnowledgePage() {
                     <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl flex flex-col overflow-hidden">
                         {!editor.selectedDoc ? (
                             <div className="flex-1 flex items-center justify-center text-slate-500">
-                                Select a document to view or edit
+                                {t('selectDocumentPrompt')}
                             </div>
                         ) : (
                             <>
@@ -165,13 +167,13 @@ export function KnowledgePage() {
                                                     disabled={editor.updateMutation.isLoading}
                                                     className="flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
                                                 >
-                                                    <Save size={14} /> Save
+                                                    <Save size={14} /> {t('save')}
                                                 </button>
                                                 <button
                                                     onClick={editor.handleCancelEdit}
                                                     className="flex items-center gap-1 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-medium transition-colors"
                                                 >
-                                                    <X size={14} /> Cancel
+                                                    <X size={14} /> {t('cancel')}
                                                 </button>
                                             </>
                                         ) : (
@@ -180,13 +182,13 @@ export function KnowledgePage() {
                                                     onClick={() => editor.setIsEditing(true)}
                                                     className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition-colors"
                                                 >
-                                                    <Edit size={14} /> Edit
+                                                    <Edit size={14} /> {t('edit')}
                                                 </button>
                                                 <button
                                                     onClick={() => editor.setShowDeleteConfirm(true)}
                                                     className="flex items-center gap-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-medium transition-colors"
                                                 >
-                                                    <Trash2 size={14} /> Delete
+                                                    <Trash2 size={14} /> {t('delete')}
                                                 </button>
                                             </>
                                         )}
@@ -200,7 +202,7 @@ export function KnowledgePage() {
                                             value={editor.editContent}
                                             onChange={e => editor.setEditContent(e.target.value)}
                                             className="w-full h-full bg-slate-950 border border-slate-800 rounded-lg p-4 text-slate-200 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none"
-                                            placeholder="Enter markdown content..."
+                                            placeholder={t('contentPlaceholder')}
                                         />
                                     ) : (
                                         <pre className="text-slate-300 text-sm font-mono whitespace-pre-wrap break-words">
