@@ -1,64 +1,81 @@
 import { Router } from 'express';
+import { validate } from '../middleware/validate.js';
+import {
+  groupFolderParams,
+  tasksPaginationQuery,
+  createTaskBody,
+  updateTaskBody,
+  updateTaskStatusBody,
+  taskRunsQuery,
+} from '../schemas/tasks.js';
+import { paginationQuery } from '../schemas/shared.js';
+import type { z } from 'zod';
 
 interface TasksRouterDeps {
-  validateFolder: (folder: string) => boolean;
-  validateNumericParam: (value: string, name: string) => number | null;
+  // validateFolder and validateNumericParam removed — handled by Zod middleware
 }
 
-export function createTasksRouter(deps: TasksRouterDeps): Router {
+export function createTasksRouter(_deps: TasksRouterDeps = {}): Router {
   const router = Router();
-  const { validateFolder, validateNumericParam } = deps;
 
   // GET /api/tasks
-  router.get('/tasks', async (req, res) => {
-    try {
-      const { getAllTasksPaginated } = await import('../db.js');
-      const { parsePagination } = await import('../utils/pagination.js');
-      const { limit, offset } = parsePagination(req.query);
-      const { rows, total } = getAllTasksPaginated(limit, offset);
-      res.json({
-        data: rows,
-        pagination: {
-          total,
-          limit,
-          offset,
-          hasMore: offset + rows.length < total,
-        },
-      });
-    } catch {
-      res.status(500).json({ error: 'Failed to fetch tasks' });
-    }
-  });
+  router.get(
+    '/tasks',
+    validate({ query: tasksPaginationQuery }),
+    async (req, res) => {
+      try {
+        const { getAllTasksPaginated } = await import('../db.js');
+        const { limit, offset } = req.query as unknown as z.infer<
+          typeof paginationQuery
+        >;
+        const { rows, total } = getAllTasksPaginated(limit, offset);
+        res.json({
+          data: rows,
+          pagination: {
+            total,
+            limit,
+            offset,
+            hasMore: offset + rows.length < total,
+          },
+        });
+      } catch {
+        res.status(500).json({ error: 'Failed to fetch tasks' });
+      }
+    },
+  );
 
   // GET /api/tasks/group/:groupFolder
-  router.get('/tasks/group/:groupFolder', async (req, res) => {
-    const { groupFolder } = req.params;
-    if (!validateFolder(groupFolder)) {
-      res.status(400).json({ error: 'Invalid group folder' });
-      return;
-    }
-    try {
-      const { getTasksForGroupPaginated } = await import('../db.js');
-      const { parsePagination } = await import('../utils/pagination.js');
-      const { limit, offset } = parsePagination(req.query);
-      const { rows, total } = getTasksForGroupPaginated(
-        groupFolder,
-        limit,
-        offset,
-      );
-      res.json({
-        data: rows,
-        pagination: {
-          total,
+  router.get(
+    '/tasks/group/:groupFolder',
+    validate({ params: groupFolderParams, query: tasksPaginationQuery }),
+    async (req, res) => {
+      const { groupFolder } = req.params as unknown as z.infer<
+        typeof groupFolderParams
+      >;
+      try {
+        const { getTasksForGroupPaginated } = await import('../db.js');
+        const { limit, offset } = req.query as unknown as z.infer<
+          typeof paginationQuery
+        >;
+        const { rows, total } = getTasksForGroupPaginated(
+          groupFolder,
           limit,
           offset,
-          hasMore: offset + rows.length < total,
-        },
-      });
-    } catch {
-      res.status(500).json({ error: 'Failed to fetch tasks' });
-    }
-  });
+        );
+        res.json({
+          data: rows,
+          pagination: {
+            total,
+            limit,
+            offset,
+            hasMore: offset + rows.length < total,
+          },
+        });
+      } catch {
+        res.status(500).json({ error: 'Failed to fetch tasks' });
+      }
+    },
+  );
 
   // POST /api/tasks
   router.post('/tasks', async (req, res) => {
@@ -105,7 +122,8 @@ export function createTasksRouter(deps: TasksRouterDeps): Router {
         return;
       }
 
-      if (!validateFolder(group_folder)) {
+      // Validate group_folder
+      if (!/^[a-zA-Z0-9_-]+$/.test(group_folder)) {
         res.status(400).json({ error: 'Invalid group folder' });
         return;
       }
@@ -121,8 +139,8 @@ export function createTasksRouter(deps: TasksRouterDeps): Router {
           return;
         }
       } else if (effectiveScheduleType === 'interval') {
-        const ms = validateNumericParam(effectiveScheduleValue, 'interval');
-        if (ms === null || ms <= 0) {
+        const ms = parseInt(effectiveScheduleValue, 10);
+        if (isNaN(ms) || ms < 0 || ms <= 0) {
           res.status(400).json({ error: 'Invalid interval value' });
           return;
         }
@@ -163,70 +181,67 @@ export function createTasksRouter(deps: TasksRouterDeps): Router {
   });
 
   // PUT /api/tasks/:taskId
-  router.put('/tasks/:taskId', async (req, res) => {
-    try {
-      const { updateTask, getTaskById } = await import('../db.js');
-      const { taskId } = req.params;
+  router.put(
+    '/tasks/:taskId',
+    validate({ body: updateTaskBody }),
+    async (req, res) => {
+      try {
+        const { updateTask, getTaskById } = await import('../db.js');
+        const taskId = String(req.params.taskId);
 
-      const task = getTaskById(taskId);
-      if (!task) {
-        res.status(404).json({ error: 'Task not found' });
-        return;
-      }
-
-      const { prompt, schedule_type, schedule_value, status } = req.body;
-      const updates: Record<string, any> = {};
-      if (prompt !== undefined) updates.prompt = prompt;
-      if (schedule_type !== undefined) updates.schedule_type = schedule_type;
-      if (schedule_value !== undefined) updates.schedule_value = schedule_value;
-      if (status !== undefined) {
-        const VALID_STATUSES = ['active', 'paused', 'completed'];
-        if (!VALID_STATUSES.includes(status)) {
-          res.status(400).json({
-            error: 'Invalid status. Must be one of: active, paused, completed',
-          });
+        const task = getTaskById(taskId);
+        if (!task) {
+          res.status(404).json({ error: 'Task not found' });
           return;
         }
-        updates.status = status;
-      }
 
-      // Recalculate next_run if schedule changed
-      if (schedule_type || schedule_value) {
-        const type = schedule_type || task.schedule_type;
-        const value = schedule_value || task.schedule_value;
+        const { prompt, schedule_type, schedule_value, status } =
+          req.body as z.infer<typeof updateTaskBody>;
+        const updates: Record<string, unknown> = {};
+        if (prompt !== undefined) updates.prompt = prompt;
+        if (schedule_type !== undefined) updates.schedule_type = schedule_type;
+        if (schedule_value !== undefined)
+          updates.schedule_value = schedule_value;
+        if (status !== undefined) updates.status = status;
 
-        if (type === 'cron') {
-          const { CronExpressionParser } = await import('cron-parser');
-          try {
-            const interval = CronExpressionParser.parse(value);
-            updates.next_run = interval.next().toISOString();
-          } catch {
-            res.status(400).json({ error: 'Invalid cron expression' });
-            return;
-          }
-        } else if (type === 'interval') {
-          const ms = validateNumericParam(value, 'interval');
-          if (ms !== null && ms > 0) {
-            updates.next_run = new Date(Date.now() + ms).toISOString();
-          } else {
-            res.status(400).json({ error: 'Invalid interval value' });
-            return;
+        // Recalculate next_run if schedule changed
+        if (schedule_type || schedule_value) {
+          const type = String(schedule_type || task.schedule_type);
+          const value = String(schedule_value || task.schedule_value);
+
+          if (type === 'cron') {
+            const { CronExpressionParser } = await import('cron-parser');
+            try {
+              const interval = CronExpressionParser.parse(value);
+              updates.next_run = interval.next().toISOString();
+            } catch {
+              res.status(400).json({ error: 'Invalid cron expression' });
+              return;
+            }
+          } else if (type === 'interval') {
+            const ms = parseInt(value, 10);
+            if (!isNaN(ms) && ms > 0) {
+              updates.next_run = new Date(Date.now() + ms).toISOString();
+            } else {
+              res.status(400).json({ error: 'Invalid interval value' });
+              return;
+            }
           }
         }
-      }
 
-      updateTask(taskId, updates);
-      res.json({ data: { success: true } });
-    } catch {
-      res.status(500).json({ error: 'Failed to update task' });
-    }
-  });
+        updateTask(taskId, updates);
+        res.json({ data: { success: true } });
+      } catch {
+        res.status(500).json({ error: 'Failed to update task' });
+      }
+    },
+  );
 
   // DELETE /api/tasks/:taskId
   router.delete('/tasks/:taskId', async (req, res) => {
     try {
       const { deleteTask, getTaskById } = await import('../db.js');
-      const { taskId } = req.params;
+      const taskId = String(req.params.taskId);
 
       const task = getTaskById(taskId);
       if (!task) {
@@ -242,54 +257,50 @@ export function createTasksRouter(deps: TasksRouterDeps): Router {
   });
 
   // PUT /api/tasks/:taskId/status
-  router.put('/tasks/:taskId/status', async (req, res) => {
-    try {
-      const { updateTask, getTaskById } = await import('../db.js');
-      const { taskId } = req.params;
-      const { status } = req.body;
+  router.put(
+    '/tasks/:taskId/status',
+    validate({ body: updateTaskStatusBody }),
+    async (req, res) => {
+      try {
+        const { updateTask, getTaskById } = await import('../db.js');
+        const taskId = String(req.params.taskId);
+        const { status } = req.body as z.infer<typeof updateTaskStatusBody>;
 
-      if (!['active', 'paused'].includes(status)) {
-        res.status(400).json({ error: 'Status must be: active or paused' });
-        return;
+        const task = getTaskById(taskId);
+        if (!task) {
+          res.status(404).json({ error: 'Task not found' });
+          return;
+        }
+
+        updateTask(taskId, { status });
+        res.json({ data: { success: true } });
+      } catch {
+        res.status(500).json({ error: 'Failed to update task status' });
       }
-
-      const task = getTaskById(taskId);
-      if (!task) {
-        res.status(404).json({ error: 'Task not found' });
-        return;
-      }
-
-      updateTask(taskId, { status });
-      res.json({ data: { success: true } });
-    } catch {
-      res.status(500).json({ error: 'Failed to update task status' });
-    }
-  });
+    },
+  );
 
   // GET /api/tasks/:taskId/runs
-  router.get('/tasks/:taskId/runs', async (req, res) => {
-    try {
-      const { getTaskRunLogs } = await import('../db.js');
-      const { taskId } = req.params;
+  router.get(
+    '/tasks/:taskId/runs',
+    validate({ query: taskRunsQuery }),
+    async (req, res) => {
+      try {
+        const { getTaskRunLogs } = await import('../db.js');
+        const taskId = String(req.params.taskId);
+        const { limit } = req.query as unknown as z.infer<typeof taskRunsQuery>;
 
-      let limit = 10;
-      if (req.query.limit) {
-        const parsedLimit = validateNumericParam(
-          req.query.limit as string,
-          'limit',
-        );
-        if (parsedLimit === null) {
+        if (limit === null) {
           res.status(400).json({ error: 'Invalid limit parameter' });
           return;
         }
-        limit = parsedLimit;
-      }
 
-      res.json({ data: getTaskRunLogs(taskId, limit) });
-    } catch {
-      res.status(500).json({ error: 'Failed to fetch task runs' });
-    }
-  });
+        res.json({ data: getTaskRunLogs(taskId, limit) });
+      } catch {
+        res.status(500).json({ error: 'Failed to fetch task runs' });
+      }
+    },
+  );
 
   return router;
 }

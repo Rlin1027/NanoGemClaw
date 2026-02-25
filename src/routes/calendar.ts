@@ -1,13 +1,14 @@
 import { Router } from 'express';
 import { logger } from '../logger.js';
+import { validate } from '../middleware/validate.js';
+import {
+  calendarConfigBody,
+  calendarDeleteBody,
+  calendarEventsQuery,
+} from '../schemas/calendar.js';
 
-interface CalendarRouterDeps {
-  validateNumericParam: (value: string, name: string) => number | null;
-}
-
-export function createCalendarRouter(deps: CalendarRouterDeps): Router {
+export function createCalendarRouter(): Router {
   const router = Router();
-  const { validateNumericParam } = deps;
 
   // GET /api/calendar/configs
   router.get('/calendar/configs', async (_req, res) => {
@@ -21,88 +22,71 @@ export function createCalendarRouter(deps: CalendarRouterDeps): Router {
   });
 
   // POST /api/calendar/configs
-  router.post('/calendar/configs', async (req, res) => {
-    try {
-      const { url, name } = req.body;
-      if (
-        !url ||
-        !name ||
-        typeof url !== 'string' ||
-        typeof name !== 'string'
-      ) {
-        res
-          .status(400)
-          .json({ error: 'Missing or invalid fields: url and name required' });
-        return;
+  router.post(
+    '/calendar/configs',
+    validate({ body: calendarConfigBody }),
+    async (req, res) => {
+      try {
+        const { url, name } = req.body;
+        const { saveCalendarConfig } = await import('../google-calendar.js');
+        saveCalendarConfig({ url, name });
+        res.json({ data: { success: true } });
+      } catch {
+        res.status(500).json({ error: 'Failed to save calendar config' });
       }
-      const { saveCalendarConfig } = await import('../google-calendar.js');
-      saveCalendarConfig({ url, name });
-      res.json({ data: { success: true } });
-    } catch {
-      res.status(500).json({ error: 'Failed to save calendar config' });
-    }
-  });
+    },
+  );
 
   // DELETE /api/calendar/configs
-  router.delete('/calendar/configs', async (req, res) => {
-    try {
-      const { url } = req.body;
-      if (!url || typeof url !== 'string') {
-        res
-          .status(400)
-          .json({ error: 'Missing or invalid field: url required' });
-        return;
+  router.delete(
+    '/calendar/configs',
+    validate({ body: calendarDeleteBody }),
+    async (req, res) => {
+      try {
+        const { url } = req.body;
+        const { removeCalendarConfig } = await import('../google-calendar.js');
+        const removed = removeCalendarConfig(url);
+        res.json({ data: { removed } });
+      } catch {
+        res.status(500).json({ error: 'Failed to remove calendar config' });
       }
-      const { removeCalendarConfig } = await import('../google-calendar.js');
-      const removed = removeCalendarConfig(url);
-      res.json({ data: { removed } });
-    } catch {
-      res.status(500).json({ error: 'Failed to remove calendar config' });
-    }
-  });
+    },
+  );
 
   // GET /api/calendar/events
-  router.get('/calendar/events', async (req, res) => {
-    try {
-      const { getCalendarConfigs, fetchCalendarEvents } =
-        await import('../google-calendar.js');
+  router.get(
+    '/calendar/events',
+    validate({ query: calendarEventsQuery }),
+    async (req, res) => {
+      try {
+        const { getCalendarConfigs, fetchCalendarEvents } =
+          await import('../google-calendar.js');
 
-      let days = 7;
-      if (req.query.days) {
-        const parsedDays = validateNumericParam(
-          req.query.days as string,
-          'days',
-        );
-        if (parsedDays === null) {
-          res.status(400).json({ error: 'Invalid days parameter' });
-          return;
+        const days = req.query.days as unknown as number;
+        const configs = getCalendarConfigs();
+
+        const allEvents = [];
+        for (const config of configs) {
+          try {
+            const events = await fetchCalendarEvents(config, days);
+            allEvents.push(...events);
+          } catch (err) {
+            logger.warn(
+              { config: config.name, err },
+              'Failed to fetch calendar events',
+            );
+          }
         }
-        days = parsedDays;
+
+        // Sort by start time
+        allEvents.sort((a, b) => a.start.getTime() - b.start.getTime());
+
+        res.json({ data: allEvents });
+      } catch {
+        res.status(500).json({ error: 'Failed to fetch calendar events' });
       }
-
-      const configs = getCalendarConfigs();
-
-      const allEvents = [];
-      for (const config of configs) {
-        try {
-          const events = await fetchCalendarEvents(config, days);
-          allEvents.push(...events);
-        } catch (err) {
-          logger.warn(
-            { config: config.name, err },
-            'Failed to fetch calendar events',
-          );
-        }
-      }
-
-      // Sort by start time
-      allEvents.sort((a, b) => a.start.getTime() - b.start.getTime());
-
-      res.json({ data: allEvents });
-    } catch {
-      res.status(500).json({ error: 'Failed to fetch calendar events' });
-    }
-  });
+    },
+  );
 
   return router;
 }

@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import { logger, setLogLevel } from '../logger.js';
+import { validate } from '../middleware/validate.js';
+import { configUpdateBody } from '../schemas/config-routes.js';
 
 interface ConfigRouterDeps {
   dashboardHost: string;
@@ -41,37 +43,41 @@ export function createConfigRouter(deps: ConfigRouterDeps): Router {
   });
 
   // PUT /api/config
-  router.put('/config', async (req, res) => {
-    try {
-      const { maintenanceMode, logLevel } = req.body;
-      const { setMaintenanceMode, isMaintenanceMode } =
-        await import('../maintenance.js');
+  router.put(
+    '/config',
+    validate({ body: configUpdateBody }),
+    async (req, res) => {
+      try {
+        const { maintenanceMode, logLevel } = req.body;
+        const { setMaintenanceMode, isMaintenanceMode } =
+          await import('../maintenance.js');
 
-      if (typeof maintenanceMode === 'boolean') {
-        setMaintenanceMode(maintenanceMode);
-        logger.info(
-          { maintenanceMode },
-          'Maintenance mode updated via dashboard',
-        );
+        if (typeof maintenanceMode === 'boolean') {
+          setMaintenanceMode(maintenanceMode);
+          logger.info(
+            { maintenanceMode },
+            'Maintenance mode updated via dashboard',
+          );
+        }
+
+        if (typeof logLevel === 'string') {
+          setLogLevel(logLevel);
+          // Update process.env so GET /api/config reflects the change
+          process.env.LOG_LEVEL = logLevel;
+          logger.info({ logLevel }, 'Log level updated via dashboard');
+        }
+
+        res.json({
+          data: {
+            maintenanceMode: isMaintenanceMode(),
+            logLevel: process.env.LOG_LEVEL || 'info',
+          },
+        });
+      } catch {
+        res.status(500).json({ error: 'Failed to update config' });
       }
-
-      if (typeof logLevel === 'string') {
-        setLogLevel(logLevel);
-        // Update process.env so GET /api/config reflects the change
-        process.env.LOG_LEVEL = logLevel;
-        logger.info({ logLevel }, 'Log level updated via dashboard');
-      }
-
-      res.json({
-        data: {
-          maintenanceMode: isMaintenanceMode(),
-          logLevel: process.env.LOG_LEVEL || 'info',
-        },
-      });
-    } catch {
-      res.status(500).json({ error: 'Failed to update config' });
-    }
-  });
+    },
+  );
 
   // GET /api/config/cache-stats - Context cache statistics
   router.get('/config/cache-stats', async (_req, res) => {

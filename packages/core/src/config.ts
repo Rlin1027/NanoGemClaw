@@ -1,4 +1,5 @@
 import path from 'path';
+import { envSchema, type ParsedEnv } from './config-schema.js';
 
 // ============================================================================
 // Config Types
@@ -23,24 +24,44 @@ export interface NanoGemClawConfig {
   timezone: string;
   cleanup: { mediaMaxAgeDays: number; mediaCleanupIntervalHours: number };
   telegram: { rateLimitDelayMs: number; maxMessageLength: number };
-  alerts: { failureThreshold: number; alertCooldownMinutes: number; enabled: boolean };
-  rateLimit: { maxRequests: number; windowMinutes: number; enabled: boolean; message: string };
-  container: { gracefulShutdownDelayMs: number; ipcDebounceMs: number; ipcFallbackPollingMultiplier: number };
+  alerts: {
+    failureThreshold: number;
+    alertCooldownMinutes: number;
+    enabled: boolean;
+  };
+  rateLimit: {
+    maxRequests: number;
+    windowMinutes: number;
+    enabled: boolean;
+    message: string;
+  };
+  container: {
+    gracefulShutdownDelayMs: number;
+    ipcDebounceMs: number;
+    ipcFallbackPollingMultiplier: number;
+  };
   webhook: { url: string; events: string[]; enabled: boolean };
   taskTracking: { maxTurns: number; stepTimeoutMs: number };
-  memory: { summarizeThresholdChars: number; maxContextMessages: number; checkIntervalHours: number; summaryPrompt: string };
-  fastPath: { enabled: boolean; cacheTtlSeconds: number; minCacheChars: number; streamingIntervalMs: number; maxHistoryMessages: number; timeoutMs: number };
+  memory: {
+    summarizeThresholdChars: number;
+    maxContextMessages: number;
+    checkIntervalHours: number;
+    summaryPrompt: string;
+  };
+  fastPath: {
+    enabled: boolean;
+    cacheTtlSeconds: number;
+    minCacheChars: number;
+    streamingIntervalMs: number;
+    maxHistoryMessages: number;
+    timeoutMs: number;
+  };
   allowedContainerEnvKeys: readonly string[];
 }
 
 // ============================================================================
 // Helpers
 // ============================================================================
-
-function safeParseInt(value: string | undefined, defaultValue: number): number {
-  const parsed = parseInt(value || String(defaultValue), 10);
-  return Number.isNaN(parsed) ? defaultValue : parsed;
-}
 
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -50,41 +71,52 @@ function escapeRegex(str: string): string {
 // Factory: create config from env (no process.exit — caller handles validation)
 // ============================================================================
 
-export function createConfig(overrides: Partial<NanoGemClawConfig> = {}): NanoGemClawConfig {
+export function createConfig(
+  overrides: Partial<NanoGemClawConfig> = {},
+): NanoGemClawConfig {
   const PROJECT_ROOT = process.cwd();
   const HOME_DIR = process.env.HOME || '/Users/user';
 
+  // Parse env vars through schema (provides type coercion and defaults)
+  const parsed = envSchema.safeParse(process.env);
+  const env: Partial<ParsedEnv> = parsed.success ? parsed.data : {};
+
   const defaults: NanoGemClawConfig = {
-    assistantName: process.env.ASSISTANT_NAME || 'Andy',
-    telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
-    geminiModel: process.env.GEMINI_MODEL || 'gemini-3-flash-preview',
+    assistantName: env.ASSISTANT_NAME ?? 'Andy',
+    telegramBotToken: env.TELEGRAM_BOT_TOKEN ?? '',
+    geminiModel: env.GEMINI_MODEL ?? 'gemini-3-flash-preview',
     pollInterval: 2000,
     schedulerPollInterval: 60000,
-    containerImage: process.env.CONTAINER_IMAGE || 'nanogemclaw-agent:latest',
-    containerTimeout: safeParseInt(process.env.CONTAINER_TIMEOUT, 300000),
-    containerMaxOutputSize: safeParseInt(process.env.CONTAINER_MAX_OUTPUT_SIZE, 10485760),
+    containerImage: env.CONTAINER_IMAGE ?? 'nanogemclaw-agent:latest',
+    containerTimeout: env.CONTAINER_TIMEOUT ?? 300000,
+    containerMaxOutputSize: env.CONTAINER_MAX_OUTPUT_SIZE ?? 10485760,
     ipcPollInterval: 1000,
     storeDir: path.resolve(PROJECT_ROOT, 'store'),
     groupsDir: path.resolve(PROJECT_ROOT, 'groups'),
     dataDir: path.resolve(PROJECT_ROOT, 'data'),
     mainGroupFolder: 'main',
-    mountAllowlistPath: path.join(HOME_DIR, '.config', 'nanogemclaw', 'mount-allowlist.json'),
+    mountAllowlistPath: path.join(
+      HOME_DIR,
+      '.config',
+      'nanogemclaw',
+      'mount-allowlist.json',
+    ),
     healthCheck: {
-      enabled: process.env.HEALTH_CHECK_ENABLED !== 'false',
-      port: safeParseInt(process.env.HEALTH_CHECK_PORT, 8080),
+      enabled: env.HEALTH_CHECK_ENABLED ?? true,
+      port: env.HEALTH_CHECK_PORT ?? 8080,
     },
-    timezone: process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone,
+    timezone: env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone,
     cleanup: { mediaMaxAgeDays: 7, mediaCleanupIntervalHours: 6 },
     telegram: { rateLimitDelayMs: 100, maxMessageLength: 4096 },
     alerts: {
       failureThreshold: 3,
       alertCooldownMinutes: 30,
-      enabled: process.env.ALERTS_ENABLED !== 'false',
+      enabled: env.ALERTS_ENABLED ?? true,
     },
     rateLimit: {
-      maxRequests: safeParseInt(process.env.RATE_LIMIT_MAX, 20),
-      windowMinutes: safeParseInt(process.env.RATE_LIMIT_WINDOW, 5),
-      enabled: process.env.RATE_LIMIT_ENABLED !== 'false',
+      maxRequests: env.RATE_LIMIT_MAX ?? 20,
+      windowMinutes: env.RATE_LIMIT_WINDOW ?? 5,
+      enabled: env.RATE_LIMIT_ENABLED ?? true,
       message: '⏳ 請求過於頻繁，請稍後再試。',
     },
     container: {
@@ -93,9 +125,9 @@ export function createConfig(overrides: Partial<NanoGemClawConfig> = {}): NanoGe
       ipcFallbackPollingMultiplier: 5,
     },
     webhook: {
-      url: process.env.WEBHOOK_URL || '',
-      events: (process.env.WEBHOOK_EVENTS || 'error,alert').split(','),
-      enabled: !!process.env.WEBHOOK_URL,
+      url: env.WEBHOOK_URL ?? '',
+      events: (env.WEBHOOK_EVENTS ?? 'error,alert').split(','),
+      enabled: !!env.WEBHOOK_URL,
     },
     taskTracking: { maxTurns: 5, stepTimeoutMs: 300000 },
     memory: {
@@ -111,17 +143,23 @@ export function createConfig(overrides: Partial<NanoGemClawConfig> = {}): NanoGe
 Keep the summary under 500 words. Output in the same language as the conversation.`,
     },
     fastPath: {
-      enabled: process.env.FAST_PATH_ENABLED !== 'false',
-      cacheTtlSeconds: safeParseInt(process.env.CACHE_TTL_SECONDS, 21600),
-      minCacheChars: safeParseInt(process.env.MIN_CACHE_CHARS, 100000),
+      enabled: env.FAST_PATH_ENABLED ?? true,
+      cacheTtlSeconds: env.CACHE_TTL_SECONDS ?? 21600,
+      minCacheChars: env.MIN_CACHE_CHARS ?? 100000,
       streamingIntervalMs: 500,
       maxHistoryMessages: 50,
-      timeoutMs: safeParseInt(process.env.FAST_PATH_TIMEOUT_MS, 180000),
+      timeoutMs: env.FAST_PATH_TIMEOUT_MS ?? 180000,
     },
     allowedContainerEnvKeys: [
-      'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_SYSTEM_PROMPT',
-      'GEMINI_ENABLE_SEARCH', 'GEMINI_MODEL', 'CONTAINER_TIMEOUT',
-      'TZ', 'NODE_ENV', 'LOG_LEVEL',
+      'GEMINI_API_KEY',
+      'GOOGLE_API_KEY',
+      'GEMINI_SYSTEM_PROMPT',
+      'GEMINI_ENABLE_SEARCH',
+      'GEMINI_MODEL',
+      'CONTAINER_TIMEOUT',
+      'TZ',
+      'NODE_ENV',
+      'LOG_LEVEL',
     ],
   };
 
@@ -132,11 +170,20 @@ Keep the summary under 500 words. Output in the same language as the conversatio
 // Backward-compatible exports (singleton from env)
 // ============================================================================
 
-export const ASSISTANT_NAME = process.env.ASSISTANT_NAME || 'Andy';
+// Parse env once for all singleton exports
+const _singletonEnv = (() => {
+  const result = envSchema.safeParse(process.env);
+  return result.success ? result.data : null;
+})();
+
+export const ASSISTANT_NAME =
+  _singletonEnv?.ASSISTANT_NAME ?? process.env.ASSISTANT_NAME ?? 'Andy';
 export const POLL_INTERVAL = 2000;
 export const SCHEDULER_POLL_INTERVAL = 60000;
 export const GEMINI_MODEL =
-  process.env.GEMINI_MODEL || 'gemini-3-flash-preview';
+  _singletonEnv?.GEMINI_MODEL ??
+  process.env.GEMINI_MODEL ??
+  'gemini-3-flash-preview';
 
 export const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 
@@ -155,20 +202,17 @@ export const DATA_DIR = path.resolve(PROJECT_ROOT, 'data');
 export const MAIN_GROUP_FOLDER = 'main';
 
 export const CONTAINER_IMAGE =
-  process.env.CONTAINER_IMAGE || 'nanogemclaw-agent:latest';
-export const CONTAINER_TIMEOUT = safeParseInt(
-  process.env.CONTAINER_TIMEOUT,
-  300000,
-);
-export const CONTAINER_MAX_OUTPUT_SIZE = safeParseInt(
-  process.env.CONTAINER_MAX_OUTPUT_SIZE,
-  10485760,
-);
+  _singletonEnv?.CONTAINER_IMAGE ??
+  process.env.CONTAINER_IMAGE ??
+  'nanogemclaw-agent:latest';
+export const CONTAINER_TIMEOUT = _singletonEnv?.CONTAINER_TIMEOUT ?? 300000;
+export const CONTAINER_MAX_OUTPUT_SIZE =
+  _singletonEnv?.CONTAINER_MAX_OUTPUT_SIZE ?? 10485760;
 export const IPC_POLL_INTERVAL = 1000;
 
 export const HEALTH_CHECK = {
-  ENABLED: process.env.HEALTH_CHECK_ENABLED !== 'false',
-  PORT: safeParseInt(process.env.HEALTH_CHECK_PORT, 8080),
+  ENABLED: _singletonEnv?.HEALTH_CHECK_ENABLED ?? true,
+  PORT: _singletonEnv?.HEALTH_CHECK_PORT ?? 8080,
 } as const;
 
 export const TRIGGER_PATTERN = new RegExp(
@@ -177,7 +221,7 @@ export const TRIGGER_PATTERN = new RegExp(
 );
 
 export const TIMEZONE =
-  process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  _singletonEnv?.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 export const CLEANUP = {
   MEDIA_MAX_AGE_DAYS: 7,
@@ -195,13 +239,13 @@ export const TELEGRAM = {
 export const ALERTS = {
   FAILURE_THRESHOLD: 3,
   ALERT_COOLDOWN_MINUTES: 30,
-  ENABLED: process.env.ALERTS_ENABLED !== 'false',
+  ENABLED: _singletonEnv?.ALERTS_ENABLED ?? true,
 } as const;
 
 export const RATE_LIMIT = {
-  MAX_REQUESTS: safeParseInt(process.env.RATE_LIMIT_MAX, 20),
-  WINDOW_MINUTES: safeParseInt(process.env.RATE_LIMIT_WINDOW, 5),
-  ENABLED: process.env.RATE_LIMIT_ENABLED !== 'false',
+  MAX_REQUESTS: _singletonEnv?.RATE_LIMIT_MAX ?? 20,
+  WINDOW_MINUTES: _singletonEnv?.RATE_LIMIT_WINDOW ?? 5,
+  ENABLED: _singletonEnv?.RATE_LIMIT_ENABLED ?? true,
   MESSAGE: '⏳ 請求過於頻繁，請稍後再試。',
 } as const;
 
@@ -212,9 +256,9 @@ export const CONTAINER = {
 } as const;
 
 export const WEBHOOK = {
-  URL: process.env.WEBHOOK_URL || '',
-  EVENTS: (process.env.WEBHOOK_EVENTS || 'error,alert').split(','),
-  ENABLED: !!process.env.WEBHOOK_URL,
+  URL: _singletonEnv?.WEBHOOK_URL ?? '',
+  EVENTS: (_singletonEnv?.WEBHOOK_EVENTS ?? 'error,alert').split(','),
+  ENABLED: !!_singletonEnv?.WEBHOOK_URL,
 } as const;
 
 export const TASK_TRACKING = {
@@ -236,12 +280,12 @@ Keep the summary under 500 words. Output in the same language as the conversatio
 } as const;
 
 export const FAST_PATH = {
-  ENABLED: process.env.FAST_PATH_ENABLED !== 'false',
-  CACHE_TTL_SECONDS: safeParseInt(process.env.CACHE_TTL_SECONDS, 21600),
-  MIN_CACHE_CHARS: safeParseInt(process.env.MIN_CACHE_CHARS, 100000),
+  ENABLED: _singletonEnv?.FAST_PATH_ENABLED ?? true,
+  CACHE_TTL_SECONDS: _singletonEnv?.CACHE_TTL_SECONDS ?? 21600,
+  MIN_CACHE_CHARS: _singletonEnv?.MIN_CACHE_CHARS ?? 100000,
   STREAMING_INTERVAL_MS: 500,
   MAX_HISTORY_MESSAGES: 50,
-  TIMEOUT_MS: safeParseInt(process.env.FAST_PATH_TIMEOUT_MS, 180000),
+  TIMEOUT_MS: _singletonEnv?.FAST_PATH_TIMEOUT_MS ?? 180000,
 } as const;
 
 export const ALLOWED_CONTAINER_ENV_KEYS = [

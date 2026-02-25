@@ -57,36 +57,6 @@ let groupUpdater:
   | null = null;
 let chatJidResolver: ((folder: string) => string | null) | null = null;
 
-// Path traversal protection
-const SAFE_FOLDER_RE = /^[a-zA-Z0-9_-]+$/;
-
-function validateFolder(folder: string): boolean {
-  return SAFE_FOLDER_RE.test(folder);
-}
-
-/**
- * Validate numeric parameter (docId, taskId, chatId, etc.)
- * Returns parsed number or null if invalid
- */
-function validateNumericParam(value: string, name: string): number | null {
-  const num = parseInt(value, 10);
-  if (isNaN(num) || num < 0) return null;
-  return num;
-}
-
-/**
- * Validate request body has required fields
- * Returns error message or null if valid
- */
-function validateBody(body: unknown, requiredFields: string[]): string | null {
-  if (!body || typeof body !== 'object') return 'Invalid request body';
-  const bodyObj = body as Record<string, unknown>;
-  for (const field of requiredFields) {
-    if (bodyObj[field] === undefined) return `Missing required field: ${field}`;
-  }
-  return null;
-}
-
 /**
  * Detect LAN IP for 0.0.0.0 binds
  */
@@ -267,48 +237,19 @@ export function startDashboardServer() {
       get chatJidResolver() {
         return chatJidResolver;
       },
-      validateFolder,
-      validateNumericParam,
       emitDashboardEvent,
     }),
   );
 
-  app.use(
-    '/api',
-    createTasksRouter({
-      validateFolder,
-      validateNumericParam,
-    }),
-  );
+  app.use('/api', createTasksRouter());
 
-  app.use(
-    '/api',
-    createKnowledgeRouter({
-      validateFolder,
-      validateNumericParam,
-    }),
-  );
+  app.use('/api', createKnowledgeRouter());
 
-  app.use(
-    '/api',
-    createCalendarRouter({
-      validateNumericParam,
-    }),
-  );
+  app.use('/api', createCalendarRouter());
 
-  app.use(
-    '/api',
-    createSkillsRouter({
-      validateFolder,
-    }),
-  );
+  app.use('/api', createSkillsRouter());
 
-  app.use(
-    '/api',
-    createAnalyticsRouter({
-      validateFolder,
-    }),
-  );
+  app.use('/api', createAnalyticsRouter());
 
   // ================================================================
   // Static file serving (production dashboard)

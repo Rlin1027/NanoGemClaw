@@ -22,12 +22,11 @@ vi.mock('../logger.js', () => ({
 }));
 
 import request from 'supertest';
-import { createTestApp, createMockDeps } from './helpers/route-test-setup.js';
+import { createTestApp } from './helpers/route-test-setup.js';
 import { createCalendarRouter } from '../routes/calendar.js';
 
 function makeApp() {
-  const { validateNumericParam } = createMockDeps();
-  return createTestApp(createCalendarRouter({ validateNumericParam }));
+  return createTestApp(createCalendarRouter());
 }
 
 describe('routes/calendar', () => {

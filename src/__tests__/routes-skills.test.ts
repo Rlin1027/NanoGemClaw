@@ -12,17 +12,11 @@ vi.mock('../config.js', () => ({
 }));
 
 import request from 'supertest';
-import { createTestApp, createMockDeps } from './helpers/route-test-setup.js';
+import { createTestApp } from './helpers/route-test-setup.js';
 import { createSkillsRouter } from '../routes/skills.js';
 
-function makeApp(validateFolder?: (folder: string) => boolean) {
-  const deps = createMockDeps();
-  if (validateFolder) {
-    deps.validateFolder = vi.fn(validateFolder);
-  }
-  return createTestApp(
-    createSkillsRouter({ validateFolder: deps.validateFolder }),
-  );
+function makeApp() {
+  return createTestApp(createSkillsRouter());
 }
 
 describe('routes/skills', () => {
@@ -63,17 +57,17 @@ describe('routes/skills', () => {
     });
 
     it('returns 400 for invalid folder', async () => {
-      const app = makeApp(() => false);
+      const app = makeApp();
       const res = await request(app).get('/api/groups/bad!folder/skills');
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'Invalid folder' });
+      expect(res.body.error).toMatch(/Invalid folder name/);
     });
 
     it('returns 400 for folder with special chars', async () => {
       const app = makeApp();
       const res = await request(app).get('/api/groups/bad%20folder/skills');
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'Invalid folder' });
+      expect(res.body.error).toMatch(/Invalid folder name/);
     });
   });
 
@@ -97,12 +91,12 @@ describe('routes/skills', () => {
     });
 
     it('returns 400 for invalid folder', async () => {
-      const app = makeApp(() => false);
+      const app = makeApp();
       const res = await request(app)
         .post('/api/groups/bad folder/skills')
         .send({ skillId: 'skill1', enabled: true });
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'Invalid folder' });
+      expect(res.body.error).toMatch(/Invalid folder name/);
     });
 
     it('returns 400 when skillId is missing', async () => {

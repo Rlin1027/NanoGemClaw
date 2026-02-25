@@ -1,14 +1,11 @@
 import { Router } from 'express';
 import path from 'path';
 import { GROUPS_DIR } from '../config.js';
+import { validate } from '../middleware/validate.js';
+import { skillsFolderParams, skillsUpdateBody } from '../schemas/skills.js';
 
-interface SkillsRouterDeps {
-  validateFolder: (folder: string) => boolean;
-}
-
-export function createSkillsRouter(deps: SkillsRouterDeps): Router {
+export function createSkillsRouter(): Router {
   const router = Router();
-  const { validateFolder } = deps;
 
   // GET /api/skills
   router.get('/skills', async (_req, res) => {
@@ -23,53 +20,42 @@ export function createSkillsRouter(deps: SkillsRouterDeps): Router {
   });
 
   // GET /api/groups/:folder/skills
-  router.get('/groups/:folder/skills', async (req, res) => {
-    const { folder } = req.params;
-    if (!validateFolder(folder)) {
-      res.status(400).json({ error: 'Invalid folder' });
-      return;
-    }
-    try {
-      const { getGroupSkills } = await import('../skills.js');
-      const skillIds = getGroupSkills(folder);
-      res.json({ data: skillIds });
-    } catch {
-      res.status(500).json({ error: 'Failed to fetch group skills' });
-    }
-  });
+  router.get(
+    '/groups/:folder/skills',
+    validate({ params: skillsFolderParams }),
+    async (req, res) => {
+      const folder = req.params.folder as string;
+      try {
+        const { getGroupSkills } = await import('../skills.js');
+        const skillIds = getGroupSkills(folder);
+        res.json({ data: skillIds });
+      } catch {
+        res.status(500).json({ error: 'Failed to fetch group skills' });
+      }
+    },
+  );
 
   // POST /api/groups/:folder/skills
-  router.post('/groups/:folder/skills', async (req, res) => {
-    const { folder } = req.params;
-    if (!validateFolder(folder)) {
-      res.status(400).json({ error: 'Invalid folder' });
-      return;
-    }
-    const { skillId, enabled } = req.body;
-    if (
-      !skillId ||
-      typeof skillId !== 'string' ||
-      typeof enabled !== 'boolean'
-    ) {
-      res.status(400).json({
-        error:
-          'Missing or invalid fields: skillId (string) and enabled (boolean) required',
-      });
-      return;
-    }
-    try {
-      const { enableGroupSkill, disableGroupSkill } =
-        await import('../skills.js');
-      if (enabled) {
-        enableGroupSkill(folder, skillId);
-      } else {
-        disableGroupSkill(folder, skillId);
+  router.post(
+    '/groups/:folder/skills',
+    validate({ params: skillsFolderParams, body: skillsUpdateBody }),
+    async (req, res) => {
+      const folder = req.params.folder as string;
+      const { skillId, enabled } = req.body;
+      try {
+        const { enableGroupSkill, disableGroupSkill } =
+          await import('../skills.js');
+        if (enabled) {
+          enableGroupSkill(folder, skillId);
+        } else {
+          disableGroupSkill(folder, skillId);
+        }
+        res.json({ data: { success: true } });
+      } catch {
+        res.status(500).json({ error: 'Failed to update skill' });
       }
-      res.json({ data: { success: true } });
-    } catch {
-      res.status(500).json({ error: 'Failed to update skill' });
-    }
-  });
+    },
+  );
 
   return router;
 }
