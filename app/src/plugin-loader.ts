@@ -208,9 +208,13 @@ async function loadPlugin(
     // Guard: duplicate plugin ID
     const existing = loadedPlugins.find((p) => p.plugin.id === plugin.id);
     if (existing) {
-      logger.warn(
-        { pluginId: plugin.id, source: entry.source },
-        'Duplicate plugin ID, skipping (already loaded from another source)',
+      logger.info(
+        {
+          pluginId: plugin.id,
+          skippedSource: entry.source,
+          skippedOrigin: (entry as DiscoveredPlugin).origin ?? 'manifest',
+        },
+        'Duplicate plugin ID, keeping first loaded instance',
       );
       return;
     }

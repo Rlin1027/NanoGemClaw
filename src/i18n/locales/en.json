@@ -58,5 +58,24 @@
   "executingCode": "⚙️ Executing code...",
   "usingTool": "🔧 Using tool: {toolName}...",
   "responding": "💬 Responding...",
-  "imageGenFailed": "❌ Image generation failed, please try again later."
+  "imageGenFailed": "❌ Image generation failed, please try again later.",
+
+  "triggerModeRequired": "require @trigger prefix",
+  "triggerModeAll": "respond to all messages",
+  "availablePersonasTitle": "🎭 **Available Personas**",
+  "groupNotFound": "❌ Group not found: {group}",
+  "invalidPersonaKey": "❌ Invalid persona key: {key}. Use `/admin persona list`",
+  "personaSet": "✅ Persona for **{group}** set to **{persona}**",
+  "personaUsage": "Usage: `/admin persona list` or `/admin persona set <group_folder> <persona_key>`",
+  "triggerUsage": "Usage: `/admin trigger <group_folder> on|off`\n\n`on` = require @trigger prefix\n`off` = respond to all messages",
+  "triggerModeSet": "✅ **{group}** trigger mode: **{mode}** ({status})",
+  "noGroupsRegistered": "📁 No groups registered.",
+  "groupsLegend": "Legend: 🔍=Search 💬=Custom Prompt 📢=All Messages",
+  "noScheduledTasks": "📅 No scheduled tasks.",
+  "scheduledTasksTitle": "📅 **Scheduled Tasks** ({count})",
+  "exportUsage": "Usage: `/admin export <group_folder>`\nExports conversation as a file.",
+  "noMessagesFound": "📭 No messages found for **{folder}**.",
+  "exportSuccess": "✅ Exported **{count}** messages for **{folder}**.",
+  "languageSwitched": "✅ Language switched to: **{lang}**",
+  "invalidLanguage": "❌ Invalid language. Available: {available}\nCurrent: {current}"
 }

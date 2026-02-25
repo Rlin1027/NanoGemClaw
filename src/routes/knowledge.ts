@@ -111,7 +111,7 @@ export function createKnowledgeRouter(_deps: KnowledgeRouterDeps = {}): Router {
         const { getKnowledgeDoc } = await import('../knowledge.js');
         const { getDatabase } = await import('../db.js');
         const db = getDatabase();
-        const doc = getKnowledgeDoc(db, docId as unknown as number);
+        const doc = getKnowledgeDoc(db, docId);
         if (!doc || doc.group_folder !== folder) {
           res.status(404).json({ error: 'Document not found' });
           return;
@@ -139,17 +139,12 @@ export function createKnowledgeRouter(_deps: KnowledgeRouterDeps = {}): Router {
           await import('../knowledge.js');
         const { getDatabase } = await import('../db.js');
         const db = getDatabase();
-        const doc = getKnowledgeDoc(db, docId as unknown as number);
+        const doc = getKnowledgeDoc(db, docId);
         if (!doc || doc.group_folder !== folder) {
           res.status(404).json({ error: 'Document not found' });
           return;
         }
-        const updated = updateKnowledgeDoc(
-          db,
-          docId as unknown as number,
-          title,
-          content,
-        );
+        const updated = updateKnowledgeDoc(db, docId, title, content);
         res.json({ data: updated });
       } catch {
         res.status(500).json({ error: 'Failed to update document' });
@@ -170,12 +165,12 @@ export function createKnowledgeRouter(_deps: KnowledgeRouterDeps = {}): Router {
           await import('../knowledge.js');
         const { getDatabase } = await import('../db.js');
         const db = getDatabase();
-        const doc = getKnowledgeDoc(db, docId as unknown as number);
+        const doc = getKnowledgeDoc(db, docId);
         if (!doc || doc.group_folder !== folder) {
           res.status(404).json({ error: 'Document not found' });
           return;
         }
-        deleteKnowledgeDoc(db, docId as unknown as number);
+        deleteKnowledgeDoc(db, docId);
         res.json({ data: { success: true } });
       } catch {
         res.status(500).json({ error: 'Failed to delete document' });

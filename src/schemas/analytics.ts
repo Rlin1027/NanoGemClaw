@@ -51,3 +51,8 @@ export const analyticsErrorRateQuery = z.object({
       return Math.min(365, Math.max(1, isNaN(n) ? 30 : n));
     }),
 });
+
+/** GET /api/usage/groups query */
+export const usageGroupsQuery = z.object({
+  since: z.string().optional(),
+});

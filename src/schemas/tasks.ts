@@ -45,6 +45,11 @@ export const updateTaskStatusBody = z.object({
   status: z.enum(['active', 'paused']),
 });
 
+/** DELETE/PUT /api/tasks/:taskId params */
+export const taskIdParams = z.object({
+  taskId: z.string().min(1, 'Task ID is required'),
+});
+
 /** GET /api/tasks/:taskId/runs query */
 export const taskRunsQuery = z.object({
   limit: z

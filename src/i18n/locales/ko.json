@@ -58,5 +58,24 @@
   "executingCode": "⚙️ 코드 실행 중...",
   "usingTool": "🔧 도구 사용 중: {toolName}...",
   "responding": "💬 응답 중...",
-  "imageGenFailed": "❌ 이미지 생성에 실패했습니다. 나중에 다시 시도해주세요."
+  "imageGenFailed": "❌ 이미지 생성에 실패했습니다. 나중에 다시 시도해주세요.",
+
+  "triggerModeRequired": "@trigger 접두사 필요",
+  "triggerModeAll": "모든 메시지에 응답",
+  "availablePersonasTitle": "🎭 **사용 가능한 페르소나**",
+  "groupNotFound": "❌ 그룹을 찾을 수 없음: {group}",
+  "invalidPersonaKey": "❌ 잘못된 페르소나 키: {key}. `/admin persona list`를 사용하세요",
+  "personaSet": "✅ **{group}**의 페르소나가 **{persona}**로 설정되었습니다",
+  "personaUsage": "사용법: `/admin persona list` 또는 `/admin persona set <group_folder> <persona_key>`",
+  "triggerUsage": "사용법: `/admin trigger <group_folder> on|off`\n\n`on` = @trigger 접두사 필요\n`off` = 모든 메시지에 응답",
+  "triggerModeSet": "✅ **{group}** 트리거 모드: **{mode}** ({status})",
+  "noGroupsRegistered": "📁 등록된 그룹이 없습니다.",
+  "groupsLegend": "범례: 🔍=검색 💬=사용자 지정 프롬프트 📢=모든 메시지",
+  "noScheduledTasks": "📅 예약된 작업이 없습니다.",
+  "scheduledTasksTitle": "📅 **예약된 작업** ({count})",
+  "exportUsage": "사용법: `/admin export <group_folder>`\n대화를 파일로 내보냅니다.",
+  "noMessagesFound": "📭 **{folder}**에 메시지가 없습니다.",
+  "exportSuccess": "✅ **{folder}**의 **{count}**개 메시지를 내보냈습니다.",
+  "languageSwitched": "✅ 언어가 **{lang}**(으)로 변경되었습니다",
+  "invalidLanguage": "❌ 잘못된 언어입니다. 사용 가능: {available}\n현재: {current}"
 }

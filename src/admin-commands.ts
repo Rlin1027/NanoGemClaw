@@ -6,6 +6,7 @@ import fs from 'fs';
 
 import { DATA_DIR, MAIN_GROUP_FOLDER } from './config.js';
 import { getAllTasks } from './db.js';
+import type { ConversationExport } from './db/messages.js';
 import { logger } from './logger.js';
 import { getBot, getRegisteredGroups } from './state.js';
 import { saveState } from './group-manager.js';
@@ -39,20 +40,27 @@ interface AdminCommandContext {
   registeredGroups: Record<string, RegisteredGroup>;
   db: {
     getAllTasks: typeof getAllTasks;
-    getUsageStats: any;
-    getAllErrorStates: any;
-    getConversationExport: any;
-    formatExportAsMarkdown: any;
+    getUsageStats: () => {
+      total_requests: number;
+      avg_duration_ms: number;
+      total_prompt_tokens: number;
+      total_response_tokens: number;
+    };
+    getAllErrorStates: () => Array<{
+      group: string;
+      state: { consecutiveFailures: number; lastError: string | null };
+    }>;
+    getConversationExport: (chatId: string) => ConversationExport;
+    formatExportAsMarkdown: (exportData: ConversationExport) => string;
   };
   i18n: {
-    t?: any;
-    tf: any;
-    setLanguage: any;
+    tf: (key: string, params?: Record<string, string | number>) => string;
+    setLanguage: (lang: import('./i18n/index.js').Language) => void;
     availableLanguages: string[];
-    getLanguage: any;
+    getLanguage: () => string;
   };
   personas: {
-    getAllPersonas: any;
+    getAllPersonas: () => Record<string, { name: string; description: string }>;
   };
 }
 
@@ -65,9 +73,11 @@ async function handlePersonaCommand(
 
   if (subCmd === 'list') {
     const allPersonas = ctx.personas.getAllPersonas();
-    return `🎭 **Available Personas**\n\n${Object.entries(allPersonas)
+    return `${ctx.i18n.tf('availablePersonasTitle')}\n\n${Object.entries(
+      allPersonas,
+    )
       .map(
-        ([key, p]: [string, any]) =>
+        ([key, p]: [string, { name: string; description: string }]) =>
           `• \`${key}\`: ${p.name} - ${p.description}`,
       )
       .join('\n')}`;
@@ -86,20 +96,23 @@ async function handlePersonaCommand(
     }
 
     if (!targetId) {
-      return `❌ Group not found: ${targetGroup}`;
+      return ctx.i18n.tf('groupNotFound', { group: targetGroup });
     }
 
     const allPersonas = ctx.personas.getAllPersonas();
     if (!allPersonas[key]) {
-      return `❌ Invalid persona key: ${key}. Use \`/admin persona list\``;
+      return ctx.i18n.tf('invalidPersonaKey', { key });
     }
 
     ctx.registeredGroups[targetId].persona = key;
     saveState();
-    return `✅ Persona for **${ctx.registeredGroups[targetId].name}** set to **${allPersonas[key].name}**`;
+    return ctx.i18n.tf('personaSet', {
+      group: ctx.registeredGroups[targetId].name,
+      persona: allPersonas[key].name,
+    });
   }
 
-  return 'Usage: `/admin persona list` or `/admin persona set <group_folder> <persona_key>`';
+  return ctx.i18n.tf('personaUsage');
 }
 
 async function handleTriggerCommand(
@@ -110,7 +123,7 @@ async function handleTriggerCommand(
   const mode = args[1]?.toLowerCase();
 
   if (!targetGroup || !mode || !['on', 'off'].includes(mode)) {
-    return 'Usage: `/admin trigger <group_folder> on|off`\n\n`on` = require @trigger prefix\n`off` = respond to all messages';
+    return ctx.i18n.tf('triggerUsage');
   }
 
   let targetId: string | undefined;
@@ -122,13 +135,20 @@ async function handleTriggerCommand(
   }
 
   if (!targetId) {
-    return `❌ Group not found: ${targetGroup}`;
+    return ctx.i18n.tf('groupNotFound', { group: targetGroup });
   }
 
   ctx.registeredGroups[targetId].requireTrigger = mode === 'on';
   saveJson(path.join(DATA_DIR, 'registered_groups.json'), ctx.registeredGroups);
-  const status = mode === 'on' ? '需要 @trigger 前綴' : '回應所有訊息';
-  return `✅ **${ctx.registeredGroups[targetId].name}** trigger mode: **${mode}** (${status})`;
+  const status =
+    mode === 'on'
+      ? ctx.i18n.tf('triggerModeRequired')
+      : ctx.i18n.tf('triggerModeAll');
+  return ctx.i18n.tf('triggerModeSet', {
+    group: ctx.registeredGroups[targetId].name,
+    mode,
+    status,
+  });
 }
 
 async function handleStatsCommand(
@@ -162,7 +182,7 @@ async function handleGroupsCommand(
 ): Promise<string> {
   const groups = Object.values(ctx.registeredGroups);
   if (groups.length === 0) {
-    return '📁 No groups registered.';
+    return ctx.i18n.tf('noGroupsRegistered');
   }
 
   const groupList = groups
@@ -180,7 +200,7 @@ async function handleGroupsCommand(
 
 ${groupList}
 
-Legend: 🔍=Search 💬=Custom Prompt 📢=All Messages`;
+${ctx.i18n.tf('groupsLegend')}`;
 }
 
 async function handleTasksCommand(
@@ -189,27 +209,39 @@ async function handleTasksCommand(
 ): Promise<string> {
   const tasks = ctx.db.getAllTasks();
   if (tasks.length === 0) {
-    return '📅 No scheduled tasks.';
+    return ctx.i18n.tf('noScheduledTasks');
   }
 
   const taskList = tasks
     .slice(0, 10)
-    .map((t: any, i: number) => {
-      const status =
-        t.status === 'active' ? '✅' : t.status === 'paused' ? '⏸️' : '✓';
-      const nextRun = t.next_run
-        ? new Date(t.next_run).toLocaleString()
-        : 'N/A';
-      return `${i + 1}. ${status} **${t.group_folder}**
+    .map(
+      (
+        t: {
+          status: string;
+          group_folder: string;
+          prompt: string;
+          schedule_type: string;
+          schedule_value: string;
+          next_run: string | null;
+        },
+        i: number,
+      ) => {
+        const status =
+          t.status === 'active' ? '✅' : t.status === 'paused' ? '⏸️' : '✓';
+        const nextRun = t.next_run
+          ? new Date(t.next_run).toLocaleString()
+          : 'N/A';
+        return `${i + 1}. ${status} **${t.group_folder}**
    📋 ${t.prompt.slice(0, 50)}${t.prompt.length > 50 ? '...' : ''}
    ⏰ ${t.schedule_type}: ${t.schedule_value} | Next: ${nextRun}`;
-    })
+      },
+    )
     .join('\n');
 
   const moreText =
     tasks.length > 10 ? `\n\n_...and ${tasks.length - 10} more tasks_` : '';
 
-  return `📅 **Scheduled Tasks** (${tasks.length})
+  return `${ctx.i18n.tf('scheduledTasksTitle', { count: tasks.length })}
 
 ${taskList}${moreText}`;
 }
@@ -225,16 +257,26 @@ async function handleErrorsCommand(
   }
 
   const errorList = errorStates
-    .filter((e: any) => e.state.consecutiveFailures > 0)
-    .map((e: any) => {
-      const group =
-        ctx.registeredGroups[
-          Object.keys(ctx.registeredGroups).find(
-            (k) => ctx.registeredGroups[k].folder === e.group,
-          ) || ''
-        ];
-      return `• **${group?.name || e.group}**: ${e.state.consecutiveFailures} failures\n  Last: ${e.state.lastError?.slice(0, 80)}...`;
-    })
+    .filter(
+      (e: {
+        group: string;
+        state: { consecutiveFailures: number; lastError: string | null };
+      }) => e.state.consecutiveFailures > 0,
+    )
+    .map(
+      (e: {
+        group: string;
+        state: { consecutiveFailures: number; lastError: string | null };
+      }) => {
+        const group =
+          ctx.registeredGroups[
+            Object.keys(ctx.registeredGroups).find(
+              (k) => ctx.registeredGroups[k].folder === e.group,
+            ) || ''
+          ];
+        return `• **${group?.name || e.group}**: ${e.state.consecutiveFailures} failures\n  Last: ${e.state.lastError?.slice(0, 80)}...`;
+      },
+    )
     .join('\n');
 
   return errorList
@@ -256,7 +298,7 @@ async function handleExportCommand(
 ): Promise<string> {
   const targetFolder = args[0];
   if (!targetFolder) {
-    return 'Usage: `/admin export <group_folder>`\nExports conversation as a file.';
+    return ctx.i18n.tf('exportUsage');
   }
 
   let targetChatId: string | undefined;
@@ -268,13 +310,13 @@ async function handleExportCommand(
   }
 
   if (!targetChatId) {
-    return `❌ Group not found: ${targetFolder}`;
+    return ctx.i18n.tf('groupNotFound', { group: targetFolder });
   }
 
   const exportData = ctx.db.getConversationExport(targetChatId);
 
   if (exportData.messageCount === 0) {
-    return `📭 No messages found for **${targetFolder}**.`;
+    return ctx.i18n.tf('noMessagesFound', { folder: targetFolder });
   }
 
   const md = ctx.db.formatExportAsMarkdown(exportData);
@@ -306,7 +348,10 @@ async function handleExportCommand(
     }
   }
 
-  return `✅ Exported **${exportData.messageCount}** messages for **${targetFolder}**.`;
+  return ctx.i18n.tf('exportSuccess', {
+    count: exportData.messageCount,
+    folder: targetFolder,
+  });
 }
 
 async function handleLanguageCommand(
@@ -318,9 +363,12 @@ async function handleLanguageCommand(
   if (ctx.i18n.availableLanguages.includes(lang)) {
     ctx.i18n.setLanguage(lang);
     saveState();
-    return `✅ Language switched to: **${lang}**`;
+    return ctx.i18n.tf('languageSwitched', { lang });
   }
-  return `❌ Invalid language. Available: ${ctx.i18n.availableLanguages.join(', ')}\nCurrent: ${ctx.i18n.getLanguage()}`;
+  return ctx.i18n.tf('invalidLanguage', {
+    available: ctx.i18n.availableLanguages.join(', '),
+    current: ctx.i18n.getLanguage(),
+  });
 }
 
 async function handleHelpCommand(

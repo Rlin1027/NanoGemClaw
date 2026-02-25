@@ -11,6 +11,7 @@ import {
   analyticsTimeseriesQuery,
   analyticsTokenRankingQuery,
   analyticsErrorRateQuery,
+  usageGroupsQuery,
 } from '../schemas/analytics.js';
 import { folderParam } from '../schemas/shared.js';
 import { z } from 'zod';
@@ -153,15 +154,21 @@ export function createAnalyticsRouter(_deps: AnalyticsRouterDeps = {}): Router {
   );
 
   // GET /api/usage/groups
-  router.get('/usage/groups', async (req, res) => {
-    try {
-      const { getUsageByGroup } = await import('../db.js');
-      const since = req.query.since as string | undefined;
-      res.json({ data: getUsageByGroup(since) });
-    } catch {
-      res.status(500).json({ error: 'Failed to fetch usage by group' });
-    }
-  });
+  router.get(
+    '/usage/groups',
+    validate({ query: usageGroupsQuery }),
+    async (req, res) => {
+      try {
+        const { getUsageByGroup } = await import('../db.js');
+        const { since } = req.query as unknown as z.infer<
+          typeof usageGroupsQuery
+        >;
+        res.json({ data: getUsageByGroup(since) });
+      } catch {
+        res.status(500).json({ error: 'Failed to fetch usage by group' });
+      }
+    },
+  );
 
   // GET /api/analytics/timeseries
   router.get(

@@ -7,6 +7,7 @@ import {
   updateTaskBody,
   updateTaskStatusBody,
   taskRunsQuery,
+  taskIdParams,
 } from '../schemas/tasks.js';
 import { paginationQuery } from '../schemas/shared.js';
 import type { z } from 'zod';
@@ -78,116 +79,111 @@ export function createTasksRouter(_deps: TasksRouterDeps = {}): Router {
   );
 
   // POST /api/tasks
-  router.post('/tasks', async (req, res) => {
-    try {
-      const { createTask } = await import('../db.js');
-      const { CronExpressionParser } = await import('cron-parser');
+  router.post(
+    '/tasks',
+    validate({ body: createTaskBody }),
+    async (req, res) => {
+      try {
+        const { createTask } = await import('../db.js');
+        const { CronExpressionParser } = await import('cron-parser');
 
-      const {
-        group_folder,
-        prompt,
-        schedule_type,
-        schedule_value,
-        context_mode,
-        natural_schedule,
-      } = req.body;
+        const {
+          group_folder,
+          prompt,
+          schedule_type,
+          schedule_value,
+          context_mode,
+          natural_schedule,
+        } = req.body as z.infer<typeof createTaskBody>;
 
-      // Parse natural schedule if provided
-      let effectiveScheduleType = schedule_type;
-      let effectiveScheduleValue = schedule_value;
+        // Parse natural schedule if provided
+        let effectiveScheduleType = schedule_type;
+        let effectiveScheduleValue = schedule_value;
 
-      if (!schedule_type && !schedule_value && natural_schedule) {
-        const { parseNaturalSchedule } = await import('../natural-schedule.js');
-        const parsed = parseNaturalSchedule(natural_schedule);
-        if (!parsed) {
-          res
-            .status(400)
-            .json({ error: 'Could not parse natural schedule text' });
+        if (!schedule_type && !schedule_value && natural_schedule) {
+          const { parseNaturalSchedule } =
+            await import('../natural-schedule.js');
+          const parsed = parseNaturalSchedule(natural_schedule);
+          if (!parsed) {
+            res
+              .status(400)
+              .json({ error: 'Could not parse natural schedule text' });
+            return;
+          }
+          effectiveScheduleType = parsed.schedule_type;
+          effectiveScheduleValue = parsed.schedule_value;
+        }
+
+        // At this point Zod refine guarantees effectiveScheduleType/Value are set
+        const resolvedScheduleType = effectiveScheduleType as
+          | 'cron'
+          | 'interval'
+          | 'once';
+        const resolvedScheduleValue = effectiveScheduleValue as string;
+
+        // Calculate next_run
+        let next_run: string | null = null;
+        if (resolvedScheduleType === 'cron') {
+          try {
+            const interval = CronExpressionParser.parse(resolvedScheduleValue);
+            next_run = interval.next().toISOString();
+          } catch {
+            res.status(400).json({ error: 'Invalid cron expression' });
+            return;
+          }
+        } else if (resolvedScheduleType === 'interval') {
+          const ms = parseInt(resolvedScheduleValue, 10);
+          if (isNaN(ms) || ms < 0 || ms <= 0) {
+            res.status(400).json({ error: 'Invalid interval value' });
+            return;
+          }
+          next_run = new Date(Date.now() + ms).toISOString();
+        } else if (resolvedScheduleType === 'once') {
+          const scheduled = new Date(resolvedScheduleValue);
+          if (isNaN(scheduled.getTime())) {
+            res.status(400).json({ error: 'Invalid date' });
+            return;
+          }
+          next_run = scheduled.toISOString();
+        } else {
+          res.status(400).json({
+            error: 'Invalid schedule_type. Must be: cron, interval, or once',
+          });
           return;
         }
-        effectiveScheduleType = parsed.schedule_type;
-        effectiveScheduleValue = parsed.schedule_value;
-      }
 
-      if (
-        !group_folder ||
-        !prompt ||
-        !effectiveScheduleType ||
-        !effectiveScheduleValue
-      ) {
-        res.status(400).json({
-          error:
-            'Missing required fields: group_folder, prompt, schedule_type, schedule_value',
+        const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+        createTask({
+          id: taskId,
+          group_folder,
+          chat_jid: '', // Will be resolved by scheduler
+          prompt,
+          schedule_type: resolvedScheduleType,
+          schedule_value: resolvedScheduleValue,
+          context_mode: (context_mode as 'group' | 'isolated') || 'isolated',
+          next_run,
+          status: 'active',
+          created_at: new Date().toISOString(),
         });
-        return;
+
+        res.status(201).json({ data: { id: taskId } });
+      } catch {
+        res.status(500).json({ error: 'Failed to create task' });
       }
-
-      // Validate group_folder
-      if (!/^[a-zA-Z0-9_-]+$/.test(group_folder)) {
-        res.status(400).json({ error: 'Invalid group folder' });
-        return;
-      }
-
-      // Calculate next_run
-      let next_run: string | null = null;
-      if (effectiveScheduleType === 'cron') {
-        try {
-          const interval = CronExpressionParser.parse(effectiveScheduleValue);
-          next_run = interval.next().toISOString();
-        } catch {
-          res.status(400).json({ error: 'Invalid cron expression' });
-          return;
-        }
-      } else if (effectiveScheduleType === 'interval') {
-        const ms = parseInt(effectiveScheduleValue, 10);
-        if (isNaN(ms) || ms < 0 || ms <= 0) {
-          res.status(400).json({ error: 'Invalid interval value' });
-          return;
-        }
-        next_run = new Date(Date.now() + ms).toISOString();
-      } else if (effectiveScheduleType === 'once') {
-        const scheduled = new Date(effectiveScheduleValue);
-        if (isNaN(scheduled.getTime())) {
-          res.status(400).json({ error: 'Invalid date' });
-          return;
-        }
-        next_run = scheduled.toISOString();
-      } else {
-        res.status(400).json({
-          error: 'Invalid schedule_type. Must be: cron, interval, or once',
-        });
-        return;
-      }
-
-      const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-      createTask({
-        id: taskId,
-        group_folder,
-        chat_jid: '', // Will be resolved by scheduler
-        prompt,
-        schedule_type: effectiveScheduleType,
-        schedule_value: effectiveScheduleValue,
-        context_mode: context_mode || 'isolated',
-        next_run,
-        status: 'active',
-        created_at: new Date().toISOString(),
-      });
-
-      res.status(201).json({ data: { id: taskId } });
-    } catch {
-      res.status(500).json({ error: 'Failed to create task' });
-    }
-  });
+    },
+  );
 
   // PUT /api/tasks/:taskId
   router.put(
     '/tasks/:taskId',
-    validate({ body: updateTaskBody }),
+    validate({ params: taskIdParams, body: updateTaskBody }),
     async (req, res) => {
       try {
         const { updateTask, getTaskById } = await import('../db.js');
-        const taskId = String(req.params.taskId);
+        const { taskId } = req.params as unknown as z.infer<
+          typeof taskIdParams
+        >;
 
         const task = getTaskById(taskId);
         if (!task) {
@@ -238,32 +234,40 @@ export function createTasksRouter(_deps: TasksRouterDeps = {}): Router {
   );
 
   // DELETE /api/tasks/:taskId
-  router.delete('/tasks/:taskId', async (req, res) => {
-    try {
-      const { deleteTask, getTaskById } = await import('../db.js');
-      const taskId = String(req.params.taskId);
+  router.delete(
+    '/tasks/:taskId',
+    validate({ params: taskIdParams }),
+    async (req, res) => {
+      try {
+        const { deleteTask, getTaskById } = await import('../db.js');
+        const { taskId } = req.params as unknown as z.infer<
+          typeof taskIdParams
+        >;
 
-      const task = getTaskById(taskId);
-      if (!task) {
-        res.status(404).json({ error: 'Task not found' });
-        return;
+        const task = getTaskById(taskId);
+        if (!task) {
+          res.status(404).json({ error: 'Task not found' });
+          return;
+        }
+
+        deleteTask(taskId);
+        res.json({ data: { success: true } });
+      } catch {
+        res.status(500).json({ error: 'Failed to delete task' });
       }
-
-      deleteTask(taskId);
-      res.json({ data: { success: true } });
-    } catch {
-      res.status(500).json({ error: 'Failed to delete task' });
-    }
-  });
+    },
+  );
 
   // PUT /api/tasks/:taskId/status
   router.put(
     '/tasks/:taskId/status',
-    validate({ body: updateTaskStatusBody }),
+    validate({ params: taskIdParams, body: updateTaskStatusBody }),
     async (req, res) => {
       try {
         const { updateTask, getTaskById } = await import('../db.js');
-        const taskId = String(req.params.taskId);
+        const { taskId } = req.params as unknown as z.infer<
+          typeof taskIdParams
+        >;
         const { status } = req.body as z.infer<typeof updateTaskStatusBody>;
 
         const task = getTaskById(taskId);
@@ -283,11 +287,13 @@ export function createTasksRouter(_deps: TasksRouterDeps = {}): Router {
   // GET /api/tasks/:taskId/runs
   router.get(
     '/tasks/:taskId/runs',
-    validate({ query: taskRunsQuery }),
+    validate({ params: taskIdParams, query: taskRunsQuery }),
     async (req, res) => {
       try {
         const { getTaskRunLogs } = await import('../db.js');
-        const taskId = String(req.params.taskId);
+        const { taskId } = req.params as unknown as z.infer<
+          typeof taskIdParams
+        >;
         const { limit } = req.query as unknown as z.infer<typeof taskRunsQuery>;
 
         if (limit === null) {

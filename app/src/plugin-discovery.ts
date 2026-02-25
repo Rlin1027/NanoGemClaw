@@ -237,7 +237,8 @@ export function mergePluginSources(
 
   // 1. Manifest entries first (with origin: 'manifest')
   for (const entry of manifestEntries) {
-    const normalizedSource = entry.source.startsWith('.')
+    const isPathLike = entry.source.startsWith('.') || path.isAbsolute(entry.source);
+    const normalizedSource = isPathLike
       ? path.resolve(entry.source)
       : entry.source;
     seenSources.add(normalizedSource);

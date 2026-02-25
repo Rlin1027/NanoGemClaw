@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import type { z } from 'zod';
 import { logger } from '../logger.js';
 import { validate } from '../middleware/validate.js';
 import {
@@ -62,7 +63,9 @@ export function createCalendarRouter(): Router {
         const { getCalendarConfigs, fetchCalendarEvents } =
           await import('../google-calendar.js');
 
-        const days = req.query.days as unknown as number;
+        const { days } = req.query as unknown as z.infer<
+          typeof calendarEventsQuery
+        >;
         const configs = getCalendarConfigs();
 
         const allEvents = [];

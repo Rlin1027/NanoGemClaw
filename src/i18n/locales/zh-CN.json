@@ -58,5 +58,24 @@
   "executingCode": "⚙️ 正在执行程序...",
   "usingTool": "🔧 使用工具: {toolName}...",
   "responding": "💬 回应中...",
-  "imageGenFailed": "❌ 图片生成失败，请稍后再试。"
+  "imageGenFailed": "❌ 图片生成失败，请稍后再试。",
+
+  "triggerModeRequired": "需要 @trigger 前缀",
+  "triggerModeAll": "回复所有消息",
+  "availablePersonasTitle": "🎭 **可用人设**",
+  "groupNotFound": "❌ 未找到群组：{group}",
+  "invalidPersonaKey": "❌ 无效的人设 key：{key}。请使用 `/admin persona list`",
+  "personaSet": "✅ **{group}** 的人设已设为 **{persona}**",
+  "personaUsage": "用法：`/admin persona list` 或 `/admin persona set <group_folder> <persona_key>`",
+  "triggerUsage": "用法：`/admin trigger <group_folder> on|off`\n\n`on` = 需要 @trigger 前缀\n`off` = 回复所有消息",
+  "triggerModeSet": "✅ **{group}** 触发模式：**{mode}**（{status}）",
+  "noGroupsRegistered": "📁 暂无已注册群组。",
+  "groupsLegend": "图示说明：🔍=搜索 💬=自定义提示 📢=回复所有消息",
+  "noScheduledTasks": "📅 暂无定时任务。",
+  "scheduledTasksTitle": "📅 **定时任务**（{count}）",
+  "exportUsage": "用法：`/admin export <group_folder>`\n导出对话记录为文件。",
+  "noMessagesFound": "📭 **{folder}** 没有消息记录。",
+  "exportSuccess": "✅ 已导出 **{folder}** 的 **{count}** 条消息。",
+  "languageSwitched": "✅ 语言已切换为：**{lang}**",
+  "invalidLanguage": "❌ 无效的语言。可用语言：{available}\n当前：{current}"
 }

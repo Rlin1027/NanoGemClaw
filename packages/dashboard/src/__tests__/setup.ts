@@ -9,10 +9,8 @@ const { resolveT } = vi.hoisted(() => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const path = require('path') as typeof import('path');
 
-    // Absolute path to en locale dir — robust against cwd differences
-    const enDir = path.resolve(
-        '/Users/redlin/Desktop/nanoGemClaw/packages/dashboard/src/i18n/locales/en',
-    );
+    // Relative path to en locale dir — works on any machine
+    const enDir = path.resolve(__dirname, '../i18n/locales/en');
 
     const en: Record<string, Record<string, string>> = {};
 

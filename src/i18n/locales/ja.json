@@ -58,5 +58,24 @@
   "executingCode": "⚙️ コードを実行中...",
   "usingTool": "🔧 ツールを使用中: {toolName}...",
   "responding": "💬 応答中...",
-  "imageGenFailed": "❌ 画像生成に失敗しました。後でもう一度お試しください。"
+  "imageGenFailed": "❌ 画像生成に失敗しました。後でもう一度お試しください。",
+
+  "triggerModeRequired": "@trigger プレフィックスが必要",
+  "triggerModeAll": "すべてのメッセージに応答",
+  "availablePersonasTitle": "🎭 **利用可能なペルソナ**",
+  "groupNotFound": "❌ グループが見つかりません：{group}",
+  "invalidPersonaKey": "❌ 無効なペルソナキー：{key}。`/admin persona list` を使用してください",
+  "personaSet": "✅ **{group}** のペルソナを **{persona}** に設定しました",
+  "personaUsage": "使い方：`/admin persona list` または `/admin persona set <group_folder> <persona_key>`",
+  "triggerUsage": "使い方：`/admin trigger <group_folder> on|off`\n\n`on` = @trigger プレフィックスが必要\n`off` = すべてのメッセージに応答",
+  "triggerModeSet": "✅ **{group}** トリガーモード：**{mode}**（{status}）",
+  "noGroupsRegistered": "📁 登録されたグループはありません。",
+  "groupsLegend": "凡例：🔍=検索 💬=カスタムプロンプト 📢=全メッセージ",
+  "noScheduledTasks": "📅 スケジュールされたタスクはありません。",
+  "scheduledTasksTitle": "📅 **スケジュールタスク**（{count}）",
+  "exportUsage": "使い方：`/admin export <group_folder>`\n会話をファイルとしてエクスポートします。",
+  "noMessagesFound": "📭 **{folder}** のメッセージは見つかりませんでした。",
+  "exportSuccess": "✅ **{folder}** の **{count}** 件のメッセージをエクスポートしました。",
+  "languageSwitched": "✅ 言語を **{lang}** に切り替えました",
+  "invalidLanguage": "❌ 無効な言語です。利用可能：{available}\n現在：{current}"
 }
