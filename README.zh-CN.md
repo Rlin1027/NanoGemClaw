@@ -15,7 +15,10 @@
   <a href="README.zh-TW.md">繁體中文</a> |
   <strong>简体中文</strong> |
   <a href="README.es.md">Español</a> |
-  <a href="README.ja.md">日本語</a>
+  <a href="README.ja.md">日本語</a> |
+  <a href="README.ko.md">한국어</a> |
+  <a href="README.pt.md">Português</a> |
+  <a href="README.ru.md">Русский</a>
 </p>
 
 ---
