@@ -19,6 +19,8 @@ export type {
   MessageHookContext,
   PluginRegistryEntry,
   PluginManifest,
+  PluginOrigin,
+  DiscoveredPlugin,
 } from '@nanogemclaw/plugin-api';
 
 export interface LoadedPlugin {

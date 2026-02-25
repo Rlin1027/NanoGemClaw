@@ -4,16 +4,19 @@
  * This is a minimal example plugin demonstrating the NanoPlugin interface.
  * Copy this directory, rename it, and customize to build your own plugin.
  *
- * To register this plugin, add it to your data/plugins.json:
- * {
- *   "plugins": [
- *     {
- *       "source": "./path/to/your-plugin/src/index.ts",
- *       "config": { "greeting": "Hello" },
- *       "enabled": true
- *     }
- *   ]
- * }
+ * To use this plugin, either:
+ * 1. Place it in the plugins/ directory (auto-discovered if package.json lists
+ *    @nanogemclaw/plugin-api as a dependency), OR
+ * 2. Register it manually in data/plugins.json:
+ *    {
+ *      "plugins": [
+ *        {
+ *          "source": "./path/to/your-plugin/src/index.ts",
+ *          "config": { "greeting": "Hello" },
+ *          "enabled": true
+ *        }
+ *      ]
+ *    }
  */
 
 import type {

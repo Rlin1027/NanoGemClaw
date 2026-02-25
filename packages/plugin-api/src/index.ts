@@ -171,6 +171,19 @@ export interface PluginRegistryEntry {
 
 export interface PluginManifest {
   plugins: PluginRegistryEntry[];
+  /** Set to true to disable auto-discovery (default: false) */
+  disableDiscovery?: boolean;
+}
+
+// ============================================================================
+// Plugin Discovery
+// ============================================================================
+
+export type PluginOrigin = 'directory' | 'npm-scope' | 'manifest';
+
+export interface DiscoveredPlugin extends PluginRegistryEntry {
+  /** How this plugin was found */
+  origin: PluginOrigin;
 }
 
 // Re-export IpcHandler from core for convenience (plugins implementing IPC handlers may need it)

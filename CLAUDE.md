@@ -88,6 +88,8 @@ groups/                   # Per-group folders with conversation context
 
 **Plugin system** — 6 extension points: Gemini Tools (permission: `'main' | 'any'`), Message Hooks (`before/after/onError`), Express Routes (`/api/plugins/{id}/`), IPC Handlers, Background Services, Dashboard extensions. Lifecycle: `init() → start() → stop()` (reverse shutdown). See `examples/plugin-skeleton/`.
 
+**Plugin discovery** — Auto-discovers plugins from `plugins/` directory (packages with `@nanogemclaw/plugin-api` dependency) and `node_modules/@nanogemclaw-plugin/*` scope. `data/plugins.json` serves as override layer (disable, configure, add non-conventional sources). Set `"disableDiscovery": true` in manifest to use manifest-only mode.
+
 **Monorepo workspaces** — `packages/*` via npm workspaces. Each package exports through `index.ts`. `@nanogemclaw/gemini` and `@nanogemclaw/plugin-api` are independently reusable.
 
 ## Conventions

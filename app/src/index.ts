@@ -19,6 +19,7 @@ import { logger } from '@nanogemclaw/core/logger';
 
 import {
   loadPlugins,
+  discoverAndLoadPlugins,
   initPlugins,
   startPlugins,
   stopPlugins,
@@ -68,15 +69,23 @@ async function main(): Promise<void> {
 
   // Load plugins
   const manifestPath = path.join(DATA_DIR, 'plugins.json');
+  const projectRoot = path.resolve(DATA_DIR, '..');
   const { getRegisteredGroups } = await import('../../src/state.js');
   const { sendMessage } = await import('../../src/telegram-helpers.js');
 
-  await loadPlugins(manifestPath, {
-    getDatabase: () => dbInstance,
-    sendMessage,
-    getGroups: () => getRegisteredGroups() as any,
-    dataDir: DATA_DIR,
-  });
+  await discoverAndLoadPlugins(
+    manifestPath,
+    {
+      getDatabase: () => dbInstance,
+      sendMessage,
+      getGroups: () => getRegisteredGroups() as any,
+      dataDir: DATA_DIR,
+    },
+    {
+      pluginsDir: path.join(projectRoot, 'plugins'),
+      nodeModulesDir: path.join(projectRoot, 'node_modules'),
+    },
+  );
 
   // Register plugin IPC handlers
   const pluginIpcHandlers = getPluginIpcHandlers();

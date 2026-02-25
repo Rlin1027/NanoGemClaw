@@ -8,8 +8,18 @@
 import path from 'path';
 import fs from 'fs';
 import { logger } from '@nanogemclaw/core/logger';
-import type { NanoPlugin, PluginApi, PluginManifest, PluginRegistryEntry } from '@nanogemclaw/plugin-api';
-import type { LoadedPlugin } from './plugin-types.js';
+import type {
+  NanoPlugin,
+  PluginApi,
+  PluginManifest,
+  PluginRegistryEntry,
+} from '@nanogemclaw/plugin-api';
+import type { LoadedPlugin, DiscoveredPlugin } from './plugin-types.js';
+import {
+  discoverDirectoryPlugins,
+  discoverNpmScopePlugins,
+  mergePluginSources,
+} from './plugin-discovery.js';
 
 // ============================================================================
 // Registry
@@ -32,10 +42,14 @@ function createPluginApi(
   },
 ): PluginApi {
   const pluginLogger = {
-    info: (msg: string, ...args: unknown[]) => logger.info({ plugin: pluginId }, msg, ...args),
-    warn: (msg: string, ...args: unknown[]) => logger.warn({ plugin: pluginId }, msg, ...args),
-    error: (msg: string, ...args: unknown[]) => logger.error({ plugin: pluginId }, msg, ...args),
-    debug: (msg: string, ...args: unknown[]) => logger.debug({ plugin: pluginId }, msg, ...args),
+    info: (msg: string, ...args: unknown[]) =>
+      logger.info({ plugin: pluginId }, msg, ...args),
+    warn: (msg: string, ...args: unknown[]) =>
+      logger.warn({ plugin: pluginId }, msg, ...args),
+    error: (msg: string, ...args: unknown[]) =>
+      logger.error({ plugin: pluginId }, msg, ...args),
+    debug: (msg: string, ...args: unknown[]) =>
+      logger.debug({ plugin: pluginId }, msg, ...args),
   };
 
   const pluginDataDir = path.join(dataDir, 'plugins', pluginId);
@@ -65,7 +79,10 @@ export async function loadPlugins(
   },
 ): Promise<void> {
   if (!fs.existsSync(manifestPath)) {
-    logger.debug({ manifestPath }, 'No plugin manifest found, skipping plugin load');
+    logger.debug(
+      { manifestPath },
+      'No plugin manifest found, skipping plugin load',
+    );
     return;
   }
 
@@ -90,6 +107,83 @@ export async function loadPlugins(
   logger.info({ count: loadedPlugins.length }, 'Plugins loaded');
 }
 
+// ============================================================================
+// Discover and load plugins (manifest + auto-discovery)
+// ============================================================================
+
+export interface DiscoverAndLoadOptions {
+  /** Directory to scan for local plugins. Default: undefined (skip) */
+  pluginsDir?: string;
+  /** node_modules directory for scope scanning. Default: undefined (skip) */
+  nodeModulesDir?: string;
+}
+
+export async function discoverAndLoadPlugins(
+  manifestPath: string,
+  deps: {
+    getDatabase(): unknown;
+    sendMessage(chatJid: string, text: string): Promise<void>;
+    getGroups(): Record<string, import('@nanogemclaw/core').RegisteredGroup>;
+    dataDir: string;
+  },
+  options?: DiscoverAndLoadOptions,
+): Promise<void> {
+  // 1. Read manifest (tolerant of missing file)
+  let manifest: PluginManifest = { plugins: [] };
+  if (fs.existsSync(manifestPath)) {
+    try {
+      const raw = fs.readFileSync(manifestPath, 'utf-8');
+      manifest = JSON.parse(raw) as PluginManifest;
+    } catch (err) {
+      logger.error({ err, manifestPath }, 'Failed to parse plugin manifest');
+      return;
+    }
+  }
+
+  // 2. Auto-discover (unless disabled by manifest or no dirs provided)
+  let directoryPlugins: DiscoveredPlugin[] = [];
+  let npmScopePlugins: DiscoveredPlugin[] = [];
+
+  if (!manifest.disableDiscovery) {
+    if (options?.pluginsDir) {
+      directoryPlugins = discoverDirectoryPlugins(options.pluginsDir);
+    }
+    if (options?.nodeModulesDir) {
+      npmScopePlugins = discoverNpmScopePlugins(options.nodeModulesDir);
+    }
+  }
+
+  // 3. Merge: manifest wins on collision
+  const merged = mergePluginSources(
+    manifest.plugins,
+    directoryPlugins,
+    npmScopePlugins,
+  );
+
+  // 4. Log discovery summary
+  const counts: Record<string, number> = {
+    manifest: 0,
+    directory: 0,
+    'npm-scope': 0,
+  };
+  for (const p of merged) counts[p.origin]++;
+  logger.info(counts, 'Plugin discovery complete');
+
+  // 5. Load each plugin
+  for (const entry of merged) {
+    if (!entry.enabled) {
+      logger.debug(
+        { source: entry.source, origin: entry.origin },
+        'Plugin disabled, skipping',
+      );
+      continue;
+    }
+    await loadPlugin(entry, deps);
+  }
+
+  logger.info({ count: loadedPlugins.length }, 'Plugins loaded');
+}
+
 async function loadPlugin(
   entry: PluginRegistryEntry,
   deps: {
@@ -104,7 +198,20 @@ async function loadPlugin(
     const plugin: NanoPlugin = mod.default ?? mod.plugin;
 
     if (!plugin || !plugin.id) {
-      logger.warn({ source: entry.source }, 'Invalid plugin: missing id or default export');
+      logger.warn(
+        { source: entry.source },
+        'Invalid plugin: missing id or default export',
+      );
+      return;
+    }
+
+    // Guard: duplicate plugin ID
+    const existing = loadedPlugins.find((p) => p.plugin.id === plugin.id);
+    if (existing) {
+      logger.warn(
+        { pluginId: plugin.id, source: entry.source },
+        'Duplicate plugin ID, skipping (already loaded from another source)',
+      );
       return;
     }
 
@@ -134,11 +241,17 @@ export async function initPlugins(): Promise<void> {
       const result = await loaded.plugin.init(loaded.api);
       if (result === false) {
         loaded.enabled = false;
-        logger.warn({ pluginId: loaded.plugin.id }, 'Plugin init returned false, disabling');
+        logger.warn(
+          { pluginId: loaded.plugin.id },
+          'Plugin init returned false, disabling',
+        );
       }
     } catch (err) {
       loaded.enabled = false;
-      logger.error({ err, pluginId: loaded.plugin.id }, 'Plugin init failed, disabling');
+      logger.error(
+        { err, pluginId: loaded.plugin.id },
+        'Plugin init failed, disabling',
+      );
     }
   }
 }
@@ -172,57 +285,79 @@ export async function stopPlugins(): Promise<void> {
 // ============================================================================
 
 export function getLoadedPlugins(): LoadedPlugin[] {
-  return loadedPlugins.filter(p => p.enabled);
+  return loadedPlugins.filter((p) => p.enabled);
 }
 
 /**
  * Get all Gemini tool contributions from all enabled plugins.
  */
-export function getPluginGeminiTools(): Array<import('@nanogemclaw/plugin-api').GeminiToolContribution> {
-  return getLoadedPlugins().flatMap(p => p.plugin.geminiTools ?? []);
+export function getPluginGeminiTools(): Array<
+  import('@nanogemclaw/plugin-api').GeminiToolContribution
+> {
+  return getLoadedPlugins().flatMap((p) => p.plugin.geminiTools ?? []);
 }
 
 /**
  * Get all IPC handler contributions from all enabled plugins.
  */
-export function getPluginIpcHandlers(): Array<import('@nanogemclaw/plugin-api').IpcHandlerContribution> {
-  return getLoadedPlugins().flatMap(p => p.plugin.ipcHandlers ?? []);
+export function getPluginIpcHandlers(): Array<
+  import('@nanogemclaw/plugin-api').IpcHandlerContribution
+> {
+  return getLoadedPlugins().flatMap((p) => p.plugin.ipcHandlers ?? []);
 }
 
 /**
  * Get all route contributions from all enabled plugins.
  */
-export function getPluginRoutes(): Array<{ pluginId: string; contribution: import('@nanogemclaw/plugin-api').RouteContribution }> {
-  return getLoadedPlugins().flatMap(p =>
-    (p.plugin.routes ?? []).map(r => ({ pluginId: p.plugin.id, contribution: r }))
+export function getPluginRoutes(): Array<{
+  pluginId: string;
+  contribution: import('@nanogemclaw/plugin-api').RouteContribution;
+}> {
+  return getLoadedPlugins().flatMap((p) =>
+    (p.plugin.routes ?? []).map((r) => ({
+      pluginId: p.plugin.id,
+      contribution: r,
+    })),
   );
 }
 
 /**
  * Get all before-message hooks from enabled plugins.
  */
-export function getBeforeMessageHooks(): Array<import('@nanogemclaw/plugin-api').BeforeMessageHook> {
+export function getBeforeMessageHooks(): Array<
+  import('@nanogemclaw/plugin-api').BeforeMessageHook
+> {
   return getLoadedPlugins()
-    .map(p => p.plugin.hooks?.beforeMessage)
-    .filter((h): h is import('@nanogemclaw/plugin-api').BeforeMessageHook => !!h);
+    .map((p) => p.plugin.hooks?.beforeMessage)
+    .filter(
+      (h): h is import('@nanogemclaw/plugin-api').BeforeMessageHook => !!h,
+    );
 }
 
 /**
  * Get all after-message hooks from enabled plugins.
  */
-export function getAfterMessageHooks(): Array<import('@nanogemclaw/plugin-api').AfterMessageHook> {
+export function getAfterMessageHooks(): Array<
+  import('@nanogemclaw/plugin-api').AfterMessageHook
+> {
   return getLoadedPlugins()
-    .map(p => p.plugin.hooks?.afterMessage)
-    .filter((h): h is import('@nanogemclaw/plugin-api').AfterMessageHook => !!h);
+    .map((p) => p.plugin.hooks?.afterMessage)
+    .filter(
+      (h): h is import('@nanogemclaw/plugin-api').AfterMessageHook => !!h,
+    );
 }
 
 /**
  * Get all on-error hooks from enabled plugins.
  */
-export function getOnMessageErrorHooks(): Array<import('@nanogemclaw/plugin-api').OnMessageErrorHook> {
+export function getOnMessageErrorHooks(): Array<
+  import('@nanogemclaw/plugin-api').OnMessageErrorHook
+> {
   return getLoadedPlugins()
-    .map(p => p.plugin.hooks?.onMessageError)
-    .filter((h): h is import('@nanogemclaw/plugin-api').OnMessageErrorHook => !!h);
+    .map((p) => p.plugin.hooks?.onMessageError)
+    .filter(
+      (h): h is import('@nanogemclaw/plugin-api').OnMessageErrorHook => !!h,
+    );
 }
 
 /**
@@ -244,7 +379,9 @@ export async function runBeforeMessageHooks(
  * Execute afterMessage hooks (fire-and-forget, errors logged).
  */
 export async function runAfterMessageHooks(
-  context: import('@nanogemclaw/plugin-api').MessageHookContext & { reply: string },
+  context: import('@nanogemclaw/plugin-api').MessageHookContext & {
+    reply: string;
+  },
 ): Promise<void> {
   for (const hook of getAfterMessageHooks()) {
     try {
@@ -259,7 +396,9 @@ export async function runAfterMessageHooks(
  * Execute onMessageError hooks, returning first non-null fallback reply.
  */
 export async function runOnMessageErrorHooks(
-  context: import('@nanogemclaw/plugin-api').MessageHookContext & { error: Error },
+  context: import('@nanogemclaw/plugin-api').MessageHookContext & {
+    error: Error;
+  },
 ): Promise<string | void> {
   for (const hook of getOnMessageErrorHooks()) {
     try {
@@ -281,7 +420,9 @@ export async function dispatchPluginToolCall(
   context: import('@nanogemclaw/plugin-api').ToolExecutionContext,
 ): Promise<string | null> {
   for (const loaded of getLoadedPlugins()) {
-    const tool = (loaded.plugin.geminiTools ?? []).find(t => t.name === toolName);
+    const tool = (loaded.plugin.geminiTools ?? []).find(
+      (t) => t.name === toolName,
+    );
     if (!tool) continue;
 
     // Check permission
@@ -292,7 +433,10 @@ export async function dispatchPluginToolCall(
     try {
       return await tool.execute(args, context);
     } catch (err) {
-      logger.error({ err, toolName, pluginId: loaded.plugin.id }, 'Plugin tool execution failed');
+      logger.error(
+        { err, toolName, pluginId: loaded.plugin.id },
+        'Plugin tool execution failed',
+      );
       return JSON.stringify({ success: false, error: 'Tool execution failed' });
     }
   }
