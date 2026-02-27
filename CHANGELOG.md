@@ -10,6 +10,50 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+#### Google Ecosystem Integration — 6 Built-in Plugins
+
+Transformed NanoGemClaw into a Google ecosystem personal assistant with 6 new plugins in the `plugins/` directory, leveraging the existing plugin system's 6 extension points.
+
+- **`google-auth`** — OAuth2 foundation for all Google services. Desktop App flow with temporary localhost callback server, encrypted token storage at `store/google-auth.json`, and automatic token refresh. Dashboard Settings UI for connecting/disconnecting Google account. Routes: `GET /status`, `POST /authorize`, `POST /revoke`.
+
+- **`google-drive`** — Search, read, and summarize Google Drive files via 3 Gemini tools (`search_drive`, `read_file_content`, `summarize_file`). Supports Docs (exported as plain text), Sheets, PDF, and plain text. Content extractor handles Google-native format conversion via Drive export API.
+
+- **`google-tasks`** — Full CRUD operations with bidirectional sync between NanoGemClaw and Google Tasks. 3 Gemini tools (`create_google_task`, `complete_google_task`, `list_google_tasks`), 2 IPC handlers, background sync service (15-minute interval), and `afterMessage` hook for `@task-complete` sentinel detection.
+
+- **`google-calendar-rw`** — Upgraded from iCal read-only to full Google Calendar API read/write. 5 Gemini tools (`create_event`, `list_events`, `update_event`, `delete_event`, `check_availability`), IPC handler for container-initiated event creation, and conflict detection via free/busy API. Original iCal integration preserved as fallback.
+
+- **`drive-knowledge-rag`** — Two-layer RAG (Retrieval-Augmented Generation) system:
+  - **Layer 1 (Pre-indexed)**: Scans a designated Drive knowledge folder every 30 minutes, extracts content, generates Gemini embeddings, and builds a local vector index for zero-latency cosine similarity search (threshold: 0.7).
+  - **Layer 2 (Live search)**: Falls back to real-time Drive full-text search when the local index has no relevant results.
+  - Gemini tool: `search_knowledge`. Dashboard routes for folder configuration and index management.
+  - Designed to share the same Drive folder with Google NotebookLM as a common source of truth.
+
+- **`discord-reporter`** — Automated daily and weekly progress reports pushed to Discord via webhooks. Features:
+  - Color-coded embeds (green = normal, yellow = warning, red = error) with up to 25 fields.
+  - Cron-based scheduler with 1-minute tick resolution, deduplication, and rate limit protection (30 req/min).
+  - Weekly report aggregates task completion rates, Google Tasks activity, and calendar events.
+  - Dashboard Settings UI for webhook URL configuration, enable/disable toggle, and test button.
+  - Dynamically imports `generateDailyReport` from the host app at runtime.
+
+#### Dashboard Enhancements
+
+- **Settings — Google Account** section: Connect/disconnect Google OAuth, status display with authenticated email.
+- **Settings — Discord Reporter** section: Webhook URL input, enable toggle, send test report button.
+
+### Changed
+
+- **Root `package.json`** — Workspaces expanded from `["packages/*"]` to `["packages/*", "plugins/*"]`.
+- **Plugin discovery** — Auto-discovers plugins from both `plugins/` directory and `node_modules/@nanogemclaw-plugin/*` scope.
+
+### Dependencies
+
+- Added `google-auth-library@^9.15.0` — Google OAuth2 client for token management.
+- Added `googleapis@^148.0.0` — Google APIs client (Drive, Calendar, Tasks).
+
+---
+
+### Added
+
 #### Monorepo Architecture — 7 npm Workspace Packages
 
 Restructured the entire project from a flat layout into a modular npm workspaces monorepo. Each package can be used independently or as part of the full stack.
@@ -92,13 +136,13 @@ A new **hybrid execution architecture** that bypasses container startup for simp
 
 ### Performance
 
-| Metric | Before (Container) | After (Fast Path) | Improvement |
-|--------|--------------------|--------------------|-------------|
-| First token latency | 5–15s | 0.5–1.5s | **3–10x faster** |
-| Streaming granularity | 2s throttle | 500ms intervals | **4x smoother** |
-| Tool call round-trip | 1–2s (file polling) | ~0ms (in-process) | **Near-instant** |
-| Input token cost | 100% | 10–25% (with cache) | **75–90% savings** |
-| Memory overhead | Docker container | In-process API call | **Near-zero** |
+| Metric                | Before (Container)  | After (Fast Path)   | Improvement        |
+| --------------------- | ------------------- | ------------------- | ------------------ |
+| First token latency   | 5–15s               | 0.5–1.5s            | **3–10x faster**   |
+| Streaming granularity | 2s throttle         | 500ms intervals     | **4x smoother**    |
+| Tool call round-trip  | 1–2s (file polling) | ~0ms (in-process)   | **Near-instant**   |
+| Input token cost      | 100%                | 10–25% (with cache) | **75–90% savings** |
+| Memory overhead       | Docker container    | In-process API call | **Near-zero**      |
 
 ### Dependencies
 

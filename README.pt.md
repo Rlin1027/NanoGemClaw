@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  Assistente pessoal de IA com <strong>Gemini</strong>. Executa de forma segura em contêineres. Leve e projetado para ser compreendido, personalizado e estendido.
+  Assistente pessoal de IA com <strong>Gemini</strong> e integração profunda com o ecossistema Google. Executa de forma segura em contêineres. Leve e projetado para ser compreendido, personalizado e estendido.
 </p>
 
 <p align="center">
@@ -27,20 +27,22 @@
 
 **NanoGemClaw** é um assistente de IA leve, seguro e extensível que executa o **Gemini** em contêineres isolados — entregue via Telegram.
 
-| Recurso | NanoClaw | NanoGemClaw |
-|---------|----------|-------------|
-| **Runtime do Agente** | Claude Agent SDK | Gemini CLI + Direct API |
-| **Mensagens** | WhatsApp (Baileys) | Telegram Bot API |
-| **Custo** | Claude Max ($100/mês) | Tier gratuito (60 req/min) |
-| **Arquitetura** | Monolito | Monorepo modular (7 pacotes) |
-| **Extensibilidade** | Hardcoded | Sistema de plugins com hooks de ciclo de vida |
-| **Suporte a Mídia** | Somente texto | Foto, Voz, Áudio, Vídeo, Documento |
-| **Navegação Web** | Somente busca | `agent-browser` completo (Playwright) |
-| **Base de Conhecimento** | - | Busca de texto completo FTS5 por grupo |
-| **Agendamento** | - | Linguagem natural + cron, calendário iCal |
-| **Dashboard** | - | SPA de gerenciamento em tempo real com 9 módulos |
-| **Ferramentas Avançadas** | - | STT, Geração de Imagem, Personas, Skills, Multi-modelo |
-| **Fast Path** | - | Streaming Direct Gemini API, cache de contexto, chamada de função nativa |
+| Recurso                   | NanoClaw              | NanoGemClaw                                                              |
+| ------------------------- | --------------------- | ------------------------------------------------------------------------ |
+| **Runtime do Agente**     | Claude Agent SDK      | Gemini CLI + Direct API                                                  |
+| **Mensagens**             | WhatsApp (Baileys)    | Telegram Bot API                                                         |
+| **Custo**                 | Claude Max ($100/mês) | Tier gratuito (60 req/min)                                               |
+| **Arquitetura**           | Monolito              | Monorepo modular (7 pacotes + 6 plugins)                                 |
+| **Extensibilidade**       | Hardcoded             | Sistema de plugins com hooks de ciclo de vida                            |
+| **Suporte a Mídia**       | Somente texto         | Foto, Voz, Áudio, Vídeo, Documento                                       |
+| **Navegação Web**         | Somente busca         | `agent-browser` completo (Playwright)                                    |
+| **Base de Conhecimento**  | -                     | Busca de texto completo FTS5 por grupo                                   |
+| **Agendamento**           | -                     | Linguagem natural + cron, calendário iCal                                |
+| **Dashboard**             | -                     | SPA de gerenciamento em tempo real com 9 módulos                         |
+| **Ferramentas Avançadas** | -                     | STT, Geração de Imagem, Personas, Skills, Multi-modelo                   |
+| **Fast Path**             | -                     | Streaming Direct Gemini API, cache de contexto, chamada de função nativa |
+| **Ecossistema Google**    | -                     | Drive, Calendar, Tasks — leitura/escrita completa via OAuth2             |
+| **Notificações**          | -                     | Relatórios diários/semanais no Discord com embeds ricos                  |
 
 ---
 
@@ -57,12 +59,16 @@
 - **Automação de Navegador** - Agentes usam `agent-browser` para tarefas web complexas.
 - **Base de Conhecimento** - Armazenamento de documentos por grupo com busca de texto completo SQLite FTS5.
 - **Tarefas Agendadas** - Agendamento em linguagem natural ("todos os dias às 8h") com suporte a cron, intervalo e execução única.
-- **Integração de Calendário** - Assine feeds iCal e consulte eventos futuros.
+- **Google Calendar Leitura/Escrita** - CRUD completo de eventos do calendário, detecção de conflitos e verificação de disponibilidade via Google Calendar API.
+- **Google Tasks** - Gerenciamento completo de tarefas com sincronização bidirecional entre NanoGemClaw e Google Tasks.
+- **Google Drive** - Pesquise, leia e resuma arquivos do Drive. Suporta Docs, Sheets, PDF e texto simples.
+- **Drive Knowledge RAG** - Sistema RAG de duas camadas: índice local com embeddings do Gemini + pesquisa em tempo real no Drive como fallback.
+- **Relatórios Discord** - Relatórios automáticos diários e semanais via webhooks do Discord com embeds codificados por cores.
 - **Sistema de Skills** - Atribua arquivos de skill baseados em Markdown a grupos para capacidades especializadas.
 - **Personas** - Personalidades pré-definidas ou crie personas customizadas por grupo.
 - **Suporte Multi-modelo** - Escolha o modelo Gemini por grupo (`gemini-3-flash-preview`, `gemini-3-pro-preview`, etc.).
 - **Isolamento de Contêiner** - Cada grupo executa em seu próprio sandbox (Apple Container ou Docker).
-- **Dashboard Web** - Centro de comando em tempo real com 9 módulos incluindo streaming de logs, editor de memória, analytics e mais.
+- **Dashboard Web** - Centro de comando em tempo real com 9 módulos incluindo gerenciamento de conta Google e configuração do Discord.
 - **i18n** - Suporte completo de interface para inglês, chinês, japonês e espanhol.
 
 ---
@@ -83,20 +89,27 @@ nanogemclaw/
 ├── src/               # Módulos da aplicação (handler de mensagem, bot, agendador, etc.)
 ├── examples/
 │   └── plugin-skeleton/  # Exemplo mínimo de plugin
+├── plugins/             # Plugins integrados do ecossistema Google + Discord
+│   ├── google-auth/        # Autenticação OAuth2 para serviços Google
+│   ├── google-drive/       # Pesquisa, leitura e resumo de arquivos do Drive
+│   ├── google-tasks/       # CRUD do Google Tasks com sincronização bidirecional
+│   ├── google-calendar-rw/ # Leitura/escrita do Google Calendar (substitui iCal somente leitura)
+│   ├── drive-knowledge-rag/# Sistema RAG com índice do Drive + embeddings do Gemini
+│   └── discord-reporter/   # Relatórios diários/semanais via webhook do Discord
 ├── container/         # Contêiner do agente (Gemini CLI + ferramentas)
 └── docs/              # Documentação & guias
 ```
 
 ### Visão Geral dos Pacotes
 
-| Pacote | Descrição | Valor de Reuso |
-|--------|-----------|----------------|
-| `@nanogemclaw/core` | Tipos compartilhados, fábrica de config, logger, utilitários | Médio |
-| `@nanogemclaw/db` | Camada de banco de dados SQLite com busca FTS5 | Médio |
-| `@nanogemclaw/gemini` | Cliente API Gemini, cache de contexto, chamada de função | **Alto** |
-| `@nanogemclaw/telegram` | Helpers do bot Telegram, rate limiter, consolidador de mensagens | Médio |
-| `@nanogemclaw/server` | Servidor dashboard Express + eventos em tempo real Socket.IO | Médio |
-| `@nanogemclaw/plugin-api` | Definições de interface de plugin e tipos de ciclo de vida | **Alto** |
+| Pacote                    | Descrição                                                        | Valor de Reuso |
+| ------------------------- | ---------------------------------------------------------------- | -------------- |
+| `@nanogemclaw/core`       | Tipos compartilhados, fábrica de config, logger, utilitários     | Médio          |
+| `@nanogemclaw/db`         | Camada de banco de dados SQLite com busca FTS5                   | Médio          |
+| `@nanogemclaw/gemini`     | Cliente API Gemini, cache de contexto, chamada de função         | **Alto**       |
+| `@nanogemclaw/telegram`   | Helpers do bot Telegram, rate limiter, consolidador de mensagens | Médio          |
+| `@nanogemclaw/server`     | Servidor dashboard Express + eventos em tempo real Socket.IO     | Médio          |
+| `@nanogemclaw/plugin-api` | Definições de interface de plugin e tipos de ciclo de vida       | **Alto**       |
 
 ---
 
@@ -104,11 +117,11 @@ nanogemclaw/
 
 ### Pré-requisitos
 
-| Ferramenta | Propósito | Instalação |
-|------------|-----------|------------|
-| **Node.js 20+** | Runtime | [nodejs.org](https://nodejs.org) |
-| **Gemini CLI** | Agente de IA | `npm install -g @google/gemini-cli` |
-| **FFmpeg** | Processamento de áudio (STT) | `brew install ffmpeg` |
+| Ferramenta      | Propósito                    | Instalação                          |
+| --------------- | ---------------------------- | ----------------------------------- |
+| **Node.js 20+** | Runtime                      | [nodejs.org](https://nodejs.org)    |
+| **Gemini CLI**  | Agente de IA                 | `npm install -g @google/gemini-cli` |
+| **FFmpeg**      | Processamento de áudio (STT) | `brew install ffmpeg`               |
 
 ### 1. Clonar & Instalar
 
@@ -176,7 +189,11 @@ NanoGemClaw suporta plugins que estendem funcionalidades sem modificar o código
 2. Implemente a interface `NanoPlugin`:
 
 ```typescript
-import type { NanoPlugin, PluginApi, GeminiToolContribution } from '@nanogemclaw/plugin-api';
+import type {
+  NanoPlugin,
+  PluginApi,
+  GeminiToolContribution,
+} from '@nanogemclaw/plugin-api';
 
 const myPlugin: NanoPlugin = {
   id: 'my-plugin',
@@ -231,55 +248,79 @@ export default myPlugin;
 
 Veja `examples/plugin-skeleton/src/index.ts` para um exemplo totalmente documentado, e [docs/GUIDE.md](docs/GUIDE.md) para o guia completo de desenvolvimento de plugins.
 
+### Plugins Integrados
+
+NanoGemClaw inclui 6 plugins integrados no diretório `plugins/`:
+
+| Plugin                  | Descrição                                              | Ferramentas Gemini |       Serviço em Background       |
+| ----------------------- | ------------------------------------------------------ | :----------------: | :-------------------------------: |
+| **google-auth**         | Autenticação OAuth2 para todos os serviços Google      |         -          |                 -                 |
+| **google-drive**        | Pesquisar, ler e resumir arquivos do Drive             |         3          |                 -                 |
+| **google-tasks**        | CRUD do Google Tasks com sincronização bidirecional    |         3          |    Sincronização a cada 15 min    |
+| **google-calendar-rw**  | CRUD de Calendar com detecção de conflitos             |         5          |                 -                 |
+| **drive-knowledge-rag** | RAG de duas camadas (índice local + pesquisa no Drive) |         1          | Varredura de índice a cada 30 min |
+| **discord-reporter**    | Relatórios diários/semanais via Discord webhook        |         -          |   Relatórios agendados por cron   |
+
 ---
 
 ## Variáveis de Ambiente
 
 ### Obrigatórias
 
-| Variável | Descrição |
-|----------|-----------|
+| Variável             | Descrição                  |
+| -------------------- | -------------------------- |
 | `TELEGRAM_BOT_TOKEN` | Token do bot do @BotFather |
 
 ### Opcionais - IA & Mídia
 
-| Variável | Padrão | Descrição |
-|----------|--------|-----------|
-| `GEMINI_API_KEY` | - | Chave de API (necessária para geração de imagem e fast path) |
-| `GEMINI_MODEL` | `gemini-3-flash-preview` | Modelo Gemini padrão para todos os grupos |
-| `ASSISTANT_NAME` | `Andy` | Nome de gatilho do bot (usado para menções `@Andy`) |
-| `STT_PROVIDER` | `gemini` | Voz para texto: `gemini` (gratuito) ou `gcp` (pago) |
+| Variável         | Padrão                   | Descrição                                                    |
+| ---------------- | ------------------------ | ------------------------------------------------------------ |
+| `GEMINI_API_KEY` | -                        | Chave de API (necessária para geração de imagem e fast path) |
+| `GEMINI_MODEL`   | `gemini-3-flash-preview` | Modelo Gemini padrão para todos os grupos                    |
+| `ASSISTANT_NAME` | `Andy`                   | Nome de gatilho do bot (usado para menções `@Andy`)          |
+| `STT_PROVIDER`   | `gemini`                 | Voz para texto: `gemini` (gratuito) ou `gcp` (pago)          |
 
 ### Opcionais - Dashboard & Segurança
 
-| Variável | Padrão | Descrição |
-|----------|--------|-----------|
-| `DASHBOARD_HOST` | `127.0.0.1` | Endereço de bind (`0.0.0.0` para acesso LAN) |
-| `DASHBOARD_API_KEY` | - | Chave de API para proteger acesso ao dashboard |
-| `DASHBOARD_ACCESS_CODE` | - | Código de acesso para tela de login do dashboard |
-| `DASHBOARD_ORIGINS` | auto | Origens CORS permitidas separadas por vírgula |
+| Variável                | Padrão      | Descrição                                        |
+| ----------------------- | ----------- | ------------------------------------------------ |
+| `DASHBOARD_HOST`        | `127.0.0.1` | Endereço de bind (`0.0.0.0` para acesso LAN)     |
+| `DASHBOARD_API_KEY`     | -           | Chave de API para proteger acesso ao dashboard   |
+| `DASHBOARD_ACCESS_CODE` | -           | Código de acesso para tela de login do dashboard |
+| `DASHBOARD_ORIGINS`     | auto        | Origens CORS permitidas separadas por vírgula    |
 
 ### Opcionais - Fast Path
 
-| Variável | Padrão | Descrição |
-|----------|--------|-----------|
-| `FAST_PATH_ENABLED` | `true` | Ativar API direta do Gemini para consultas de texto |
-| `FAST_PATH_TIMEOUT_MS` | `180000` | Timeout da API (ms) |
-| `CACHE_TTL_SECONDS` | `21600` | TTL do cache de contexto (6 horas) |
-| `MIN_CACHE_CHARS` | `100000` | Comprimento mínimo de conteúdo para cache |
+| Variável               | Padrão   | Descrição                                           |
+| ---------------------- | -------- | --------------------------------------------------- |
+| `FAST_PATH_ENABLED`    | `true`   | Ativar API direta do Gemini para consultas de texto |
+| `FAST_PATH_TIMEOUT_MS` | `180000` | Timeout da API (ms)                                 |
+| `CACHE_TTL_SECONDS`    | `21600`  | TTL do cache de contexto (6 horas)                  |
+| `MIN_CACHE_CHARS`      | `100000` | Comprimento mínimo de conteúdo para cache           |
+
+### Opcionais — Ecossistema Google (Plugins)
+
+| Variável                     | Descrição                                          |
+| ---------------------------- | -------------------------------------------------- |
+| `GOOGLE_CLIENT_ID`           | ID do cliente OAuth2 (do Google Cloud Console)     |
+| `GOOGLE_CLIENT_SECRET`       | Segredo do cliente OAuth2                          |
+| `GOOGLE_KNOWLEDGE_FOLDER_ID` | ID da pasta do Drive para base de conhecimento RAG |
+| `DISCORD_WEBHOOK_URL`        | URL do webhook do Discord para relatórios          |
+| `DISCORD_DAILY_CRON`         | Agenda do relatório diário (padrão: `0 9 * * *`)   |
+| `DISCORD_WEEKLY_CRON`        | Agenda do relatório semanal (padrão: `0 9 * * 1`)  |
 
 ### Opcionais - Infraestrutura
 
-| Variável | Padrão | Descrição |
-|----------|--------|-----------|
-| `CONTAINER_TIMEOUT` | `300000` | Timeout de execução do contêiner (ms) |
-| `CONTAINER_IMAGE` | `nanogemclaw-agent:latest` | Nome da imagem do contêiner |
-| `RATE_LIMIT_ENABLED` | `true` | Ativar limitação de taxa de requisições |
-| `RATE_LIMIT_MAX` | `20` | Máximo de requisições por janela por grupo |
-| `RATE_LIMIT_WINDOW` | `5` | Janela de limitação de taxa (minutos) |
-| `WEBHOOK_URL` | - | Webhook externo para notificações |
-| `TZ` | system | Fuso horário para tarefas agendadas |
-| `LOG_LEVEL` | `info` | Nível de logging |
+| Variável             | Padrão                     | Descrição                                  |
+| -------------------- | -------------------------- | ------------------------------------------ |
+| `CONTAINER_TIMEOUT`  | `300000`                   | Timeout de execução do contêiner (ms)      |
+| `CONTAINER_IMAGE`    | `nanogemclaw-agent:latest` | Nome da imagem do contêiner                |
+| `RATE_LIMIT_ENABLED` | `true`                     | Ativar limitação de taxa de requisições    |
+| `RATE_LIMIT_MAX`     | `20`                       | Máximo de requisições por janela por grupo |
+| `RATE_LIMIT_WINDOW`  | `5`                        | Janela de limitação de taxa (minutos)      |
+| `WEBHOOK_URL`        | -                          | Webhook externo para notificações          |
+| `TZ`                 | system                     | Fuso horário para tarefas agendadas        |
+| `LOG_LEVEL`          | `info`                     | Nível de logging                           |
 
 Para a lista completa, veja [.env.example](.env.example).
 
@@ -301,6 +342,15 @@ Para a lista completa, veja [.env.example](.env.example).
 ### Base de Conhecimento
 
 - Faça upload de documentos via dashboard, depois pergunte: `@Andy pesquise na base de conhecimento por guia de implantação`
+
+### Ecossistema Google
+
+- `@Andy pesquise no meu Drive o relatório do projeto Q4`
+- `@Andy crie um evento no calendário para amanhã às 15h — reunião da equipe`
+- `@Andy adicione uma tarefa: preparar apresentação para sexta`
+- `@Andy liste minhas tarefas pendentes do Google Tasks`
+- `@Andy verifique minha disponibilidade para a próxima semana`
+- `@Andy pesquise na base de conhecimento as melhores práticas de deploy`
 
 ### Administração
 
@@ -329,50 +379,55 @@ graph LR
     Bot --> Dashboard[Web Dashboard]
     Dashboard --> WS[Socket.IO]
     Bot --> Scheduler[Task Scheduler]
-    Bot --> Calendar[iCal Integration]
     Bot --> Knowledge[Knowledge Base]
     Bot --> Plugins[Plugin System]
+    Plugins --> GAuth[Google OAuth2]
+    GAuth --> GDrive[Google Drive]
+    GAuth --> GCal[Google Calendar]
+    GAuth --> GTasks[Google Tasks]
+    GDrive --> RAG[Drive Knowledge RAG]
+    Plugins --> Discord[Discord Reporter]
 ```
 
 ### Pacotes Backend
 
-| Pacote | Módulos Principais |
-|--------|-------------------|
-| `@nanogemclaw/core` | `config.ts`, `types.ts`, `logger.ts`, `utils.ts`, `safe-compare.ts` |
-| `@nanogemclaw/db` | `connection.ts`, `messages.ts`, `tasks.ts`, `stats.ts`, `preferences.ts` |
-| `@nanogemclaw/gemini` | `gemini-client.ts`, `context-cache.ts`, `gemini-tools.ts` |
-| `@nanogemclaw/telegram` | `telegram-helpers.ts`, `telegram-rate-limiter.ts`, `message-consolidator.ts` |
-| `@nanogemclaw/server` | `server.ts`, `routes/` (auth, groups, tasks, knowledge, calendar, skills, config, analytics) |
-| `@nanogemclaw/plugin-api` | `NanoPlugin`, `PluginApi`, `GeminiToolContribution`, `HookContributions` |
+| Pacote                    | Módulos Principais                                                                           |
+| ------------------------- | -------------------------------------------------------------------------------------------- |
+| `@nanogemclaw/core`       | `config.ts`, `types.ts`, `logger.ts`, `utils.ts`, `safe-compare.ts`                          |
+| `@nanogemclaw/db`         | `connection.ts`, `messages.ts`, `tasks.ts`, `stats.ts`, `preferences.ts`                     |
+| `@nanogemclaw/gemini`     | `gemini-client.ts`, `context-cache.ts`, `gemini-tools.ts`                                    |
+| `@nanogemclaw/telegram`   | `telegram-helpers.ts`, `telegram-rate-limiter.ts`, `message-consolidator.ts`                 |
+| `@nanogemclaw/server`     | `server.ts`, `routes/` (auth, groups, tasks, knowledge, calendar, skills, config, analytics) |
+| `@nanogemclaw/plugin-api` | `NanoPlugin`, `PluginApi`, `GeminiToolContribution`, `HookContributions`                     |
 
 ### Camada de Aplicação (`src/`)
 
-| Módulo | Propósito |
-|--------|-----------|
-| `index.ts` | Entrada do bot Telegram, gerenciamento de estado, dispatch IPC |
-| `message-handler.ts` | Processamento de mensagem, roteamento fast path, entrada multimodal |
-| `fast-path.ts` | Execução Direct Gemini API com streaming |
-| `container-runner.ts` | Ciclo de vida do contêiner e saída streaming |
-| `task-scheduler.ts` | Execução de tarefas cron/intervalo/única |
-| `knowledge.ts` | Motor de base de conhecimento FTS5 |
-| `personas.ts` | Definições de persona e gerenciamento de persona customizada |
-| `natural-schedule.ts` | Parser de linguagem natural para cron (EN/ZH) |
+| Módulo                | Propósito                                                           |
+| --------------------- | ------------------------------------------------------------------- |
+| `index.ts`            | Entrada do bot Telegram, gerenciamento de estado, dispatch IPC      |
+| `message-handler.ts`  | Processamento de mensagem, roteamento fast path, entrada multimodal |
+| `fast-path.ts`        | Execução Direct Gemini API com streaming                            |
+| `container-runner.ts` | Ciclo de vida do contêiner e saída streaming                        |
+| `task-scheduler.ts`   | Execução de tarefas cron/intervalo/única                            |
+| `knowledge.ts`        | Motor de base de conhecimento FTS5                                  |
+| `personas.ts`         | Definições de persona e gerenciamento de persona customizada        |
+| `natural-schedule.ts` | Parser de linguagem natural para cron (EN/ZH)                       |
 
 ### Frontend (`packages/dashboard/`)
 
 SPA React + Vite + TailwindCSS com 9 módulos:
 
-| Página | Descrição |
-|--------|-----------|
-| **Visão Geral** | Cards de status de grupo com atividade de agente em tempo real |
-| **Logs** | Stream de log universal com filtragem por nível |
-| **Memory Studio** | Editor Monaco para prompts de sistema e resumos de conversa |
-| **Detalhe do Grupo** | Configurações por grupo: persona, modelo, gatilho, toggle de busca web |
-| **Tarefas** | CRUD de tarefas agendadas com histórico de execução |
-| **Analytics** | Gráficos de uso, logs de contêiner, estatísticas de mensagem |
-| **Conhecimento** | Upload de documentos, busca FTS5, gerenciamento de documentos por grupo |
-| **Calendário** | Assinatura de feed iCal e visualizador de eventos futuros |
-| **Configurações** | Modo de manutenção, logging de debug, status de secrets, preferências |
+| Página               | Descrição                                                               |
+| -------------------- | ----------------------------------------------------------------------- |
+| **Visão Geral**      | Cards de status de grupo com atividade de agente em tempo real          |
+| **Logs**             | Stream de log universal com filtragem por nível                         |
+| **Memory Studio**    | Editor Monaco para prompts de sistema e resumos de conversa             |
+| **Detalhe do Grupo** | Configurações por grupo: persona, modelo, gatilho, toggle de busca web  |
+| **Tarefas**          | CRUD de tarefas agendadas com histórico de execução                     |
+| **Analytics**        | Gráficos de uso, logs de contêiner, estatísticas de mensagem            |
+| **Conhecimento**     | Upload de documentos, busca FTS5, gerenciamento de documentos por grupo |
+| **Calendário**       | Assinatura de feed iCal e visualizador de eventos futuros               |
+| **Configurações**    | Modo de manutenção, conta Google, configuração do Discord, preferências |
 
 ### Persistência
 
@@ -409,7 +464,7 @@ npm start                  # Serve o dashboard em :3000
 ```bash
 npm run dev               # Iniciar com tsx (hot reload)
 npm run typecheck         # Verificação de tipos TypeScript (backend)
-npm test                  # Executar todos os testes (Vitest, 12 arquivos, ~330 testes)
+npm test                  # Executar todos os testes (Vitest, 28 arquivos, ~600 testes)
 npm run test:watch        # Modo observação
 npm run test:coverage     # Relatório de cobertura
 npm run format:check      # Verificação Prettier
@@ -437,6 +492,9 @@ npx tsc --noEmit          # Verificação de tipos do frontend
 - **Fast path não funciona?** Certifique-se de que `GEMINI_API_KEY` está definida. Configurações somente OAuth fazem fallback para o caminho do contêiner.
 - **Deseja desativar o fast path?** Defina `FAST_PATH_ENABLED=false` globalmente, ou alterne por grupo no dashboard.
 - **Limitado por taxa?** Ajuste `RATE_LIMIT_MAX` e `RATE_LIMIT_WINDOW` no `.env`.
+- **Erro de OAuth do Google?** Verifique `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` no `.env`. Certifique-se de que o tipo de app OAuth seja "Desktop App".
+- **Drive/Calendar/Tasks não funcionam?** Conecte sua conta Google em Configurações do dashboard. Os tokens são armazenados em `store/google-auth.json`.
+- **Relatórios do Discord não chegam?** Verifique `DISCORD_WEBHOOK_URL` no `.env`. Teste com o botão "Enviar relatório de teste" em Configurações do dashboard.
 
 ---
 
