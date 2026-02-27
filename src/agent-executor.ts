@@ -61,6 +61,7 @@ export async function runAgent(
   chatId: string,
   mediaPath: string | null = null,
   statusMsg: TelegramBot.Message | null = null,
+  messageThreadId?: number | null,
 ): Promise<string | null> {
   const bot = getBot();
   const sessions = getSessions();
@@ -137,7 +138,7 @@ export async function runAgent(
 
   // Import message consolidator and mark streaming as active
   const { messageConsolidator } = await import('./message-consolidator.js');
-  messageConsolidator.setStreaming(chatId, true);
+  messageConsolidator.setStreaming(chatId, true, messageThreadId);
 
   try {
     // Get memory context from conversation summaries
@@ -166,7 +167,7 @@ export async function runAgent(
         isMain,
         registeredGroups,
         sendMessage: async (jid: string, text: string) => {
-          await sendMessage(jid, text);
+          await sendMessage(jid, text, messageThreadId);
         },
         bot,
       };
@@ -181,6 +182,7 @@ export async function runAgent(
         conversationHistory = getRecentConversation(
           chatId,
           FAST_PATH.MAX_HISTORY_MESSAGES,
+          messageThreadId?.toString(),
         );
       } catch {
         // DB may not have messages yet
@@ -340,7 +342,9 @@ export async function runAgent(
         // Send retry status update to chat
         try {
           await bot
-            .sendMessage(parseInt(chatId), '🔄 重試中...')
+            .sendMessage(parseInt(chatId), i18nTf('retrying', undefined, groupLang), {
+              ...(messageThreadId ? { message_thread_id: messageThreadId } : {}),
+            })
             .catch(() => {});
         } catch (err) {
           logger.debug({ err }, 'Retry status message error');
@@ -383,6 +387,6 @@ export async function runAgent(
     return null;
   } finally {
     // Clear streaming state
-    messageConsolidator.setStreaming(chatId, false);
+    messageConsolidator.setStreaming(chatId, false, messageThreadId);
   }
 }

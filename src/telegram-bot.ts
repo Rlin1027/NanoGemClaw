@@ -64,6 +64,7 @@ export async function connectTelegram(): Promise<void> {
         date: Math.floor(Date.now() / 1000),
         message_id: lastMsg.messageId || Date.now(),
         from: { id: 0, is_bot: false, first_name: 'User' },
+        ...(result.messageThreadId ? { message_thread_id: result.messageThreadId } : {}),
       } as TelegramBot.Message;
 
       await processMessage(syntheticMsg);
@@ -81,6 +82,7 @@ export async function connectTelegram(): Promise<void> {
     const senderName = msg.from?.first_name || 'Unknown';
     const timestamp = new Date(msg.date * 1000).toISOString();
     const chatName = msg.chat.title || msg.chat.first_name || chatId;
+    const messageThreadId = msg.message_thread_id ?? null;
 
     // Store chat metadata for group discovery
     storeChatMetadata(chatId, timestamp, chatName);
@@ -106,6 +108,7 @@ export async function connectTelegram(): Promise<void> {
         content + (tags.length > 0 ? `\n\nTags: ${tags.join(' ')}` : ''),
         timestamp,
         false,
+        messageThreadId?.toString() ?? null,
       );
     }
 
@@ -134,6 +137,7 @@ export async function connectTelegram(): Promise<void> {
           messageId: msg.message_id,
           isMedia,
           debounceMs,
+          messageThreadId: msg.message_thread_id,
         });
 
         // If buffered, wait for consolidation event; otherwise process immediately
@@ -199,6 +203,7 @@ export async function connectTelegram(): Promise<void> {
                 is_bot: false,
                 first_name: query.from.first_name,
               },
+              message_thread_id: query.message?.message_thread_id,
             };
             await processMessage(fakeMsg);
             break;
@@ -215,6 +220,7 @@ export async function connectTelegram(): Promise<void> {
                 is_bot: false,
                 first_name: query.from.first_name,
               },
+              message_thread_id: query.message?.message_thread_id,
             };
             await processMessage(fakeMsg);
             break;
@@ -231,6 +237,7 @@ export async function connectTelegram(): Promise<void> {
               await sendMessage(
                 chatId,
                 tf('settingToggled', { setting, value }),
+                query.message?.message_thread_id,
               );
             }
             break;
@@ -248,6 +255,7 @@ export async function connectTelegram(): Promise<void> {
           chatId,
           groupFolder,
           data,
+          query.message?.message_thread_id,
         );
         if (handled) return;
       }
@@ -257,10 +265,10 @@ export async function connectTelegram(): Promise<void> {
 
       switch (action) {
         case 'confirm':
-          await sendMessage(chatId, tf('confirmed'));
+          await sendMessage(chatId, tf('confirmed'), query.message?.message_thread_id);
           break;
         case 'cancel':
-          await sendMessage(chatId, tf('cancelled'));
+          await sendMessage(chatId, tf('cancelled'), query.message?.message_thread_id);
           break;
         case 'retry': {
           const originalMsgId = params[0];
@@ -287,7 +295,7 @@ export async function connectTelegram(): Promise<void> {
 
           if (originalMsg) {
             // Re-trigger the processing logic
-            await sendMessage(chatId, tf('retrying'));
+            await sendMessage(chatId, tf('retrying'), query.message?.message_thread_id);
 
             // Construct a skeletal Telegram message for processMessage
             const fakeMsg: TelegramBot.Message = {
@@ -302,11 +310,12 @@ export async function connectTelegram(): Promise<void> {
                 is_bot: false,
                 first_name: originalMsg.sender_name,
               },
+              message_thread_id: query.message?.message_thread_id,
             };
 
             await processMessage(fakeMsg);
           } else {
-            await sendMessage(chatId, tf('retryFailed'));
+            await sendMessage(chatId, tf('retryFailed'), query.message?.message_thread_id);
           }
           break;
         }
@@ -323,7 +332,7 @@ export async function connectTelegram(): Promise<void> {
               },
             ],
           ];
-          await sendMessageWithButtons(chatId, tf('feedbackPrompt'), buttons);
+          await sendMessageWithButtons(chatId, tf('feedbackPrompt'), buttons, query.message?.message_thread_id);
           break;
         }
         case 'feedback': {
@@ -332,6 +341,7 @@ export async function connectTelegram(): Promise<void> {
           await sendMessage(
             chatId,
             rating === 'up' ? tf('thanksFeedback') : tf('willImprove'),
+            query.message?.message_thread_id,
           );
           break;
         }
@@ -339,7 +349,7 @@ export async function connectTelegram(): Promise<void> {
           // Pass through to agent if unknown action
           const group = registeredGroups[chatId];
           if (group) {
-            await sendMessage(chatId, tf('unknownAction', { action: data }));
+            await sendMessage(chatId, tf('unknownAction', { action: data }), query.message?.message_thread_id);
           }
         }
       }

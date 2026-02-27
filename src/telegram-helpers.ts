@@ -14,15 +14,20 @@ import { formatError } from './utils.js';
 export async function setTyping(
   chatId: string,
   isTyping: boolean,
+  messageThreadId?: number | null,
 ): Promise<void> {
   const bot = getBot();
+  // Use compound key so parallel forum threads don't clobber each other's intervals
+  const typingKey = `${chatId}:${messageThreadId ?? 'null'}`;
   if (isTyping) {
     // Clear any existing interval
-    clearTypingInterval(chatId);
+    clearTypingInterval(typingKey);
 
     // Send initial typing indicator
     try {
-      await bot.sendChatAction(parseInt(chatId), 'typing');
+      await bot.sendChatAction(parseInt(chatId), 'typing', {
+        ...(messageThreadId ? { message_thread_id: messageThreadId } : {}),
+      });
     } catch {
       // Ignore typing errors
     }
@@ -30,17 +35,19 @@ export async function setTyping(
     // Refresh typing indicator every 5 seconds (Telegram resets after ~5s)
     const interval = setInterval(async () => {
       try {
-        await bot.sendChatAction(parseInt(chatId), 'typing');
+        await bot.sendChatAction(parseInt(chatId), 'typing', {
+          ...(messageThreadId ? { message_thread_id: messageThreadId } : {}),
+        });
       } catch {
         // Stop if error
-        clearTypingInterval(chatId);
+        clearTypingInterval(typingKey);
       }
     }, 5000);
 
-    setTypingInterval(chatId, interval);
+    setTypingInterval(typingKey, interval);
   } else {
     // Stop typing indicator
-    clearTypingInterval(chatId);
+    clearTypingInterval(typingKey);
   }
 }
 
@@ -48,7 +55,7 @@ export async function setTyping(
 // Message Sending
 // ============================================================================
 
-export async function sendMessage(chatId: string, text: string): Promise<void> {
+export async function sendMessage(chatId: string, text: string, messageThreadId?: number | null): Promise<void> {
   const bot = getBot();
   try {
     const chunks = splitMessageIntelligently(
@@ -57,7 +64,9 @@ export async function sendMessage(chatId: string, text: string): Promise<void> {
     );
 
     for (let i = 0; i < chunks.length; i++) {
-      await bot.sendMessage(parseInt(chatId), chunks[i]);
+      await bot.sendMessage(parseInt(chatId), chunks[i], {
+        ...(messageThreadId ? { message_thread_id: messageThreadId } : {}),
+      });
       // Rate limiting: add delay between chunks to avoid Telegram limits
       if (i < chunks.length - 1) {
         await new Promise((r) => setTimeout(r, TELEGRAM.RATE_LIMIT_DELAY_MS));
@@ -91,6 +100,7 @@ export async function sendMessageWithButtons(
   chatId: string,
   text: string,
   buttons: QuickReplyButton[][],
+  messageThreadId?: number | null,
 ): Promise<void> {
   const bot = getBot();
   try {
@@ -102,6 +112,7 @@ export async function sendMessageWithButtons(
     );
 
     await bot.sendMessage(parseInt(chatId), text, {
+      ...(messageThreadId ? { message_thread_id: messageThreadId } : {}),
       reply_markup: {
         inline_keyboard: inlineKeyboard,
       },

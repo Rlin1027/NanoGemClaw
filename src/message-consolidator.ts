@@ -9,12 +9,14 @@ interface PendingMessage {
   text: string;
   timestamp: number;
   messageId?: number;
+  messageThreadId?: number;
 }
 
 interface ConsolidatedResult {
   chatId: string | number;
   messages: PendingMessage[];
   combinedText: string;
+  messageThreadId?: number;
 }
 
 export class MessageConsolidator extends EventEmitter {
@@ -37,9 +39,10 @@ export class MessageConsolidator extends EventEmitter {
       messageId?: number;
       isMedia?: boolean;
       debounceMs?: number;
+      messageThreadId?: number;
     },
   ): boolean {
-    const key = String(chatId);
+    const key = `${chatId}:${options?.messageThreadId ?? 'null'}`;
 
     // Media messages (photos/voice) always process immediately
     if (options?.isMedia) return false;
@@ -53,6 +56,7 @@ export class MessageConsolidator extends EventEmitter {
       text,
       timestamp: Date.now(),
       messageId: options?.messageId,
+      messageThreadId: options?.messageThreadId,
     };
 
     const existing = this.buffers.get(key) || [];
@@ -91,6 +95,7 @@ export class MessageConsolidator extends EventEmitter {
       chatId: messages[0].chatId,
       messages,
       combinedText,
+      messageThreadId: messages[0].messageThreadId,
     };
 
     this.emit('consolidated', result);
@@ -100,8 +105,8 @@ export class MessageConsolidator extends EventEmitter {
   /**
    * Mark a chat as actively streaming (new messages won't be merged)
    */
-  setStreaming(chatId: string | number, streaming: boolean): void {
-    const key = String(chatId);
+  setStreaming(chatId: string | number, streaming: boolean, threadId?: number | null): void {
+    const key = `${chatId}:${threadId ?? 'null'}`;
     if (streaming) {
       this.activeStreaming.add(key);
     } else {
@@ -112,8 +117,9 @@ export class MessageConsolidator extends EventEmitter {
   /**
    * Check if chat has pending messages
    */
-  hasPending(chatId: string | number): boolean {
-    const msgs = this.buffers.get(String(chatId));
+  hasPending(chatId: string | number, threadId?: number | null): boolean {
+    const key = `${chatId}:${threadId ?? 'null'}`;
+    const msgs = this.buffers.get(key);
     return !!msgs && msgs.length > 0;
   }
 

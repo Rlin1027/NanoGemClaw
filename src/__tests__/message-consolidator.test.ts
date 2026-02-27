@@ -137,7 +137,7 @@ describe('message-consolidator.ts', () => {
       consolidator.addMessage('123', 'Message 1');
       consolidator.addMessage('123', 'Message 2');
 
-      const result = consolidator.flush('123');
+      const result = consolidator.flush('123:null');
 
       expect(result).toBeDefined();
       expect(result!.combinedText).toBe('Message 1\nMessage 2');
@@ -146,7 +146,7 @@ describe('message-consolidator.ts', () => {
     });
 
     it('should return null for non-existent chat', () => {
-      const result = consolidator.flush('non-existent');
+      const result = consolidator.flush('non-existent:null');
       expect(result).toBeNull();
     });
 
@@ -155,7 +155,7 @@ describe('message-consolidator.ts', () => {
       consolidator.on('consolidated', listener);
 
       consolidator.addMessage('123', 'Message');
-      consolidator.flush('123');
+      consolidator.flush('123:null');
 
       expect(listener).toHaveBeenCalledOnce();
     });
@@ -165,7 +165,7 @@ describe('message-consolidator.ts', () => {
       consolidator.on('consolidated', listener);
 
       consolidator.addMessage('123', 'Message');
-      consolidator.flush('123');
+      consolidator.flush('123:null');
 
       // Timer should be cleared, so advancing time shouldn't trigger again
       vi.advanceTimersByTime(5000);
@@ -206,13 +206,20 @@ describe('message-consolidator.ts', () => {
 
     it('should return false after flush', () => {
       consolidator.addMessage('123', 'Message');
-      consolidator.flush('123');
+      consolidator.flush('123:null');
       expect(consolidator.hasPending('123')).toBe(false);
     });
 
     it('should handle numeric chatId', () => {
       consolidator.addMessage(123, 'Message');
       expect(consolidator.hasPending(123)).toBe(true);
+    });
+
+    it('should check pending for specific thread', () => {
+      consolidator.addMessage('chat1', 'Msg', { messageThreadId: 100 });
+      expect(consolidator.hasPending('chat1', 100)).toBe(true);
+      expect(consolidator.hasPending('chat1', 200)).toBe(false);
+      expect(consolidator.hasPending('chat1')).toBe(false); // null thread ≠ thread 100
     });
   });
 
@@ -287,14 +294,14 @@ describe('message-consolidator.ts', () => {
   describe('Edge Cases', () => {
     it('should handle empty message text', () => {
       consolidator.addMessage('123', '');
-      const result = consolidator.flush('123');
+      const result = consolidator.flush('123:null');
       expect(result!.combinedText).toBe('');
     });
 
     it('should handle messages with newlines', () => {
       consolidator.addMessage('123', 'Line 1\nLine 2');
       consolidator.addMessage('123', 'Line 3');
-      const result = consolidator.flush('123');
+      const result = consolidator.flush('123:null');
       expect(result!.combinedText).toBe('Line 1\nLine 2\nLine 3');
     });
 
@@ -308,6 +315,49 @@ describe('message-consolidator.ts', () => {
       const result = listener.mock.calls[0][0];
       expect(result.messages).toHaveLength(1);
       expect(result.combinedText).toBe('Single');
+    });
+  });
+
+  describe('Forum Topics Thread Isolation', () => {
+    it('should not merge messages from different threads in same chat', () => {
+      const listener = vi.fn();
+      consolidator.on('consolidated', listener);
+
+      consolidator.addMessage('chat1', 'Thread A msg', { messageThreadId: 100 });
+      consolidator.addMessage('chat1', 'Thread B msg', { messageThreadId: 200 });
+
+      vi.advanceTimersByTime(2000);
+
+      expect(listener).toHaveBeenCalledTimes(2);
+      const results = listener.mock.calls.map((call: any) => call[0]);
+      expect(results[0].combinedText).toBe('Thread A msg');
+      expect(results[1].combinedText).toBe('Thread B msg');
+    });
+
+    it('should merge messages within same thread', () => {
+      const listener = vi.fn();
+      consolidator.on('consolidated', listener);
+
+      consolidator.addMessage('chat1', 'Msg 1', { messageThreadId: 100 });
+      consolidator.addMessage('chat1', 'Msg 2', { messageThreadId: 100 });
+
+      vi.advanceTimersByTime(2000);
+
+      expect(listener).toHaveBeenCalledOnce();
+      expect(listener.mock.calls[0][0].combinedText).toBe('Msg 1\nMsg 2');
+      expect(listener.mock.calls[0][0].messageThreadId).toBe(100);
+    });
+
+    it('should isolate streaming per thread', () => {
+      consolidator.setStreaming('chat1', true, 100);
+
+      // Thread 100 should be blocked
+      const blocked = consolidator.addMessage('chat1', 'Msg', { messageThreadId: 100 });
+      expect(blocked).toBe(false);
+
+      // Thread 200 should still buffer
+      const buffered = consolidator.addMessage('chat1', 'Msg', { messageThreadId: 200 });
+      expect(buffered).toBe(true);
     });
   });
 });

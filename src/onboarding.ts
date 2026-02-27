@@ -21,6 +21,7 @@ export async function checkAndStartOnboarding(
   chatId: string,
   groupFolder: string,
   groupName: string,
+  messageThreadId?: number | null,
 ): Promise<boolean> {
   // Check if already onboarded
   const completed = getUserPreference(chatId, ONBOARDING_COMPLETE_KEY);
@@ -32,6 +33,7 @@ export async function checkAndStartOnboarding(
   await sendMessage(
     chatId,
     tf('onboarding_welcome', { name: groupName }, lang),
+    messageThreadId,
   );
 
   // Step 2: Feature showcase with buttons
@@ -51,6 +53,7 @@ export async function checkAndStartOnboarding(
     chatId,
     tf('onboarding_features', undefined, lang),
     buttons,
+    messageThreadId,
   );
 
   return true;
@@ -63,6 +66,7 @@ export async function handleOnboardingCallback(
   chatId: string,
   groupFolder: string,
   action: string,
+  messageThreadId?: number | null,
 ): Promise<boolean> {
   if (!action.startsWith('onboard_')) return false;
 
@@ -70,12 +74,12 @@ export async function handleOnboardingCallback(
 
   if (action === 'onboard_skip' || action === 'onboard_complete') {
     setUserPreference(chatId, ONBOARDING_COMPLETE_KEY, 'true');
-    await sendMessage(chatId, tf('onboarding_done', undefined, lang));
+    await sendMessage(chatId, tf('onboarding_done', undefined, lang), messageThreadId);
     return true;
   }
 
   if (action === 'onboard_demo') {
-    await sendMessage(chatId, tf('onboarding_demo', undefined, lang));
+    await sendMessage(chatId, tf('onboarding_demo', undefined, lang), messageThreadId);
     // Mark as complete after demo
     setUserPreference(chatId, ONBOARDING_COMPLETE_KEY, 'true');
     return true;

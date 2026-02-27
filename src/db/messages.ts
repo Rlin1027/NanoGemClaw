@@ -130,10 +130,11 @@ export function storeMessage(
   content: string,
   timestamp: string,
   isFromMe: boolean,
+  messageThreadId?: string | null,
 ): void {
   const db = getDatabase();
   db.prepare(
-    `INSERT OR REPLACE INTO messages (id, chat_jid, sender, sender_name, content, timestamp, is_from_me) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT OR REPLACE INTO messages (id, chat_jid, sender, sender_name, content, timestamp, is_from_me, message_thread_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     msgId,
     chatId,
@@ -142,9 +143,13 @@ export function storeMessage(
     content,
     timestamp,
     isFromMe ? 1 : 0,
+    messageThreadId ?? null,
   );
 }
 
+// Note: No thread filtering — this function aggregates across all threads.
+// Used for daily reports and scheduled tasks where cross-thread view is intentional.
+// Thread-scoped variant planned for Phase 2.
 export function getNewMessages(
   jids: string[],
   lastTimestamp: string,
@@ -178,9 +183,22 @@ export function getMessagesSince(
   chatJid: string,
   sinceTimestamp: string,
   botPrefix: string,
+  messageThreadId?: string | null,
 ): NewMessage[] {
   const db = getDatabase();
   // Filter out bot's own messages by checking content prefix
+  if (messageThreadId !== undefined) {
+    const sql = `
+      SELECT id, chat_jid, sender, sender_name, content, timestamp
+      FROM messages
+      WHERE chat_jid = ? AND timestamp > ? AND content NOT LIKE ?
+        AND message_thread_id IS ?
+      ORDER BY timestamp
+    `;
+    return db
+      .prepare(sql)
+      .all(chatJid, sinceTimestamp, `${botPrefix}:%`, messageThreadId ?? null) as NewMessage[];
+  }
   const sql = `
     SELECT id, chat_jid, sender, sender_name, content, timestamp
     FROM messages
@@ -255,19 +273,32 @@ export function getMessagesForSummary(
 export function getRecentConversation(
   chatJid: string,
   limit: number = 50,
+  messageThreadId?: string | null,
 ): Array<{ role: 'user' | 'model'; text: string }> {
   const db = getDatabase();
-  const rows = db
-    .prepare(
-      `
+  const rows = messageThreadId !== undefined
+    ? (db
+        .prepare(
+          `
+      SELECT content, is_from_me
+      FROM messages
+      WHERE chat_jid = ? AND content != '' AND message_thread_id IS ?
+      ORDER BY timestamp DESC
+      LIMIT ?
+    `,
+        )
+        .all(chatJid, messageThreadId ?? null, limit) as Array<{ content: string; is_from_me: number }>)
+    : (db
+        .prepare(
+          `
       SELECT content, is_from_me
       FROM messages
       WHERE chat_jid = ? AND content != ''
       ORDER BY timestamp DESC
       LIMIT ?
     `,
-    )
-    .all(chatJid, limit) as Array<{ content: string; is_from_me: number }>;
+        )
+        .all(chatJid, limit) as Array<{ content: string; is_from_me: number }>);
 
   // Reverse to oldest-first order for conversation context
   return rows.reverse().map((row) => ({

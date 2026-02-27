@@ -163,8 +163,28 @@ export function initDatabase(): void {
     }
   }
 
+  if (currentVersion < 3) {
+    db.exec('BEGIN');
+    try {
+      // Migration v3: Forum Topics support — thread-aware messages
+      try {
+        db.exec(`ALTER TABLE messages ADD COLUMN message_thread_id TEXT`);
+      } catch {
+        /* column already exists */
+      }
+      db.exec(
+        'CREATE INDEX IF NOT EXISTS idx_messages_chat_thread_timestamp ON messages(chat_jid, message_thread_id, timestamp)',
+      );
+      db.exec('PRAGMA user_version = 3');
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+  }
+
   // Future migrations go here:
-  // if (currentVersion < 3) { ... db.exec('PRAGMA user_version = 3'); }
+  // if (currentVersion < 4) { ... db.exec('PRAGMA user_version = 4'); }
 }
 
 /**

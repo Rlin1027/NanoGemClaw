@@ -46,6 +46,10 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
 
   const bot = getBot();
 
+  const messageThreadId = msg.message_thread_id ?? undefined;
+  const threadIdNum = messageThreadId ?? null;
+  const threadIdStr = messageThreadId?.toString();
+
   // Maintenance mode: auto-reply and skip processing
   if (isMaintenanceMode()) {
     const { tf: i18nTf, getGroupLang: i18nGetGroupLang } =
@@ -53,6 +57,7 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
     await bot.sendMessage(
       parseInt(chatId),
       i18nTf('maintenanceMode', undefined, i18nGetGroupLang(group.folder)),
+      { ...(threadIdNum ? { message_thread_id: threadIdNum } : {}) },
     );
     return;
   }
@@ -70,12 +75,13 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
 
     try {
       const response = await handleAdminCommand(adminCmd, adminArgs);
-      await sendMessage(chatId, response);
+      await sendMessage(chatId, response, threadIdNum);
     } catch (err) {
       logger.error({ err: formatError(err) }, 'Admin command failed');
       await sendMessage(
         chatId,
         '❌ Admin command failed. Check logs for details.',
+        threadIdNum,
       );
     }
     return;
@@ -93,6 +99,7 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
       chatId,
       group.folder,
       group.name,
+      threadIdNum,
     );
     if (triggered) return; // Don't process the first message, show onboarding instead
   }
@@ -121,6 +128,7 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
       await sendMessage(
         chatId,
         `${tf('rateLimited', undefined, groupLang)} ${tf('retryIn', { minutes: waitMinutes }, groupLang)}`,
+        threadIdNum,
       );
       return;
     }
@@ -153,6 +161,7 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
     `⏳ ${tf('processing', undefined, groupLang)}...`,
     {
       reply_to_message_id: msg.message_id,
+      ...(threadIdNum ? { message_thread_id: threadIdNum } : {}),
     },
   );
 
@@ -203,6 +212,7 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
           await sendMessage(
             chatId,
             `🎤 ${tf('stt_transcribed', undefined, groupLang)}: "${transcription}"`,
+            threadIdNum,
           );
           logger.info(
             { chatId, transcription: transcription.slice(0, 100) },
@@ -238,6 +248,7 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
     chatId,
     sinceTimestamp,
     ASSISTANT_NAME,
+    threadIdStr,
   );
 
   if (missedMessages.length === 0) return;
@@ -259,7 +270,7 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
   );
 
   const ipcMessageSentChats = getIpcMessageSentChats();
-  await setTyping(chatId, true);
+  await setTyping(chatId, true, threadIdNum);
   ipcMessageSentChats.delete(chatId); // Reset before agent run
   try {
     const response = await runAgent(
@@ -268,6 +279,7 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
       chatId,
       mediaPath,
       statusMsg,
+      messageThreadId,
     );
 
     // Skip container output if agent already sent response via IPC
@@ -318,6 +330,7 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
         chatId,
         `${ASSISTANT_NAME}: ${cleanText}`,
         buttons,
+        threadIdNum,
       );
     } else if (ipcAlreadySent && statusMsg) {
       // IPC handled the response; just clean up status message
@@ -339,6 +352,6 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
         .catch(() => {});
     }
   } finally {
-    await setTyping(chatId, false);
+    await setTyping(chatId, false, threadIdNum);
   }
 }

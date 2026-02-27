@@ -66,6 +66,7 @@ export interface NewMessage {
   sender_name: string;
   content: string;
   timestamp: string;
+  message_thread_id?: string | null;
 }
 
 export interface ScheduledTask {
