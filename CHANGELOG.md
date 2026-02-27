@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Auto-detect Gemini models at startup** — New model discovery service (`packages/gemini/src/model-discovery.ts`) queries the Gemini API for available models, caches results for 24 hours, and gracefully falls back to a hardcoded list when offline or on failure. Startup log shows the auto-detected default model.
+- **Dynamic model selector in Dashboard** — Group detail page now fetches available models from `GET /api/config/models` instead of a hardcoded dropdown. Each group can independently select a specific model or choose "Auto (Latest)" to always track the newest flash model.
+- **`"auto"` model value** — Groups can set `geminiModel: "auto"` to follow the globally resolved latest model. Resolved at execution time in both fast-path and container-runner.
+- **`getDefaultModel()` config helper** — Dynamic function that respects `GEMINI_MODEL` env var > auto-discovered model > hardcoded fallback. Replaces static `GEMINI_MODEL` constant in new code paths.
+- **`modelAuto` i18n key** — Added across all 8 locales (en, zh-TW, zh-CN, es, ja, ko, pt, ru).
+
+### Changed
+
+- **Model validation in `PUT /api/groups/:folder`** — Replaced hardcoded 4-model allowlist with dynamic validation against discovered models. `"auto"` is always accepted.
+
 ### Security
 
 - **Fix 9 npm audit vulnerabilities** — Added npm overrides to force secure versions of `request` sub-dependencies: `form-data` 2.5.5 (critical → fixed), `qs` 6.14.2 (high → fixed), `tough-cookie` 5.1.2 (moderate → fixed). Upgraded dashboard `vite` from ^5.1.5 to ^6.2.0 to resolve esbuild dev server SSRF vulnerability (moderate → fixed).
