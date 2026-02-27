@@ -56,6 +56,13 @@
     "typescript": "^5.7.0",
     "vitest": "^4.0.18"
   },
+  "overrides": {
+    "request": {
+      "form-data": "2.5.5",
+      "qs": "6.14.2",
+      "tough-cookie": "5.1.2"
+    }
+  },
   "engines": {
     "node": ">=20"
   }
