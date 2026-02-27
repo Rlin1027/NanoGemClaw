@@ -47,5 +47,17 @@
     "calendarAdded": "Calendar added",
     "calendarRemoved": "Calendar removed",
     "failedToAdd": "Failed to add calendar",
-    "failedToRemove": "Failed to remove calendar"
+    "failedToRemove": "Failed to remove calendar",
+    "connected": "已连接",
+    "refresh": "刷新",
+    "googleNotConnectedHint": "连接您的 Google 账户以同步 Google 日历事件。",
+    "connectInSettings": "前往设置",
+    "eventCreated": "事件已创建",
+    "failedToCreateEvent": "创建事件失败",
+    "creating": "创建中...",
+    "startTime": "开始时间",
+    "endTime": "结束时间",
+    "locationLabel": "地点",
+    "optional": "选填",
+    "eventTitlePlaceholder": "与团队开会"
 }

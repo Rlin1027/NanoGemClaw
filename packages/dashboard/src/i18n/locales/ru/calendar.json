@@ -47,5 +47,17 @@
     "calendarAdded": "Calendar added",
     "calendarRemoved": "Calendar removed",
     "failedToAdd": "Failed to add calendar",
-    "failedToRemove": "Failed to remove calendar"
+    "failedToRemove": "Failed to remove calendar",
+    "connected": "Подключено",
+    "refresh": "Обновить",
+    "googleNotConnectedHint": "Подключите аккаунт Google для синхронизации событий Google Календаря.",
+    "connectInSettings": "Перейти в настройки",
+    "eventCreated": "Событие создано",
+    "failedToCreateEvent": "Не удалось создать событие",
+    "creating": "Создание...",
+    "startTime": "Время начала",
+    "endTime": "Время окончания",
+    "locationLabel": "Место",
+    "optional": "Необязательно",
+    "eventTitlePlaceholder": "Встреча с командой"
 }

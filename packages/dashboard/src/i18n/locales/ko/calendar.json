@@ -47,5 +47,17 @@
     "calendarAdded": "Calendar added",
     "calendarRemoved": "Calendar removed",
     "failedToAdd": "Failed to add calendar",
-    "failedToRemove": "Failed to remove calendar"
+    "failedToRemove": "Failed to remove calendar",
+    "connected": "연결됨",
+    "refresh": "새로고침",
+    "googleNotConnectedHint": "Google 캘린더 이벤트를 동기화하려면 Google 계정을 연결하세요.",
+    "connectInSettings": "설정으로 이동",
+    "eventCreated": "이벤트가 생성되었습니다",
+    "failedToCreateEvent": "이벤트 생성에 실패했습니다",
+    "creating": "생성 중...",
+    "startTime": "시작 시간",
+    "endTime": "종료 시간",
+    "locationLabel": "장소",
+    "optional": "선택사항",
+    "eventTitlePlaceholder": "팀 미팅"
 }

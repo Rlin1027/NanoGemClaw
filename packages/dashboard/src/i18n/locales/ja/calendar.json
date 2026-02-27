@@ -47,5 +47,17 @@
     "calendarAdded": "Calendar added",
     "calendarRemoved": "Calendar removed",
     "failedToAdd": "Failed to add calendar",
-    "failedToRemove": "Failed to remove calendar"
+    "failedToRemove": "Failed to remove calendar",
+    "connected": "接続済み",
+    "refresh": "更新",
+    "googleNotConnectedHint": "Google カレンダーのイベントを同期するには Google アカウントを接続してください。",
+    "connectInSettings": "設定へ移動",
+    "eventCreated": "イベントを作成しました",
+    "failedToCreateEvent": "イベントの作成に失敗しました",
+    "creating": "作成中...",
+    "startTime": "開始時刻",
+    "endTime": "終了時刻",
+    "locationLabel": "場所",
+    "optional": "任意",
+    "eventTitlePlaceholder": "チームミーティング"
 }

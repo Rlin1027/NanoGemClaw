@@ -47,5 +47,17 @@
     "calendarAdded": "Calendar added",
     "calendarRemoved": "Calendar removed",
     "failedToAdd": "Failed to add calendar",
-    "failedToRemove": "Failed to remove calendar"
+    "failedToRemove": "Failed to remove calendar",
+    "connected": "Conectado",
+    "refresh": "Atualizar",
+    "googleNotConnectedHint": "Conecte sua conta Google para sincronizar eventos do Google Agenda.",
+    "connectInSettings": "Ir para Configurações",
+    "eventCreated": "Evento criado",
+    "failedToCreateEvent": "Falha ao criar evento",
+    "creating": "Criando...",
+    "startTime": "Hora de início",
+    "endTime": "Hora de término",
+    "locationLabel": "Local",
+    "optional": "Opcional",
+    "eventTitlePlaceholder": "Reunião com a equipe"
 }

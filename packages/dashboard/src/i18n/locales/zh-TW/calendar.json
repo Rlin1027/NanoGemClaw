@@ -47,5 +47,17 @@
     "calendarAdded": "行事曆已新增",
     "calendarRemoved": "行事曆已移除",
     "failedToAdd": "新增行事曆失敗",
-    "failedToRemove": "移除行事曆失敗"
+    "failedToRemove": "移除行事曆失敗",
+    "connected": "已連接",
+    "refresh": "重新整理",
+    "googleNotConnectedHint": "連接您的 Google 帳戶以同步 Google 日曆事件。",
+    "connectInSettings": "前往設定",
+    "eventCreated": "事件已建立",
+    "failedToCreateEvent": "建立事件失敗",
+    "creating": "建立中...",
+    "startTime": "開始時間",
+    "endTime": "結束時間",
+    "locationLabel": "地點",
+    "optional": "選填",
+    "eventTitlePlaceholder": "與團隊開會"
 }
