@@ -1,0 +1,16 @@
+{
+  "name": "nanogemclaw-plugin-drive-knowledge-rag",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@nanogemclaw/plugin-api": "*",
+    "nanogemclaw-plugin-google-auth": "*",
+    "nanogemclaw-plugin-google-drive": "*",
+    "googleapis": "^148.0.0"
+  },
+  "engines": { "node": ">=20" }
+}

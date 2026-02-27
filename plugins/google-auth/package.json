@@ -1,0 +1,14 @@
+{
+  "name": "nanogemclaw-plugin-google-auth",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@nanogemclaw/plugin-api": "*",
+    "google-auth-library": "^9.15.0"
+  },
+  "engines": { "node": ">=20" }
+}

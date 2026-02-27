@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Shield, Clock, Wifi, AlertTriangle, Trash2, RefreshCw, Key } from 'lucide-react';
+import {
+    Shield, Clock, Wifi, AlertTriangle, Trash2, RefreshCw, Key,
+    Link2, Unlink, ExternalLink, Bell, Send, CheckCircle2, XCircle,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { useApiQuery, useApiMutation } from '../hooks/useApi';
+import { useApiQuery, useApiMutation, apiFetch } from '../hooks/useApi';
 
 interface ConfigData {
     maintenanceMode: boolean;
@@ -18,6 +21,20 @@ interface SecretInfo {
     masked: string | null;
 }
 
+interface GoogleAuthStatus {
+    authenticated: boolean;
+    hasCredentials: boolean;
+    scopes: string[];
+}
+
+interface DiscordReporterConfig {
+    webhookUrl: string;
+    dailyTime: string;
+    weeklyDay: number;
+    weeklyTime: string;
+    enabled: boolean;
+}
+
 export function SettingsPage() {
     const { t } = useTranslation('settings');
     const { data: config, isLoading, refetch } = useApiQuery<ConfigData>('/api/config');
@@ -28,12 +45,36 @@ export function SettingsPage() {
     const [maintenanceMode, setMaintenanceMode] = useState(false);
     const [logLevel, setLogLevel] = useState('info');
 
+    // Google Auth
+    const { data: googleAuth, refetch: refetchGoogleAuth } = useApiQuery<GoogleAuthStatus>(
+        '/api/plugins/google-auth/status',
+    );
+    const [googleAuthLoading, setGoogleAuthLoading] = useState(false);
+
+    // Discord Reporter
+    const { data: discordConfig, refetch: refetchDiscordConfig } =
+        useApiQuery<DiscordReporterConfig>('/api/plugins/discord-reporter/config');
+    const { mutate: updateDiscordConfig } = useApiMutation<any, Partial<DiscordReporterConfig>>(
+        '/api/plugins/discord-reporter/config',
+        'PUT',
+    );
+    const [webhookUrl, setWebhookUrl] = useState('');
+    const [discordEnabled, setDiscordEnabled] = useState(false);
+    const [discordTestStatus, setDiscordTestStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
+
     useEffect(() => {
         if (config) {
             setMaintenanceMode(config.maintenanceMode);
             setLogLevel(config.logLevel);
         }
     }, [config]);
+
+    useEffect(() => {
+        if (discordConfig) {
+            setWebhookUrl(discordConfig.webhookUrl);
+            setDiscordEnabled(discordConfig.enabled);
+        }
+    }, [discordConfig]);
 
     const toggleMaintenance = async () => {
         const newVal = !maintenanceMode;
@@ -45,6 +86,53 @@ export function SettingsPage() {
         const newLevel = logLevel === 'debug' ? 'info' : 'debug';
         setLogLevel(newLevel);
         await updateConfig({ logLevel: newLevel });
+    };
+
+    const handleGoogleConnect = async () => {
+        setGoogleAuthLoading(true);
+        try {
+            const result = await apiFetch<{ authUrl?: string; message?: string }>(
+                '/api/plugins/google-auth/authorize',
+                { method: 'POST' },
+            );
+            if (result.authUrl) {
+                window.open(result.authUrl, '_blank', 'noopener');
+                // Poll for auth completion
+                const poll = setInterval(async () => {
+                    await refetchGoogleAuth();
+                }, 3000);
+                setTimeout(() => clearInterval(poll), 5 * 60 * 1000);
+            }
+        } finally {
+            setGoogleAuthLoading(false);
+        }
+    };
+
+    const handleGoogleDisconnect = async () => {
+        setGoogleAuthLoading(true);
+        try {
+            await apiFetch('/api/plugins/google-auth/revoke', { method: 'POST' });
+            await refetchGoogleAuth();
+        } finally {
+            setGoogleAuthLoading(false);
+        }
+    };
+
+    const handleDiscordSave = async () => {
+        await updateDiscordConfig({ webhookUrl, enabled: discordEnabled });
+        await refetchDiscordConfig();
+    };
+
+    const handleDiscordTest = async () => {
+        setDiscordTestStatus('sending');
+        try {
+            await apiFetch('/api/plugins/discord-reporter/test', { method: 'POST' });
+            setDiscordTestStatus('success');
+            setTimeout(() => setDiscordTestStatus('idle'), 3000);
+        } catch {
+            setDiscordTestStatus('error');
+            setTimeout(() => setDiscordTestStatus('idle'), 3000);
+        }
     };
 
     const formatUptime = (seconds: number) => {
@@ -141,6 +229,130 @@ export function SettingsPage() {
                             </div>
                         </div>
                     ))}
+                </div>
+            </section>
+
+            {/* Google Account */}
+            <section>
+                <h2 className="text-lg font-bold text-slate-100 mb-4 flex items-center gap-2">
+                    <Link2 size={20} className="text-emerald-400" /> Google Account
+                </h2>
+                <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
+                    {!googleAuth?.hasCredentials ? (
+                        <div className="text-sm text-slate-400">
+                            <p>Google OAuth credentials not configured.</p>
+                            <p className="mt-1 text-xs">
+                                Set <code className="text-slate-300">GOOGLE_CLIENT_ID</code> and{' '}
+                                <code className="text-slate-300">GOOGLE_CLIENT_SECRET</code> in{' '}
+                                <code className="text-slate-300">.env</code> and restart.
+                            </p>
+                        </div>
+                    ) : googleAuth?.authenticated ? (
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <CheckCircle2 size={20} className="text-green-400" />
+                                <div>
+                                    <div className="font-medium text-slate-200">Connected</div>
+                                    <div className="text-xs text-slate-400">
+                                        Scopes: {googleAuth.scopes.map(s => s.split('/').pop()).join(', ')}
+                                    </div>
+                                </div>
+                            </div>
+                            <button
+                                onClick={handleGoogleDisconnect}
+                                disabled={googleAuthLoading}
+                                className="flex items-center gap-2 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg text-sm transition-colors disabled:opacity-50"
+                            >
+                                <Unlink size={14} /> Disconnect
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <XCircle size={20} className="text-slate-500" />
+                                <div>
+                                    <div className="font-medium text-slate-200">Not Connected</div>
+                                    <div className="text-xs text-slate-400">
+                                        Connect your Google account to enable Drive, Calendar, and Tasks.
+                                    </div>
+                                </div>
+                            </div>
+                            <button
+                                onClick={handleGoogleConnect}
+                                disabled={googleAuthLoading}
+                                className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 rounded-lg text-sm transition-colors disabled:opacity-50"
+                            >
+                                <ExternalLink size={14} /> Connect Google
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </section>
+
+            {/* Discord Reporter */}
+            <section>
+                <h2 className="text-lg font-bold text-slate-100 mb-4 flex items-center gap-2">
+                    <Bell size={20} className="text-indigo-400" /> Discord Reporter
+                </h2>
+                <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4 space-y-4">
+                    {/* Enable toggle */}
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <div className="font-medium text-slate-200">Enable Reports</div>
+                            <div className="text-xs text-slate-400">Send daily and weekly reports to Discord</div>
+                        </div>
+                        <button
+                            onClick={async () => {
+                                const newVal = !discordEnabled;
+                                setDiscordEnabled(newVal);
+                                await updateDiscordConfig({ enabled: newVal });
+                            }}
+                            className={`relative w-12 h-6 rounded-full transition-colors ${discordEnabled ? 'bg-indigo-500' : 'bg-slate-700'}`}
+                        >
+                            <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${discordEnabled ? 'translate-x-6' : 'translate-x-0.5'}`} />
+                        </button>
+                    </div>
+
+                    {/* Webhook URL */}
+                    <div>
+                        <label className="text-xs text-slate-400 block mb-1">Webhook URL</label>
+                        <div className="flex gap-2">
+                            <input
+                                type="url"
+                                value={webhookUrl}
+                                onChange={(e) => setWebhookUrl(e.target.value)}
+                                placeholder="https://discord.com/api/webhooks/..."
+                                className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500"
+                            />
+                            <button
+                                onClick={handleDiscordSave}
+                                className="px-3 py-2 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 rounded-lg text-sm transition-colors"
+                            >
+                                Save
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Test button */}
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={handleDiscordTest}
+                            disabled={!webhookUrl || discordTestStatus === 'sending'}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm transition-colors disabled:opacity-50"
+                        >
+                            <Send size={14} /> Send Test
+                        </button>
+                        {discordTestStatus === 'success' && (
+                            <span className="text-xs text-green-400 flex items-center gap-1">
+                                <CheckCircle2 size={12} /> Test sent successfully
+                            </span>
+                        )}
+                        {discordTestStatus === 'error' && (
+                            <span className="text-xs text-red-400 flex items-center gap-1">
+                                <XCircle size={12} /> Failed to send test
+                            </span>
+                        )}
+                    </div>
                 </div>
             </section>
 
