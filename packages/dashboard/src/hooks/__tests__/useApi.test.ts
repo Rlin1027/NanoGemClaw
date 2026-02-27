@@ -161,10 +161,10 @@ describe('useApiMutation', () => {
     it('sets error state on failure', async () => {
         vi.stubGlobal('fetch', mockFetchError(400, 'Bad Request'));
         const { result } = renderHook(() => useApiMutation('/api/items'));
-        await waitFor(async () => {
-            await result.current.mutate({});
+        await result.current.mutate({});
+        await waitFor(() => {
+            expect(result.current.error).toBeInstanceOf(Error);
         });
-        expect(result.current.error).toBeInstanceOf(Error);
     });
 
     it('returns null on failure', async () => {
