@@ -454,7 +454,16 @@ describe('db/messages', () => {
     it('should store message with messageThreadId', () => {
       const chatId = 'forum_chat@g.us';
       storeChatMetadata(chatId, '2026-02-08T10:00:00Z');
-      storeMessage('msg1', chatId, 'user1', 'User', 'Hello from topic', '2026-02-08T10:00:00Z', false, '12345');
+      storeMessage(
+        'msg1',
+        chatId,
+        'user1',
+        'User',
+        'Hello from topic',
+        '2026-02-08T10:00:00Z',
+        false,
+        '12345',
+      );
 
       const message = getMessageById(chatId, 'msg1');
       expect(message).toBeDefined();
@@ -464,7 +473,15 @@ describe('db/messages', () => {
     it('should store message without messageThreadId (backward compat)', () => {
       const chatId = 'normal_chat@g.us';
       storeChatMetadata(chatId, '2026-02-08T10:00:00Z');
-      storeMessage('msg1', chatId, 'user1', 'User', 'Hello', '2026-02-08T10:00:00Z', false);
+      storeMessage(
+        'msg1',
+        chatId,
+        'user1',
+        'User',
+        'Hello',
+        '2026-02-08T10:00:00Z',
+        false,
+      );
 
       const message = getMessageById(chatId, 'msg1');
       expect(message).toBeDefined();
@@ -475,12 +492,47 @@ describe('db/messages', () => {
       const chatId = 'forum_filter@g.us';
       storeChatMetadata(chatId, '2026-02-08T12:00:00Z');
       // Thread A messages
-      storeMessage('t1', chatId, 'user1', 'User', 'Topic A msg 1', '2026-02-08T10:00:00Z', false, '100');
-      storeMessage('t2', chatId, 'user1', 'User', 'Topic A msg 2', '2026-02-08T10:01:00Z', false, '100');
+      storeMessage(
+        't1',
+        chatId,
+        'user1',
+        'User',
+        'Topic A msg 1',
+        '2026-02-08T10:00:00Z',
+        false,
+        '100',
+      );
+      storeMessage(
+        't2',
+        chatId,
+        'user1',
+        'User',
+        'Topic A msg 2',
+        '2026-02-08T10:01:00Z',
+        false,
+        '100',
+      );
       // Thread B messages
-      storeMessage('t3', chatId, 'user1', 'User', 'Topic B msg 1', '2026-02-08T10:02:00Z', false, '200');
+      storeMessage(
+        't3',
+        chatId,
+        'user1',
+        'User',
+        'Topic B msg 1',
+        '2026-02-08T10:02:00Z',
+        false,
+        '200',
+      );
       // No-thread message
-      storeMessage('t4', chatId, 'user1', 'User', 'General msg', '2026-02-08T10:03:00Z', false);
+      storeMessage(
+        't4',
+        chatId,
+        'user1',
+        'User',
+        'General msg',
+        '2026-02-08T10:03:00Z',
+        false,
+      );
 
       const threadA = getRecentConversation(chatId, 50, '100');
       expect(threadA).toHaveLength(2);
@@ -491,8 +543,25 @@ describe('db/messages', () => {
     it('should filter getRecentConversation for non-forum messages (null)', () => {
       const chatId = 'forum_null@g.us';
       storeChatMetadata(chatId, '2026-02-08T12:00:00Z');
-      storeMessage('t1', chatId, 'user1', 'User', 'In topic', '2026-02-08T10:00:00Z', false, '100');
-      storeMessage('t2', chatId, 'user1', 'User', 'No topic', '2026-02-08T10:01:00Z', false);
+      storeMessage(
+        't1',
+        chatId,
+        'user1',
+        'User',
+        'In topic',
+        '2026-02-08T10:00:00Z',
+        false,
+        '100',
+      );
+      storeMessage(
+        't2',
+        chatId,
+        'user1',
+        'User',
+        'No topic',
+        '2026-02-08T10:01:00Z',
+        false,
+      );
 
       const noThread = getRecentConversation(chatId, 50, null);
       expect(noThread).toHaveLength(1);
@@ -502,8 +571,25 @@ describe('db/messages', () => {
     it('should return all messages when no thread filter (backward compat)', () => {
       const chatId = 'forum_all@g.us';
       storeChatMetadata(chatId, '2026-02-08T12:00:00Z');
-      storeMessage('t1', chatId, 'user1', 'User', 'In topic', '2026-02-08T10:00:00Z', false, '100');
-      storeMessage('t2', chatId, 'user1', 'User', 'No topic', '2026-02-08T10:01:00Z', false);
+      storeMessage(
+        't1',
+        chatId,
+        'user1',
+        'User',
+        'In topic',
+        '2026-02-08T10:00:00Z',
+        false,
+        '100',
+      );
+      storeMessage(
+        't2',
+        chatId,
+        'user1',
+        'User',
+        'No topic',
+        '2026-02-08T10:01:00Z',
+        false,
+      );
 
       const all = getRecentConversation(chatId, 50);
       expect(all).toHaveLength(2);
@@ -512,11 +598,42 @@ describe('db/messages', () => {
     it('should filter getMessagesSince by specific thread', () => {
       const chatId = 'forum_since@g.us';
       storeChatMetadata(chatId, '2026-02-08T12:00:00Z');
-      storeMessage('t1', chatId, 'user1', 'User', 'Topic A', '2026-02-08T10:00:00Z', false, '100');
-      storeMessage('t2', chatId, 'user1', 'User', 'Topic B', '2026-02-08T10:01:00Z', false, '200');
-      storeMessage('t3', chatId, 'user1', 'User', 'General', '2026-02-08T10:02:00Z', false);
+      storeMessage(
+        't1',
+        chatId,
+        'user1',
+        'User',
+        'Topic A',
+        '2026-02-08T10:00:00Z',
+        false,
+        '100',
+      );
+      storeMessage(
+        't2',
+        chatId,
+        'user1',
+        'User',
+        'Topic B',
+        '2026-02-08T10:01:00Z',
+        false,
+        '200',
+      );
+      storeMessage(
+        't3',
+        chatId,
+        'user1',
+        'User',
+        'General',
+        '2026-02-08T10:02:00Z',
+        false,
+      );
 
-      const threadA = getMessagesSince(chatId, '2026-02-08T09:00:00Z', 'Bot', '100');
+      const threadA = getMessagesSince(
+        chatId,
+        '2026-02-08T09:00:00Z',
+        'Bot',
+        '100',
+      );
       expect(threadA).toHaveLength(1);
       expect(threadA[0].content).toBe('Topic A');
     });
@@ -524,10 +641,32 @@ describe('db/messages', () => {
     it('should filter getMessagesSince for non-forum (null)', () => {
       const chatId = 'forum_since_null@g.us';
       storeChatMetadata(chatId, '2026-02-08T12:00:00Z');
-      storeMessage('t1', chatId, 'user1', 'User', 'In topic', '2026-02-08T10:00:00Z', false, '100');
-      storeMessage('t2', chatId, 'user1', 'User', 'General', '2026-02-08T10:01:00Z', false);
+      storeMessage(
+        't1',
+        chatId,
+        'user1',
+        'User',
+        'In topic',
+        '2026-02-08T10:00:00Z',
+        false,
+        '100',
+      );
+      storeMessage(
+        't2',
+        chatId,
+        'user1',
+        'User',
+        'General',
+        '2026-02-08T10:01:00Z',
+        false,
+      );
 
-      const general = getMessagesSince(chatId, '2026-02-08T09:00:00Z', 'Bot', null);
+      const general = getMessagesSince(
+        chatId,
+        '2026-02-08T09:00:00Z',
+        'Bot',
+        null,
+      );
       expect(general).toHaveLength(1);
       expect(general[0].content).toBe('General');
     });
@@ -535,8 +674,25 @@ describe('db/messages', () => {
     it('should return all messages in getMessagesSince without thread filter', () => {
       const chatId = 'forum_since_all@g.us';
       storeChatMetadata(chatId, '2026-02-08T12:00:00Z');
-      storeMessage('t1', chatId, 'user1', 'User', 'Topic A', '2026-02-08T10:00:00Z', false, '100');
-      storeMessage('t2', chatId, 'user1', 'User', 'General', '2026-02-08T10:01:00Z', false);
+      storeMessage(
+        't1',
+        chatId,
+        'user1',
+        'User',
+        'Topic A',
+        '2026-02-08T10:00:00Z',
+        false,
+        '100',
+      );
+      storeMessage(
+        't2',
+        chatId,
+        'user1',
+        'User',
+        'General',
+        '2026-02-08T10:01:00Z',
+        false,
+      );
 
       const all = getMessagesSince(chatId, '2026-02-08T09:00:00Z', 'Bot');
       expect(all).toHaveLength(2);

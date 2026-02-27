@@ -74,12 +74,20 @@ export async function handleOnboardingCallback(
 
   if (action === 'onboard_skip' || action === 'onboard_complete') {
     setUserPreference(chatId, ONBOARDING_COMPLETE_KEY, 'true');
-    await sendMessage(chatId, tf('onboarding_done', undefined, lang), messageThreadId);
+    await sendMessage(
+      chatId,
+      tf('onboarding_done', undefined, lang),
+      messageThreadId,
+    );
     return true;
   }
 
   if (action === 'onboard_demo') {
-    await sendMessage(chatId, tf('onboarding_demo', undefined, lang), messageThreadId);
+    await sendMessage(
+      chatId,
+      tf('onboarding_demo', undefined, lang),
+      messageThreadId,
+    );
     // Mark as complete after demo
     setUserPreference(chatId, ONBOARDING_COMPLETE_KEY, 'true');
     return true;

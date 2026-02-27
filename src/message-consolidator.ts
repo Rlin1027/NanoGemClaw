@@ -105,7 +105,11 @@ export class MessageConsolidator extends EventEmitter {
   /**
    * Mark a chat as actively streaming (new messages won't be merged)
    */
-  setStreaming(chatId: string | number, streaming: boolean, threadId?: number | null): void {
+  setStreaming(
+    chatId: string | number,
+    streaming: boolean,
+    threadId?: number | null,
+  ): void {
     const key = `${chatId}:${threadId ?? 'null'}`;
     if (streaming) {
       this.activeStreaming.add(key);

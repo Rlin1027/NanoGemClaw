@@ -55,7 +55,11 @@ export async function setTyping(
 // Message Sending
 // ============================================================================
 
-export async function sendMessage(chatId: string, text: string, messageThreadId?: number | null): Promise<void> {
+export async function sendMessage(
+  chatId: string,
+  text: string,
+  messageThreadId?: number | null,
+): Promise<void> {
   const bot = getBot();
   try {
     const chunks = splitMessageIntelligently(

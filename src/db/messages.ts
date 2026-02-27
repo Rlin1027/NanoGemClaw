@@ -197,7 +197,12 @@ export function getMessagesSince(
     `;
     return db
       .prepare(sql)
-      .all(chatJid, sinceTimestamp, `${botPrefix}:%`, messageThreadId ?? null) as NewMessage[];
+      .all(
+        chatJid,
+        sinceTimestamp,
+        `${botPrefix}:%`,
+        messageThreadId ?? null,
+      ) as NewMessage[];
   }
   const sql = `
     SELECT id, chat_jid, sender, sender_name, content, timestamp
@@ -276,29 +281,36 @@ export function getRecentConversation(
   messageThreadId?: string | null,
 ): Array<{ role: 'user' | 'model'; text: string }> {
   const db = getDatabase();
-  const rows = messageThreadId !== undefined
-    ? (db
-        .prepare(
-          `
+  const rows =
+    messageThreadId !== undefined
+      ? (db
+          .prepare(
+            `
       SELECT content, is_from_me
       FROM messages
       WHERE chat_jid = ? AND content != '' AND message_thread_id IS ?
       ORDER BY timestamp DESC
       LIMIT ?
     `,
-        )
-        .all(chatJid, messageThreadId ?? null, limit) as Array<{ content: string; is_from_me: number }>)
-    : (db
-        .prepare(
-          `
+          )
+          .all(chatJid, messageThreadId ?? null, limit) as Array<{
+          content: string;
+          is_from_me: number;
+        }>)
+      : (db
+          .prepare(
+            `
       SELECT content, is_from_me
       FROM messages
       WHERE chat_jid = ? AND content != ''
       ORDER BY timestamp DESC
       LIMIT ?
     `,
-        )
-        .all(chatJid, limit) as Array<{ content: string; is_from_me: number }>);
+          )
+          .all(chatJid, limit) as Array<{
+          content: string;
+          is_from_me: number;
+        }>);
 
   // Reverse to oldest-first order for conversation context
   return rows.reverse().map((row) => ({

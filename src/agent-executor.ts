@@ -342,9 +342,15 @@ export async function runAgent(
         // Send retry status update to chat
         try {
           await bot
-            .sendMessage(parseInt(chatId), i18nTf('retrying', undefined, groupLang), {
-              ...(messageThreadId ? { message_thread_id: messageThreadId } : {}),
-            })
+            .sendMessage(
+              parseInt(chatId),
+              i18nTf('retrying', undefined, groupLang),
+              {
+                ...(messageThreadId
+                  ? { message_thread_id: messageThreadId }
+                  : {}),
+              },
+            )
             .catch(() => {});
         } catch (err) {
           logger.debug({ err }, 'Retry status message error');

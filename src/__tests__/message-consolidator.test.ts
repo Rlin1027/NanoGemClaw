@@ -323,8 +323,12 @@ describe('message-consolidator.ts', () => {
       const listener = vi.fn();
       consolidator.on('consolidated', listener);
 
-      consolidator.addMessage('chat1', 'Thread A msg', { messageThreadId: 100 });
-      consolidator.addMessage('chat1', 'Thread B msg', { messageThreadId: 200 });
+      consolidator.addMessage('chat1', 'Thread A msg', {
+        messageThreadId: 100,
+      });
+      consolidator.addMessage('chat1', 'Thread B msg', {
+        messageThreadId: 200,
+      });
 
       vi.advanceTimersByTime(2000);
 
@@ -352,11 +356,15 @@ describe('message-consolidator.ts', () => {
       consolidator.setStreaming('chat1', true, 100);
 
       // Thread 100 should be blocked
-      const blocked = consolidator.addMessage('chat1', 'Msg', { messageThreadId: 100 });
+      const blocked = consolidator.addMessage('chat1', 'Msg', {
+        messageThreadId: 100,
+      });
       expect(blocked).toBe(false);
 
       // Thread 200 should still buffer
-      const buffered = consolidator.addMessage('chat1', 'Msg', { messageThreadId: 200 });
+      const buffered = consolidator.addMessage('chat1', 'Msg', {
+        messageThreadId: 200,
+      });
       expect(buffered).toBe(true);
     });
   });
