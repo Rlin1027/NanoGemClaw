@@ -1,4 +1,4 @@
-import { LayoutDashboard, TerminalSquare, Settings, Database, Plus, CalendarClock, BarChart3, BookOpen, Calendar, Search, ScrollText, CalendarRange } from "lucide-react";
+import { LayoutDashboard, TerminalSquare, Settings, Database, Plus, CalendarClock, BarChart3, BookOpen, Calendar, Search, ScrollText, CalendarRange, HardDrive } from "lucide-react";
 import { useTranslation } from 'react-i18next';
 import { cn } from "@/lib/utils";
 import { LanguageSwitcher } from './LanguageSwitcher';
@@ -58,6 +58,12 @@ export function DashboardLayout({ children, activeTab = 'overview', onTabChange,
                             label={t('knowledge')}
                             active={activeTab === 'knowledge'}
                             onClick={() => onTabChange?.('knowledge')}
+                        />
+                        <NavItem
+                            icon={<HardDrive size={20} />}
+                            label={t('drive', { defaultValue: 'Drive' })}
+                            active={activeTab === 'drive'}
+                            onClick={() => onTabChange?.('drive')}
                         />
                         <NavItem
                             icon={<CalendarClock size={20} />}

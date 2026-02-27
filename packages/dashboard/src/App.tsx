@@ -9,6 +9,7 @@ import { GroupDetailPage } from './pages/GroupDetailPage';
 import { TasksPage } from './pages/TasksPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { KnowledgePage } from './pages/KnowledgePage';
+import { DrivePage } from './pages/DrivePage';
 import { CalendarPage } from './pages/CalendarPage';
 import { ActivityLogsPage } from './pages/ActivityLogsPage';
 import { SchedulePage } from './pages/SchedulePage';
@@ -206,6 +207,9 @@ function App() {
 
             {/* KNOWLEDGE TAB */}
             {activeTab === 'knowledge' && <KnowledgePage />}
+
+            {/* DRIVE TAB */}
+            {activeTab === 'drive' && <DrivePage />}
 
             {/* CALENDAR TAB */}
             {activeTab === 'calendar' && <CalendarPage />}

@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import {
     Shield, Clock, Wifi, AlertTriangle, Trash2, RefreshCw, Key,
     Link2, Unlink, ExternalLink, Bell, Send, CheckCircle2, XCircle,
+    CalendarClock, HardDrive, Database, Loader2, Calendar,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useApiQuery, useApiMutation, apiFetch } from '../hooks/useApi';
+import { showToast } from '../hooks/useToast';
 
 interface ConfigData {
     maintenanceMode: boolean;
@@ -35,6 +37,17 @@ interface DiscordReporterConfig {
     enabled: boolean;
 }
 
+interface GoogleTasksSyncState {
+    lastSync: string | null;
+    mappingCount: number;
+    syncing: boolean;
+}
+
+interface RAGConfigSummary {
+    knowledgeFolderIds: string[];
+    scanIntervalMinutes: number;
+}
+
 export function SettingsPage() {
     const { t } = useTranslation('settings');
     const { data: config, isLoading, refetch } = useApiQuery<ConfigData>('/api/config');
@@ -61,6 +74,15 @@ export function SettingsPage() {
     const [webhookUrl, setWebhookUrl] = useState('');
     const [discordEnabled, setDiscordEnabled] = useState(false);
     const [discordTestStatus, setDiscordTestStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
+
+    // Google Tasks
+    const { data: tasksSyncState, refetch: refetchTasksSync } =
+        useApiQuery<GoogleTasksSyncState>('/api/plugins/google-tasks/sync-state');
+    const [tasksSyncing, setTasksSyncing] = useState(false);
+
+    // Drive Knowledge RAG
+    const { data: ragConfig } = useApiQuery<RAGConfigSummary>('/api/plugins/drive-knowledge-rag/config');
+    const [ragReindexing, setRagReindexing] = useState(false);
 
     useEffect(() => {
         if (config) {
@@ -132,6 +154,31 @@ export function SettingsPage() {
         } catch {
             setDiscordTestStatus('error');
             setTimeout(() => setDiscordTestStatus('idle'), 3000);
+        }
+    };
+
+    const handleTasksSync = async () => {
+        setTasksSyncing(true);
+        try {
+            await apiFetch('/api/plugins/google-tasks/sync', { method: 'POST' });
+            showToast('Sync started', 'success');
+            setTimeout(() => refetchTasksSync(), 2000);
+        } catch {
+            showToast('Failed to start sync');
+        } finally {
+            setTasksSyncing(false);
+        }
+    };
+
+    const handleRagReindex = async () => {
+        setRagReindexing(true);
+        try {
+            await apiFetch('/api/plugins/drive-knowledge-rag/reindex', { method: 'POST' });
+            showToast('Reindex started', 'success');
+        } catch {
+            showToast('Failed to start reindex');
+        } finally {
+            setRagReindexing(false);
         }
     };
 
@@ -353,6 +400,131 @@ export function SettingsPage() {
                             </span>
                         )}
                     </div>
+                </div>
+            </section>
+
+            {/* Google Tasks */}
+            <section>
+                <h2 className="text-lg font-bold text-slate-100 mb-4 flex items-center gap-2">
+                    <CalendarClock size={20} className="text-blue-400" /> Google Tasks
+                </h2>
+                <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4 space-y-4">
+                    {!googleAuth?.authenticated ? (
+                        <p className="text-sm text-slate-400">Connect your Google account above to enable Tasks sync.</p>
+                    ) : (
+                        <>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
+                                    <div className="text-xs text-slate-500 mb-1">Last Sync</div>
+                                    <div className="text-sm text-slate-200 font-mono">
+                                        {tasksSyncState?.lastSync
+                                            ? new Date(tasksSyncState.lastSync).toLocaleString()
+                                            : 'Never'}
+                                    </div>
+                                </div>
+                                <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
+                                    <div className="text-xs text-slate-500 mb-1">Mapped Tasks</div>
+                                    <div className="text-sm text-slate-200 font-mono font-bold">
+                                        {tasksSyncState?.mappingCount ?? 0}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="text-sm text-slate-300 font-medium">Auto-sync interval</div>
+                                    <div className="text-xs text-slate-500 mt-0.5">Every 15 minutes (configured in plugin)</div>
+                                </div>
+                                <button
+                                    onClick={handleTasksSync}
+                                    disabled={tasksSyncing}
+                                    className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-lg text-sm transition-colors disabled:opacity-50"
+                                >
+                                    {tasksSyncing
+                                        ? <Loader2 size={14} className="animate-spin" />
+                                        : <RefreshCw size={14} />}
+                                    Sync Now
+                                </button>
+                            </div>
+                        </>
+                    )}
+                </div>
+            </section>
+
+            {/* Drive Knowledge RAG */}
+            <section>
+                <h2 className="text-lg font-bold text-slate-100 mb-4 flex items-center gap-2">
+                    <Database size={20} className="text-purple-400" /> Drive Knowledge RAG
+                </h2>
+                <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4 space-y-4">
+                    {!googleAuth?.authenticated ? (
+                        <p className="text-sm text-slate-400">Connect your Google account above to enable RAG indexing.</p>
+                    ) : (
+                        <>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
+                                    <div className="text-xs text-slate-500 mb-1">Knowledge Folders</div>
+                                    <div className="text-sm text-slate-200 font-mono font-bold">
+                                        {ragConfig?.knowledgeFolderIds?.length ?? 0}
+                                    </div>
+                                </div>
+                                <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
+                                    <div className="text-xs text-slate-500 mb-1">Scan Interval</div>
+                                    <div className="text-sm text-slate-200 font-mono">
+                                        {ragConfig?.scanIntervalMinutes ?? '—'} min
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={handleRagReindex}
+                                    disabled={ragReindexing}
+                                    className="flex items-center gap-2 px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 rounded-lg text-sm transition-colors disabled:opacity-50"
+                                >
+                                    {ragReindexing
+                                        ? <Loader2 size={14} className="animate-spin" />
+                                        : <RefreshCw size={14} />}
+                                    Quick Reindex
+                                </button>
+                                <span className="text-xs text-slate-500">
+                                    Full RAG management available in the{' '}
+                                    <span className="text-blue-400 font-medium">Drive → Knowledge RAG</span> tab
+                                </span>
+                            </div>
+                        </>
+                    )}
+                </div>
+            </section>
+
+            {/* Google Calendar */}
+            <section>
+                <h2 className="text-lg font-bold text-slate-100 mb-4 flex items-center gap-2">
+                    <Calendar size={20} className="text-green-400" /> Google Calendar
+                </h2>
+                <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4 space-y-3">
+                    {!googleAuth?.authenticated ? (
+                        <p className="text-sm text-slate-400">Connect your Google account above to enable Calendar tools.</p>
+                    ) : (
+                        <>
+                            <div className="flex items-center gap-3">
+                                <CheckCircle2 size={18} className="text-green-400 flex-shrink-0" />
+                                <div>
+                                    <div className="text-sm font-medium text-slate-200">Calendar access active</div>
+                                    <div className="text-xs text-slate-500 mt-0.5">
+                                        The bot can read and create calendar events via Gemini tools.
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
+                                <div className="text-xs text-slate-500 mb-2 font-semibold uppercase tracking-wider">Available Tools</div>
+                                <ul className="space-y-1 text-xs text-slate-400">
+                                    <li className="flex items-center gap-2"><HardDrive size={11} className="text-slate-600" /> listCalendarEvents — fetch upcoming events</li>
+                                    <li className="flex items-center gap-2"><HardDrive size={11} className="text-slate-600" /> createCalendarEvent — create new events</li>
+                                    <li className="flex items-center gap-2"><HardDrive size={11} className="text-slate-600" /> updateCalendarEvent — modify existing events</li>
+                                    <li className="flex items-center gap-2"><HardDrive size={11} className="text-slate-600" /> deleteCalendarEvent — remove events</li>
+                                </ul>
+                            </div>
+                        </>
+                    )}
                 </div>
             </section>
 

@@ -47,5 +47,17 @@
     "calendarAdded": "Calendar added",
     "calendarRemoved": "Calendar removed",
     "failedToAdd": "Failed to add calendar",
-    "failedToRemove": "Failed to remove calendar"
+    "failedToRemove": "Failed to remove calendar",
+    "connected": "Connected",
+    "refresh": "Refresh",
+    "googleNotConnectedHint": "Connect your Google account to sync Google Calendar events.",
+    "connectInSettings": "Go to Settings",
+    "eventCreated": "Event created",
+    "failedToCreateEvent": "Failed to create event",
+    "creating": "Creating...",
+    "startTime": "Start Time",
+    "endTime": "End Time",
+    "locationLabel": "Location",
+    "optional": "Optional",
+    "eventTitlePlaceholder": "Meeting with team"
 }

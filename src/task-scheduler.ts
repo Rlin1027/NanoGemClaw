@@ -110,6 +110,19 @@ async function runTask(
       error = output.error || 'Unknown error';
     } else {
       result = output.result;
+
+      // Emit completion sentinel so plugins (e.g. google-tasks) can detect it.
+      // The afterMessage hook watches for "@task-complete:<id>" in bot replies.
+      if (chatJid) {
+        try {
+          await deps.sendMessage(chatJid, `@task-complete:${task.id}`);
+        } catch (sentinelErr) {
+          logger.warn(
+            { taskId: task.id, sentinelErr },
+            'Failed to emit task completion sentinel',
+          );
+        }
+      }
     }
 
     logger.info(

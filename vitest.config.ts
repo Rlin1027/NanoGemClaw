@@ -8,6 +8,7 @@ export default defineConfig({
       'src/**/*.test.ts',
       'tests/**/*.test.ts',
       'packages/!(dashboard)/src/**/*.test.ts',
+      'plugins/*/src/**/*.test.ts',
     ],
     coverage: {
       provider: 'v8',
@@ -27,6 +28,7 @@ export default defineConfig({
         'src/routes/calendar.ts',
         'src/routes/analytics.ts',
         'src/routes/skills.ts',
+        'plugins/*/src/**/*.ts',
       ],
       exclude: ['src/index.ts', 'src/test-features.ts'],
       thresholds: { lines: 80, functions: 80, branches: 70 },

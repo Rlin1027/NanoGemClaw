@@ -177,15 +177,14 @@ const schedulerService: ServiceContribution = {
   name: 'discord-report-scheduler',
 
   async start(api: PluginApi): Promise<void> {
-    // Load the host app's daily-report module at runtime via a URL-relative
-    // dynamic import so tsc does not attempt to resolve it cross-package.
+    // Load the host app's daily-report module at runtime using an absolute
+    // path from process.cwd() (project root) so the import works regardless
+    // of where the plugin code lives.
     try {
-      const reporterUrl = new URL(
-        '../../../../src/daily-report.js',
-        import.meta.url,
-      ).href;
+      const { join } = await import('path');
+      const reporterPath = join(process.cwd(), 'src', 'daily-report.js');
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mod = (await import(reporterUrl)) as any;
+      const mod = (await import(reporterPath)) as any;
       dailyReportGenerator = mod.generateDailyReport as DailyReportGenerator;
     } catch {
       api.logger.warn(

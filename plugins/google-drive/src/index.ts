@@ -20,6 +20,7 @@ import type {
   NanoPlugin,
   PluginApi,
   GeminiToolContribution,
+  IpcHandlerContribution,
   RouteContribution,
 } from '@nanogemclaw/plugin-api';
 import { Router } from 'express';
@@ -29,7 +30,6 @@ import {
   listRecentFiles,
   getFileMetadata,
   getFileContent,
-  listFolderContents,
 } from './drive-api.js';
 import { extractContent } from './content-extractor.js';
 
@@ -171,6 +171,102 @@ const geminiTools: GeminiToolContribution[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// IPC Handlers
+// ---------------------------------------------------------------------------
+
+let pluginApi: PluginApi | null = null;
+
+const ipcHandlers: IpcHandlerContribution[] = [
+    {
+        type: 'search_drive_ipc',
+        requiredPermission: 'main',
+
+        async handle(data, context): Promise<void> {
+            if (!isAuthenticated()) {
+                await context.sendMessage(
+                    context.sourceGroup,
+                    JSON.stringify({ error: 'Google Drive not authenticated' }),
+                );
+                return;
+            }
+
+            const query = data['query'] != null ? String(data['query']) : '';
+            if (!query.trim()) {
+                await context.sendMessage(
+                    context.sourceGroup,
+                    JSON.stringify({ error: 'query is required' }),
+                );
+                return;
+            }
+
+            const maxResults =
+                typeof data['maxResults'] === 'number'
+                    ? data['maxResults']
+                    : 10;
+            const folderId =
+                data['folderId'] != null ? String(data['folderId']) : undefined;
+
+            try {
+                const result = await searchFiles(query, { maxResults, folderId });
+                await context.sendMessage(
+                    context.sourceGroup,
+                    JSON.stringify(result),
+                );
+            } catch (err) {
+                pluginApi?.logger.error(
+                    `Google Drive IPC search_drive_ipc error: ${err}`,
+                );
+                await context.sendMessage(
+                    context.sourceGroup,
+                    JSON.stringify({ error: 'Failed to search Drive files' }),
+                );
+            }
+        },
+    },
+
+    {
+        type: 'read_file_ipc',
+        requiredPermission: 'main',
+
+        async handle(data, context): Promise<void> {
+            if (!isAuthenticated()) {
+                await context.sendMessage(
+                    context.sourceGroup,
+                    JSON.stringify({ error: 'Google Drive not authenticated' }),
+                );
+                return;
+            }
+
+            const fileId = data['fileId'] != null ? String(data['fileId']) : '';
+            if (!fileId.trim()) {
+                await context.sendMessage(
+                    context.sourceGroup,
+                    JSON.stringify({ error: 'fileId is required' }),
+                );
+                return;
+            }
+
+            try {
+                const meta = await getFileMetadata(fileId);
+                const content = await getFileContent(fileId, meta.mimeType);
+                await context.sendMessage(
+                    context.sourceGroup,
+                    JSON.stringify({ file: meta, content }),
+                );
+            } catch (err) {
+                pluginApi?.logger.error(
+                    `Google Drive IPC read_file_ipc error: ${err}`,
+                );
+                await context.sendMessage(
+                    context.sourceGroup,
+                    JSON.stringify({ error: 'Failed to read Drive file' }),
+                );
+            }
+        },
+    },
+];
+
+// ---------------------------------------------------------------------------
 // Dashboard Routes
 // ---------------------------------------------------------------------------
 
@@ -286,6 +382,7 @@ const googleDrivePlugin: NanoPlugin = {
     'Search and read Google Drive files from Gemini and the dashboard',
 
   async init(api: PluginApi): Promise<void | false> {
+    pluginApi = api;
     if (!isAuthenticated()) {
       api.logger.warn(
         'Google Drive: not authenticated — tools are registered but will return an ' +
@@ -297,6 +394,7 @@ const googleDrivePlugin: NanoPlugin = {
   },
 
   geminiTools,
+  ipcHandlers,
   routes,
 };
 
