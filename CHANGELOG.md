@@ -16,7 +16,7 @@ Transformed NanoGemClaw into a Google ecosystem personal assistant with 6 new pl
 
 - **`google-auth`** — OAuth2 foundation for all Google services. Desktop App flow with temporary localhost callback server, encrypted token storage at `store/google-auth.json`, and automatic token refresh. Dashboard Settings UI for connecting/disconnecting Google account. Routes: `GET /status`, `POST /authorize`, `POST /revoke`.
 
-- **`google-drive`** — Search, read, and summarize Google Drive files via 3 Gemini tools (`search_drive`, `read_file_content`, `summarize_file`). Supports Docs (exported as plain text), Sheets, PDF, and plain text. Content extractor handles Google-native format conversion via Drive export API.
+- **`google-drive`** — Search, read, and summarize Google Drive files via 3 Gemini tools (`search_drive`, `read_file_content`, `summarize_file`). Supports Docs (exported as plain text), Sheets, PDF, and plain text. Content extractor handles Google-native format conversion via Drive export API. 2 IPC handlers (`search_drive_ipc`, `read_file_ipc`) for container agent access.
 
 - **`google-tasks`** — Full CRUD operations with bidirectional sync between NanoGemClaw and Google Tasks. 3 Gemini tools (`create_google_task`, `complete_google_task`, `list_google_tasks`), 2 IPC handlers, background sync service (15-minute interval), and `afterMessage` hook for `@task-complete` sentinel detection.
 
@@ -33,17 +33,54 @@ Transformed NanoGemClaw into a Google ecosystem personal assistant with 6 new pl
   - Cron-based scheduler with 1-minute tick resolution, deduplication, and rate limit protection (30 req/min).
   - Weekly report aggregates task completion rates, Google Tasks activity, and calendar events.
   - Dashboard Settings UI for webhook URL configuration, enable/disable toggle, and test button.
-  - Dynamically imports `generateDailyReport` from the host app at runtime.
+  - Dynamically imports `generateDailyReport` from the host app at runtime (robust `process.cwd()`-based path).
 
-#### Dashboard Enhancements
+#### Dashboard — Full Google Ecosystem UI
 
-- **Settings — Google Account** section: Connect/disconnect Google OAuth, status display with authenticated email.
-- **Settings — Discord Reporter** section: Webhook URL input, enable toggle, send test report button.
+- **CalendarPage** — Detects Google OAuth status, fetches events from `google-calendar-rw` plugin routes when authenticated, merges and deduplicates with iCal events (by title+time within 60s). Google events shown with emerald accent badge. Create Event modal for adding events directly via Google Calendar API. Falls back to iCal-only view when not authenticated.
+- **TasksPage** — New "Google Tasks" section below existing scheduled tasks. Per-list tabs, task completion checkboxes (PATCH), inline create form, manual sync button with last-sync timestamp. Unauthenticated fallback with "connect in Settings" hint.
+- **DrivePage** — New page for browsing Google Drive files. Recent files list (default view), debounced search bar, file metadata display (name, type icon, modified date, size), click-to-preview content panel, external link to Google Drive.
+- **Settings — Google Tasks** section: Sync status (last sync, mapped task count), auto-sync interval info, manual "Sync Now" button.
+- **Settings — Drive Knowledge RAG** section: Knowledge folder count, scan interval summary, quick "Reindex" button with link to full RAG management.
+- **Settings — Google Calendar** section: Connection status, available Gemini tool list.
+- **DashboardLayout** — Added Drive navigation item in sidebar.
+- **i18n** — 28 new translation keys for calendar and tasks pages.
+
+#### Plugin Test Suite — 298 New Tests
+
+Comprehensive test coverage for all 6 Google ecosystem plugins (902 total tests across 39 files):
+
+- **Shared test helpers** (`plugins/__tests__/helpers/`):
+  - `plugin-api-mock.ts` — `createMockPluginApi()` factory for all plugin tests.
+  - `google-auth-mock.ts` — Shared `mockGetOAuth2Client`, `mockIsAuthenticated` with `setupGoogleAuthMock()`.
+  - `googleapis-mock.ts` — `createMockTasksClient()`, `createMockDriveClient()`, `createMockCalendarClient()` factories.
+
+- **Test modules** (11 files, 298 tests):
+
+  | Module | Tests | Coverage |
+  |--------|:-----:|---------|
+  | discord-reporter/embed-formatter | 30 | 95.7% lines |
+  | discord-reporter/scheduler | 22 | 66.1% lines |
+  | google-drive/content-extractor | 15 | 100% lines |
+  | google-drive/drive-api | 40 | 100% lines |
+  | google-tasks/tasks-api | 40 | 100% lines |
+  | google-tasks/sync | 28 | 100% lines |
+  | google-calendar-rw/calendar-api | 36 | 98.0% lines |
+  | google-auth/token-manager | 22 | 91.0% lines |
+  | google-auth/oauth-flow | 14 | 82.6% lines |
+  | drive-knowledge-rag/search | 18 | 90.0% lines |
+  | drive-knowledge-rag/indexer | 33 | 96.3% lines |
+
+### Fixed
+
+- **Task Scheduler → Google Tasks sync** — Scheduled task completion now emits `@task-complete:<id>` sentinel via `sendMessage`, enabling the google-tasks plugin's `afterMessage` hook to automatically sync completions to Google Tasks.
+- **Discord Reporter dynamic import** — Replaced fragile relative URL import (`../../../../src/daily-report.js` via `import.meta.url`) with robust `path.join(process.cwd(), 'src', 'daily-report.js')` absolute path.
 
 ### Changed
 
 - **Root `package.json`** — Workspaces expanded from `["packages/*"]` to `["packages/*", "plugins/*"]`.
 - **Plugin discovery** — Auto-discovers plugins from both `plugins/` directory and `node_modules/@nanogemclaw-plugin/*` scope.
+- **`vitest.config.ts`** — Added `plugins/*/src/**/*.test.ts` to test includes and `plugins/*/src/**/*.ts` to coverage includes.
 
 ### Dependencies
 
