@@ -79,6 +79,25 @@ export function createConfigRouter(deps: ConfigRouterDeps): Router {
     },
   );
 
+  // GET /api/config/scheduler - Scheduler concurrency info
+  router.get('/config/scheduler', async (_req, res) => {
+    try {
+      const os = await import('os');
+      const { SCHEDULER } = await import('../config.js');
+
+      res.json({
+        data: {
+          concurrency: SCHEDULER.CONCURRENCY,
+          recommended: SCHEDULER.getRecommendedConcurrency(),
+          cpuCores: os.default.cpus().length,
+          totalMemoryGB: +(os.default.totalmem() / 1024 ** 3).toFixed(1),
+        },
+      });
+    } catch {
+      res.status(500).json({ error: 'Failed to fetch scheduler info' });
+    }
+  });
+
   // GET /api/config/cache-stats - Context cache statistics
   router.get('/config/cache-stats', async (_req, res) => {
     try {

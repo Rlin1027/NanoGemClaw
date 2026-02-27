@@ -224,6 +224,26 @@ export const FAST_PATH = {
 /**
  * Allowed environment variables to pass to containers
  */
+/**
+ * Task scheduler concurrency configuration
+ */
+function getRecommendedConcurrency(): number {
+  const cpuCores = os.cpus().length;
+  const totalMemGB = os.totalmem() / 1024 ** 3;
+  const memCap = Math.floor(totalMemGB / 1.5); // ~1.5GB per subprocess
+  const cpuCap = Math.max(2, cpuCores - 1); // leave 1 core for main process
+  return Math.max(2, Math.min(cpuCap, memCap, 8)); // bounded [2, 8]
+}
+
+export const SCHEDULER = {
+  POLL_INTERVAL_MS: SCHEDULER_POLL_INTERVAL,
+  CONCURRENCY: safeParseInt(
+    process.env.SCHEDULER_CONCURRENCY,
+    getRecommendedConcurrency(),
+  ),
+  getRecommendedConcurrency,
+} as const;
+
 export const ALLOWED_CONTAINER_ENV_KEYS = [
   'GEMINI_API_KEY',
   'GOOGLE_API_KEY',

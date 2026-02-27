@@ -57,7 +57,11 @@ vi.mock('../maintenance.js', () => ({
 vi.mock('../config.js', () => ({
   GROUPS_DIR: '/tmp/test-groups',
   MAIN_GROUP_FOLDER: 'main',
-  SCHEDULER_POLL_INTERVAL: 100,
+  SCHEDULER: {
+    POLL_INTERVAL_MS: 100,
+    CONCURRENCY: 3,
+    getRecommendedConcurrency: () => 3,
+  },
   TIMEZONE: 'UTC',
   DATA_DIR: '/tmp/test-data',
 }));

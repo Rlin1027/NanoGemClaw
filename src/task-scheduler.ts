@@ -2,11 +2,11 @@ import { CronExpressionParser } from 'cron-parser';
 import fs from 'fs';
 import path from 'path';
 
+import { ConcurrencyLimiter } from './concurrency-limiter.js';
 import {
-  DATA_DIR,
   GROUPS_DIR,
   MAIN_GROUP_FOLDER,
-  SCHEDULER_POLL_INTERVAL,
+  SCHEDULER,
   TIMEZONE,
 } from './config.js';
 import { runContainerAgent, writeTasksSnapshot } from './container-runner.js';
@@ -155,7 +155,15 @@ async function runTask(
 export function startSchedulerLoop(deps: SchedulerDependencies): {
   stop: () => void;
 } {
-  logger.info('Scheduler loop started');
+  const limiter = new ConcurrencyLimiter(SCHEDULER.CONCURRENCY);
+
+  logger.info(
+    {
+      concurrency: SCHEDULER.CONCURRENCY,
+      recommended: SCHEDULER.getRecommendedConcurrency(),
+    },
+    'Scheduler started',
+  );
 
   let stopped = false;
   let currentTimeout: NodeJS.Timeout | null = null;
@@ -168,7 +176,7 @@ export function startSchedulerLoop(deps: SchedulerDependencies): {
       if (isMaintenanceMode()) {
         logger.debug('Scheduler skipping: maintenance mode active');
         if (!stopped) {
-          currentTimeout = setTimeout(loop, SCHEDULER_POLL_INTERVAL);
+          currentTimeout = setTimeout(loop, SCHEDULER.POLL_INTERVAL_MS);
         }
         return;
       }
@@ -181,34 +189,23 @@ export function startSchedulerLoop(deps: SchedulerDependencies): {
       // Fetch all tasks once per tick and pass cached list to each runTask call
       const allTasksSnapshot = dueTasks.length > 0 ? getAllTasks() : [];
 
-      for (const task of dueTasks) {
-        if (stopped) break;
+      // Filter to valid tasks, then run in parallel with concurrency limit
+      const validTasks = dueTasks.filter((task) => {
+        const current = getTaskById(task.id);
+        return current && current.status === 'active';
+      });
 
-        // Re-check task status in case it was paused/cancelled
-        const currentTask = getTaskById(task.id);
-        if (!currentTask || currentTask.status !== 'active') {
-          continue;
-        }
-
-        // Isolate each task - one failure shouldn't block others
-        try {
-          await runTask(currentTask, deps, allTasksSnapshot);
-        } catch (taskErr) {
-          logger.error(
-            {
-              taskId: task.id,
-              err: taskErr instanceof Error ? taskErr.message : String(taskErr),
-            },
-            'Task execution failed (isolated)',
-          );
-        }
-      }
+      await Promise.allSettled(
+        validTasks.map((task) =>
+          limiter.run(() => runTask(task, deps, allTasksSnapshot)),
+        ),
+      );
     } catch (err) {
       logger.error({ err }, 'Error in scheduler loop');
     }
 
     if (!stopped) {
-      currentTimeout = setTimeout(loop, SCHEDULER_POLL_INTERVAL);
+      currentTimeout = setTimeout(loop, SCHEDULER.POLL_INTERVAL_MS);
     }
   };
 
