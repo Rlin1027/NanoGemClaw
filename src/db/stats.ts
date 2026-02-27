@@ -102,7 +102,10 @@ export function getUsageTimeseries(
     hour: '%Y-%m-%d %H:00',
     day: '%Y-%m-%d',
   };
-  const fmt = GRANULARITY_FORMATS[granularity] || GRANULARITY_FORMATS['day'];
+  const fmt = GRANULARITY_FORMATS[granularity];
+  if (!fmt) {
+    throw new Error(`Invalid granularity: ${granularity}`);
+  }
 
   let query = `
     SELECT strftime('${fmt}', timestamp) as bucket,

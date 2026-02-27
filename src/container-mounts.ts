@@ -72,18 +72,28 @@ export function buildVolumeMounts(
     }
   }
 
-  // Global Gemini directory for OAuth credentials and session data
-  // Read-only: protect OAuth credentials from being modified by container code.
-  // The per-group sessions directory below overrides /home/node/.gemini/tmp
-  // with a writable mount for session isolation.
+  // Filtered Gemini settings directory — only copy settings.json, never oauth_creds.json.
+  // We create a temp directory under the group's data path and copy only safe files,
+  // so the container never has access to OAuth credentials.
   const hostGeminiDir = path.join(homeDir, '.gemini');
+  const filteredGeminiDir = path.join(
+    DATA_DIR,
+    'gemini-filtered',
+    group.folder,
+  );
+  fs.mkdirSync(filteredGeminiDir, { recursive: true });
   if (fs.existsSync(hostGeminiDir)) {
-    mounts.push({
-      hostPath: hostGeminiDir,
-      containerPath: '/home/node/.gemini',
-      readonly: true, // Security: prevent container from modifying OAuth credentials
-    });
+    const settingsSrc = path.join(hostGeminiDir, 'settings.json');
+    const settingsDst = path.join(filteredGeminiDir, 'settings.json');
+    if (fs.existsSync(settingsSrc)) {
+      fs.copyFileSync(settingsSrc, settingsDst);
+    }
   }
+  mounts.push({
+    hostPath: filteredGeminiDir,
+    containerPath: '/home/node/.gemini',
+    readonly: true, // Security: filtered copy — no OAuth credentials exposed
+  });
 
   // Per-group Gemini sessions directory (isolated from other groups)
   // This overrides the global .gemini/tmp for session isolation
@@ -126,10 +136,14 @@ export function buildVolumeMounts(
     });
 
     if (filteredLines.length > 0) {
-      fs.writeFileSync(
-        path.join(envDir, 'env'),
-        filteredLines.join('\n') + '\n',
-      );
+      const quotedLines = filteredLines.map((line) => {
+        const eqIdx = line.indexOf('=');
+        if (eqIdx === -1) return line;
+        const key = line.slice(0, eqIdx);
+        const val = line.slice(eqIdx + 1).replace(/'/g, "'\\''");
+        return `${key}='${val}'`;
+      });
+      fs.writeFileSync(path.join(envDir, 'env'), quotedLines.join('\n') + '\n');
       mounts.push({
         hostPath: envDir,
         containerPath: '/workspace/env-dir',

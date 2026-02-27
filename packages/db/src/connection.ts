@@ -12,6 +12,7 @@ export function initDatabase(options?: { storeDir?: string }): void {
   db = new Database(dbPath);
   db.exec('PRAGMA journal_mode = WAL');
   db.exec('PRAGMA busy_timeout = 5000');
+  db.exec('PRAGMA foreign_keys = ON');
   db.exec(`
     CREATE TABLE IF NOT EXISTS chats (
       jid TEXT PRIMARY KEY,
@@ -88,55 +89,69 @@ export function initDatabase(options?: { storeDir?: string }): void {
   const currentVersion = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version;
 
   if (currentVersion < 1) {
-    // Migration v1: composite index + column additions
-    db.exec('CREATE INDEX IF NOT EXISTS idx_messages_chat_timestamp ON messages(chat_jid, timestamp)');
-
-    // Add sender_name column if it doesn't exist
+    db.exec('BEGIN');
     try {
-      db.exec(`ALTER TABLE messages ADD COLUMN sender_name TEXT`);
-    } catch {
-      /* column already exists */
+      // Migration v1: composite index + column additions
+      db.exec('CREATE INDEX IF NOT EXISTS idx_messages_chat_timestamp ON messages(chat_jid, timestamp)');
+
+      // Add sender_name column if it doesn't exist
+      try {
+        db.exec(`ALTER TABLE messages ADD COLUMN sender_name TEXT`);
+      } catch {
+        /* column already exists */
+      }
+
+      // Add context_mode column if it doesn't exist
+      try {
+        db.exec(`ALTER TABLE scheduled_tasks ADD COLUMN context_mode TEXT DEFAULT 'isolated'`);
+      } catch {
+        /* column already exists */
+      }
+
+      // Create preferences table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS preferences (
+          group_folder TEXT NOT NULL,
+          key TEXT NOT NULL,
+          value TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          PRIMARY KEY (group_folder, key)
+        );
+        CREATE INDEX IF NOT EXISTS idx_preferences_group ON preferences(group_folder);
+      `);
+
+      db.exec('PRAGMA user_version = 1');
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
     }
-
-    // Add context_mode column if it doesn't exist
-    try {
-      db.exec(`ALTER TABLE scheduled_tasks ADD COLUMN context_mode TEXT DEFAULT 'isolated'`);
-    } catch {
-      /* column already exists */
-    }
-
-    // Create preferences table
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS preferences (
-        group_folder TEXT NOT NULL,
-        key TEXT NOT NULL,
-        value TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        PRIMARY KEY (group_folder, key)
-      );
-      CREATE INDEX IF NOT EXISTS idx_preferences_group ON preferences(group_folder);
-    `);
-
-    db.exec('PRAGMA user_version = 1');
   }
 
   if (currentVersion < 2) {
-    // Migration v2: Knowledge base tables
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS knowledge_docs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        group_folder TEXT NOT NULL,
-        filename TEXT NOT NULL,
-        title TEXT NOT NULL,
-        content TEXT NOT NULL,
-        size_chars INTEGER NOT NULL,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        UNIQUE(group_folder, filename)
-      );
-      CREATE INDEX IF NOT EXISTS idx_knowledge_group ON knowledge_docs(group_folder);
-    `);
-    db.exec('PRAGMA user_version = 2');
+    db.exec('BEGIN');
+    try {
+      // Migration v2: Knowledge base tables
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS knowledge_docs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          group_folder TEXT NOT NULL,
+          filename TEXT NOT NULL,
+          title TEXT NOT NULL,
+          content TEXT NOT NULL,
+          size_chars INTEGER NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          UNIQUE(group_folder, filename)
+        );
+        CREATE INDEX IF NOT EXISTS idx_knowledge_group ON knowledge_docs(group_folder);
+      `);
+      db.exec('PRAGMA user_version = 2');
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
   }
 
   // Future migrations go here:
@@ -154,5 +169,6 @@ export function closeDatabase(): void {
 }
 
 export function getDatabase(): Database.Database {
+  if (!db) throw new Error('Database not initialized. Call initDatabase() first.');
   return db;
 }

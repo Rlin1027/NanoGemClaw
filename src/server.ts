@@ -2,6 +2,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import fs from 'fs';
 import path from 'path';
@@ -82,9 +83,12 @@ export function startDashboardServer() {
   httpServer = server;
 
   // Middleware
+  app.use(helmet());
   app.use(
     cors({
       origin: (origin, callback) => {
+        // !origin is intentionally allowed for non-browser requests (curl, server-to-server);
+        // auth middleware is the primary defense for all protected endpoints.
         if (!origin || ALLOWED_ORIGINS.includes(origin)) {
           callback(null, true);
         } else {
@@ -166,22 +170,21 @@ export function startDashboardServer() {
     },
   });
 
-  // Socket.io authentication - check both ACCESS_CODE and API key
+  // Socket.io authentication - OR logic matching HTTP middleware: authenticated if either credential matches
   if (DASHBOARD_API_KEY || ACCESS_CODE) {
     io.use((socket, next) => {
+      let authenticated = false;
       if (ACCESS_CODE) {
         const code = String(socket.handshake.auth?.accessCode || '');
-        if (!safeCompare(code, ACCESS_CODE)) {
-          next(new Error('Authentication required'));
-          return;
-        }
+        if (safeCompare(code, ACCESS_CODE)) authenticated = true;
       }
-      if (DASHBOARD_API_KEY) {
+      if (!authenticated && DASHBOARD_API_KEY) {
         const token = String(socket.handshake.auth?.token || '');
-        if (!safeCompare(token, DASHBOARD_API_KEY)) {
-          next(new Error('Authentication required'));
-          return;
-        }
+        if (safeCompare(token, DASHBOARD_API_KEY)) authenticated = true;
+      }
+      if (!authenticated) {
+        next(new Error('Authentication required'));
+        return;
       }
       next();
     });

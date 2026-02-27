@@ -56,7 +56,14 @@ export const updatePreferencesBody = z.object({
     'timezone',
     'custom_instructions',
   ]),
-  value: z.unknown(),
+  value: z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.record(z.string(), z.unknown()),
+    z.array(z.unknown()),
+  ]),
 });
 
 /** PUT /api/prompt/:groupFolder body */

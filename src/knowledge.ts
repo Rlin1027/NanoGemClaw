@@ -4,6 +4,16 @@ import fs from 'fs';
 import path from 'path';
 import { GROUPS_DIR } from './config.js';
 
+/**
+ * Sanitize a user-provided query for safe use in FTS5 MATCH expressions.
+ * Strips special FTS5 operators and wraps as a literal phrase.
+ */
+function sanitizeFTS5Query(query: string): string {
+  const stripped = query.replace(/[*^{}():\-+]/g, '');
+  if (!stripped.trim()) return '""';
+  return `"${stripped.replace(/"/g, '""')}"`;
+}
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -322,7 +332,7 @@ export function searchKnowledge(
   limit = 10,
 ): KnowledgeSearchResult[] {
   // Sanitize FTS5 query - wrap in quotes to treat as literal phrase
-  const sanitizedQuery = `"${query.replace(/"/g, '""')}"`;
+  const sanitizedQuery = sanitizeFTS5Query(query);
 
   const results = db
     .prepare(

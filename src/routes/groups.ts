@@ -312,9 +312,10 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
         if (format === 'md' || format === 'markdown') {
           const md = formatExportAsMarkdown(exportData);
           res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+          const safeFilename = folder.replace(/[^a-zA-Z0-9_-]/g, '_');
           res.setHeader(
             'Content-Disposition',
-            `attachment; filename="${folder}-export.md"`,
+            `attachment; filename="${safeFilename}-export.md"`,
           );
           res.send(md);
         } else {

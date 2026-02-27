@@ -56,6 +56,13 @@ export function updateTask(
     >
   >,
 ): void {
+  const ALLOWED_COLUMNS = new Set([
+    'prompt',
+    'schedule_type',
+    'schedule_value',
+    'next_run',
+    'status',
+  ]);
   const db = getDatabase();
   const fields: string[] = [];
   const values: unknown[] = [];
@@ -82,6 +89,13 @@ export function updateTask(
   }
 
   if (fields.length === 0) return;
+
+  for (const field of fields) {
+    const col = field.split(' ')[0];
+    if (!ALLOWED_COLUMNS.has(col)) {
+      throw new Error(`Invalid column: ${col}`);
+    }
+  }
 
   values.push(id);
   db.prepare(

@@ -211,7 +211,8 @@ Only suggest follow-ups when they genuinely add value. Do not suggest them for s
   const envLines = existingEnvContent
     .split('\n')
     .filter((l) => l.trim() && !l.startsWith('GEMINI_SYSTEM_PROMPT='));
-  envLines.push(`GEMINI_SYSTEM_PROMPT=${sanitizedPrompt}`);
+  const shellQuoted = sanitizedPrompt.replace(/'/g, "'\\''");
+  envLines.push(`GEMINI_SYSTEM_PROMPT='${shellQuoted}'`);
   fs.writeFileSync(envFilePath, envLines.join('\n') + '\n');
 
   // Ensure the env-dir mount is present (buildVolumeMounts adds it only when .env exists with API keys)

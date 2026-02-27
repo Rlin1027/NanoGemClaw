@@ -69,6 +69,16 @@ export function removeFromIndex(db: Database.Database, rowid: number): void {
   db.prepare('DELETE FROM messages_fts WHERE rowid = ?').run(rowid);
 }
 
+/**
+ * Sanitize a user-provided query for safe use in FTS5 MATCH expressions.
+ * Strips special FTS5 operators and wraps as a literal phrase.
+ */
+function sanitizeFTS5Query(query: string): string {
+  const stripped = query.replace(/[*^{}():\-+]/g, '');
+  if (!stripped.trim()) return '""';
+  return `"${stripped.replace(/"/g, '""')}"`;
+}
+
 export interface SearchResult {
   id: number;
   chatJid: string;
@@ -97,15 +107,14 @@ export function searchMessages(
   }
 
   // Strip FTS5 special characters to prevent query injection, then wrap as literal phrase
-  const sanitized = query.replace(/[*^{}():\-]/g, '');
-  const escapedQuery = `"${sanitized.replace(/"/g, '""')}"`;
+  const escapedQuery = sanitizeFTS5Query(query);
 
   // Build WHERE clause for optional group filter
   let groupFilter = '';
   const params: any[] = [escapedQuery];
   if (options?.group) {
-    groupFilter = 'AND m.chat_jid LIKE ?';
-    params.push(`%${options.group}%`);
+    groupFilter = 'AND m.chat_jid = ?';
+    params.push(options.group);
   }
 
   // Count total matches
