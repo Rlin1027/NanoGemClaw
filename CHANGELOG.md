@@ -44,7 +44,7 @@ Transformed NanoGemClaw into a Google ecosystem personal assistant with 6 new pl
 - **Settings — Drive Knowledge RAG** section: Knowledge folder count, scan interval summary, quick "Reindex" button with link to full RAG management.
 - **Settings — Google Calendar** section: Connection status, available Gemini tool list.
 - **DashboardLayout** — Added Drive navigation item in sidebar.
-- **i18n** — 28 new translation keys for calendar and tasks pages.
+- **i18n** — 28 new translation keys for calendar and tasks pages, synced to all 8 supported languages (en, es, ja, ko, pt, ru, zh-CN, zh-TW).
 
 #### Plugin Test Suite — 298 New Tests
 
@@ -75,6 +75,7 @@ Comprehensive test coverage for all 6 Google ecosystem plugins (902 total tests 
 
 - **Task Scheduler → Google Tasks sync** — Scheduled task completion now emits `@task-complete:<id>` sentinel via `sendMessage`, enabling the google-tasks plugin's `afterMessage` hook to automatically sync completions to Google Tasks.
 - **Discord Reporter dynamic import** — Replaced fragile relative URL import (`../../../../src/daily-report.js` via `import.meta.url`) with robust `path.join(process.cwd(), 'src', 'daily-report.js')` absolute path.
+- **Dashboard i18n key symmetry** — Added 12 calendar keys and 22 tasks keys (Google ecosystem UI) to all 7 non-English locales (es, ja, ko, pt, ru, zh-CN, zh-TW), fixing CI i18n symmetry test failures.
 
 ### Changed
 
