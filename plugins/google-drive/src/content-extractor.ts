@@ -19,9 +19,9 @@ const TRUNCATION_MARKER = '... [truncated]';
 // ---------------------------------------------------------------------------
 
 export interface ExtractedContent {
-    content: string;
-    mimeType: string;
-    truncated: boolean;
+  content: string;
+  mimeType: string;
+  truncated: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -40,12 +40,12 @@ export interface ExtractedContent {
  * Returns the content capped at MAX_CONTENT_CHARS with a truncation marker.
  */
 export async function extractContent(
-    fileId: string,
-    mimeType: string,
+  fileId: string,
+  mimeType: string,
 ): Promise<ExtractedContent> {
-    const effectiveMime = resolveEffectiveMime(mimeType);
-    const raw = await getFileContent(fileId, mimeType);
-    return truncateContent(raw, MAX_CONTENT_CHARS, effectiveMime);
+  const effectiveMime = resolveEffectiveMime(mimeType);
+  const raw = await getFileContent(fileId, mimeType);
+  return truncateContent(raw, MAX_CONTENT_CHARS, effectiveMime);
 }
 
 /**
@@ -53,18 +53,18 @@ export async function extractContent(
  * Exported for unit testing and external use.
  */
 export function truncateContent(
-    content: string,
-    maxChars: number,
-    mimeType = 'text/plain',
+  content: string,
+  maxChars: number,
+  mimeType = 'text/plain',
 ): ExtractedContent {
-    if (content.length <= maxChars) {
-        return { content, mimeType, truncated: false };
-    }
-    return {
-        content: content.slice(0, maxChars) + TRUNCATION_MARKER,
-        mimeType,
-        truncated: true,
-    };
+  if (content.length <= maxChars) {
+    return { content, mimeType, truncated: false };
+  }
+  return {
+    content: content.slice(0, maxChars) + TRUNCATION_MARKER,
+    mimeType,
+    truncated: true,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -77,17 +77,17 @@ export function truncateContent(
  * drive-api.ts via the export endpoint).
  */
 function resolveEffectiveMime(mimeType: string): string {
-    switch (mimeType) {
-        case 'application/vnd.google-apps.document':
-            return 'text/plain';
-        case 'application/vnd.google-apps.spreadsheet':
-            return 'text/csv';
-        case 'application/vnd.google-apps.presentation':
-            return 'text/plain';
-        case 'application/pdf':
-            return 'text/plain';
-        default:
-            // text/plain, text/markdown, text/html, etc.
-            return mimeType.startsWith('text/') ? mimeType : 'text/plain';
-    }
+  switch (mimeType) {
+    case 'application/vnd.google-apps.document':
+      return 'text/plain';
+    case 'application/vnd.google-apps.spreadsheet':
+      return 'text/csv';
+    case 'application/vnd.google-apps.presentation':
+      return 'text/plain';
+    case 'application/pdf':
+      return 'text/plain';
+    default:
+      // text/plain, text/markdown, text/html, etc.
+      return mimeType.startsWith('text/') ? mimeType : 'text/plain';
+  }
 }

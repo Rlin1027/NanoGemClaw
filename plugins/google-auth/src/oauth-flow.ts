@@ -25,6 +25,7 @@ export interface OAuthFlowResult {
 let activeServer: http.Server | null = null;
 let flowResolve: ((result: OAuthFlowResult) => void) | null = null;
 let flowReject: ((err: Error) => void) | null = null;
+let flowTimer: ReturnType<typeof setTimeout> | null = null;
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -62,8 +63,9 @@ export function startOAuthCallbackServer(): Promise<OAuthFlowResult> {
         if (error) {
           res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
           res.end(renderPage(false, error));
-          stopCallbackServer();
-          flowReject?.(new Error(`OAuth authorization denied: ${error}`));
+          const rejectFn = flowReject;
+          stopCallbackServer(false);
+          rejectFn?.(new Error(`OAuth authorization denied: ${error}`));
           return;
         }
 
@@ -71,44 +73,51 @@ export function startOAuthCallbackServer(): Promise<OAuthFlowResult> {
         if (!code) {
           res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
           res.end(renderPage(false, 'No authorization code received'));
-          stopCallbackServer();
-          flowReject?.(new Error('No authorization code in callback'));
+          const rejectFn = flowReject;
+          stopCallbackServer(false);
+          rejectFn?.(new Error('No authorization code in callback'));
           return;
         }
 
         const port = (server.address() as { port: number }).port;
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(renderPage(true));
-        stopCallbackServer();
+        const resolveFn = flowResolve;
+        stopCallbackServer(false);
 
-        flowResolve?.({
+        resolveFn?.({
           code,
           redirectUri: `http://localhost:${port}/oauth2callback`,
         });
       } catch (err) {
-        stopCallbackServer();
-        flowReject?.(err instanceof Error ? err : new Error(String(err)));
+        const rejectFn = flowReject;
+        stopCallbackServer(false);
+        rejectFn?.(err instanceof Error ? err : new Error(String(err)));
       }
     });
 
     activeServer = server;
 
     // 5-minute timeout
-    const timer = setTimeout(() => {
-      stopCallbackServer();
-      flowReject?.(new Error('OAuth flow timed out after 5 minutes'));
-    }, 5 * 60 * 1000);
-
-    // Attach timer to server for cleanup
-    (server as any).__timer = timer;
-
-    // Listen on a random available port, localhost only
-    server.listen(0, '127.0.0.1');
+    flowTimer = setTimeout(
+      () => {
+        const rejectFn = flowReject;
+        stopCallbackServer(false);
+        rejectFn?.(new Error('OAuth flow timed out after 5 minutes'));
+      },
+      5 * 60 * 1000,
+    );
 
     server.on('error', (err) => {
-      stopCallbackServer();
-      flowReject?.(err);
+      const rejectFn = flowReject;
+      stopCallbackServer(false);
+      rejectFn?.(err);
     });
+
+    // Listen on a random available port, localhost only.
+    // Using the 'listening' event avoids the race condition of a setTimeout
+    // that could fire before the server is actually bound.
+    server.listen(0, '127.0.0.1');
   });
 }
 
@@ -123,13 +132,23 @@ export function getCallbackPort(): number | null {
 
 /**
  * Stop the callback server if running.
+ *
+ * When called externally (not from the request handler), any pending OAuth
+ * promise is rejected to prevent a promise leak.  Internal callers (the
+ * request handler paths) pass `rejectPending = false` because they resolve
+ * or reject the promise themselves immediately after calling this function.
  */
-export function stopCallbackServer(): void {
+export function stopCallbackServer(rejectPending = true): void {
+  if (flowTimer) {
+    clearTimeout(flowTimer);
+    flowTimer = null;
+  }
   if (activeServer) {
-    const timer = (activeServer as any).__timer;
-    if (timer) clearTimeout(timer);
     activeServer.close();
     activeServer = null;
+  }
+  if (rejectPending && flowReject) {
+    flowReject(new Error('OAuth callback server stopped'));
   }
   flowResolve = null;
   flowReject = null;
@@ -139,14 +158,21 @@ export function stopCallbackServer(): void {
 // HTML templates
 // ---------------------------------------------------------------------------
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function renderPage(success: boolean, errorMsg?: string): string {
   const title = success ? 'Authorization Successful' : 'Authorization Failed';
-  const heading = success
-    ? 'Google Account Connected'
-    : 'Authorization Failed';
+  const heading = success ? 'Google Account Connected' : 'Authorization Failed';
   const body = success
     ? 'NanoGemClaw is now connected to your Google account. You can close this window.'
-    : `${errorMsg || 'Unknown error'}. Please try again from the dashboard.`;
+    : `${escapeHtml(errorMsg || 'Unknown error')}. Please try again from the dashboard.`;
   const color = success ? '#4ade80' : '#f87171';
 
   return `<!DOCTYPE html>

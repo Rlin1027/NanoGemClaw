@@ -9,7 +9,10 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { GoogleGenAI } from '@google/genai';
-import { listFolderContents, extractContent } from 'nanogemclaw-plugin-google-drive';
+import {
+  listFolderContents,
+  extractContent,
+} from 'nanogemclaw-plugin-google-drive';
 import type { DriveFile } from 'nanogemclaw-plugin-google-drive';
 import type { PluginApi } from '@nanogemclaw/plugin-api';
 
@@ -18,28 +21,28 @@ import type { PluginApi } from '@nanogemclaw/plugin-api';
 // ---------------------------------------------------------------------------
 
 export interface IndexedChunk {
-    text: string;
-    embedding: number[];
-    startOffset: number;
+  text: string;
+  embedding: number[];
+  startOffset: number;
 }
 
 export interface IndexedDocument {
-    fileId: string;
-    name: string;
-    mimeType: string;
-    modifiedTime: string;
-    chunks: IndexedChunk[];
+  fileId: string;
+  name: string;
+  mimeType: string;
+  modifiedTime: string;
+  chunks: IndexedChunk[];
 }
 
 export interface KnowledgeIndex {
-    /** keyed by fileId */
-    documents: Record<string, IndexedDocument>;
-    /** ISO timestamp of last full scan */
-    lastScanAt: string | null;
+  /** keyed by fileId */
+  documents: Record<string, IndexedDocument>;
+  /** ISO timestamp of last full scan */
+  lastScanAt: string | null;
 }
 
 export function emptyIndex(): KnowledgeIndex {
-    return { documents: {}, lastScanAt: null };
+  return { documents: {}, lastScanAt: null };
 }
 
 // ---------------------------------------------------------------------------
@@ -47,19 +50,28 @@ export function emptyIndex(): KnowledgeIndex {
 // ---------------------------------------------------------------------------
 
 export async function loadIndex(dataDir: string): Promise<KnowledgeIndex> {
-    const indexPath = path.join(dataDir, 'knowledge-index.json');
-    try {
-        const raw = await fs.readFile(indexPath, 'utf-8');
-        return JSON.parse(raw) as KnowledgeIndex;
-    } catch {
-        return emptyIndex();
-    }
+  const indexPath = path.join(dataDir, 'knowledge-index.json');
+  try {
+    const raw = await fs.readFile(indexPath, 'utf-8');
+    return JSON.parse(raw) as KnowledgeIndex;
+  } catch {
+    return emptyIndex();
+  }
 }
 
-export async function saveIndex(dataDir: string, index: KnowledgeIndex): Promise<void> {
-    const indexPath = path.join(dataDir, 'knowledge-index.json');
-    await fs.mkdir(dataDir, { recursive: true });
-    await fs.writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
+/**
+ * Persist the knowledge index atomically (write to tmp, then rename).
+ * This prevents corruption if the process crashes mid-write.
+ */
+export async function saveIndex(
+  dataDir: string,
+  index: KnowledgeIndex,
+): Promise<void> {
+  const indexPath = path.join(dataDir, 'knowledge-index.json');
+  const tmpPath = `${indexPath}.tmp.${Date.now()}`;
+  await fs.mkdir(dataDir, { recursive: true });
+  await fs.writeFile(tmpPath, JSON.stringify(index, null, 2), 'utf-8');
+  await fs.rename(tmpPath, indexPath);
 }
 
 // ---------------------------------------------------------------------------
@@ -71,68 +83,98 @@ export async function saveIndex(dataDir: string, index: KnowledgeIndex): Promise
  * the combined length approaches `maxChars`.  This keeps chunks semantically
  * cohesive while respecting the size limit.
  */
-function chunkText(text: string, maxChars = 1000): Array<{ text: string; startOffset: number }> {
-    const paragraphs = text.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
-    const chunks: Array<{ text: string; startOffset: number }> = [];
+function chunkText(
+  text: string,
+  maxChars = 1000,
+): Array<{ text: string; startOffset: number }> {
+  const paragraphs = text
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const chunks: Array<{ text: string; startOffset: number }> = [];
 
-    let current = '';
-    let startOffset = 0;
-    let cursor = 0;
+  let current = '';
+  let startOffset = 0;
+  let cursor = 0;
 
-    for (const para of paragraphs) {
-        const candidate = current ? `${current}\n\n${para}` : para;
-        if (candidate.length > maxChars && current.length > 0) {
-            chunks.push({ text: current, startOffset });
-            startOffset = cursor;
-            current = para;
-        } else {
-            current = candidate;
-        }
-        // Advance cursor past this paragraph and the separator
-        cursor += para.length + 2;
+  for (const para of paragraphs) {
+    const candidate = current ? `${current}\n\n${para}` : para;
+    if (candidate.length > maxChars && current.length > 0) {
+      chunks.push({ text: current, startOffset });
+      startOffset = cursor;
+      current = para;
+    } else {
+      current = candidate;
     }
+    // Advance cursor past this paragraph and the separator
+    cursor += para.length + 2;
+  }
 
-    if (current.length > 0) {
-        chunks.push({ text: current, startOffset });
+  if (current.length > 0) {
+    chunks.push({ text: current, startOffset });
+  }
+
+  // If nothing split (no blank lines), hard-split on maxChars
+  if (chunks.length === 0 && text.length > 0) {
+    for (let i = 0; i < text.length; i += maxChars) {
+      chunks.push({ text: text.slice(i, i + maxChars), startOffset: i });
     }
+  }
 
-    // If nothing split (no blank lines), hard-split on maxChars
-    if (chunks.length === 0 && text.length > 0) {
-        for (let i = 0; i < text.length; i += maxChars) {
-            chunks.push({ text: text.slice(i, i + maxChars), startOffset: i });
-        }
-    }
-
-    return chunks;
+  return chunks;
 }
 
 // ---------------------------------------------------------------------------
 // Embedding
 // ---------------------------------------------------------------------------
 
+const EMBED_MAX_RETRIES = 3;
+const EMBED_BASE_DELAY_MS = 1000;
+
+async function embedWithRetry(
+  genai: InstanceType<typeof GoogleGenAI>,
+  text: string,
+): Promise<number[]> {
+  for (let attempt = 1; attempt <= EMBED_MAX_RETRIES; attempt++) {
+    try {
+      const response = await genai.models.embedContent({
+        model: 'text-embedding-004',
+        contents: [{ parts: [{ text }] }],
+      });
+      const values = response.embeddings?.[0]?.values;
+      if (!values || values.length === 0) {
+        throw new Error(
+          `Empty embedding returned for text starting with: "${text.slice(0, 60)}"`,
+        );
+      }
+      return values;
+    } catch (err) {
+      if (attempt === EMBED_MAX_RETRIES) throw err;
+      // Exponential backoff: 1s, 2s, 4s
+      await new Promise((r) =>
+        setTimeout(r, EMBED_BASE_DELAY_MS * 2 ** (attempt - 1)),
+      );
+    }
+  }
+  // Unreachable, but satisfies TypeScript
+  throw new Error('embedWithRetry: exhausted retries');
+}
+
 async function embedBatch(texts: string[]): Promise<number[][]> {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-        throw new Error('GEMINI_API_KEY is not set — cannot generate embeddings');
-    }
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY is not set — cannot generate embeddings');
+  }
 
-    const genai = new GoogleGenAI({ apiKey });
-    const embeddings: number[][] = [];
+  const genai = new GoogleGenAI({ apiKey });
+  const embeddings: number[][] = [];
 
-    // Embed sequentially to avoid rate-limiting
-    for (const text of texts) {
-        const response = await genai.models.embedContent({
-            model: 'text-embedding-004',
-            contents: [{ parts: [{ text }] }],
-        });
-        const values = response.embeddings?.[0]?.values;
-        if (!values || values.length === 0) {
-            throw new Error(`Empty embedding returned for text starting with: "${text.slice(0, 60)}"`);
-        }
-        embeddings.push(values);
-    }
+  // Embed sequentially to avoid rate-limiting, with per-chunk retry
+  for (const text of texts) {
+    embeddings.push(await embedWithRetry(genai, text));
+  }
 
-    return embeddings;
+  return embeddings;
 }
 
 // ---------------------------------------------------------------------------
@@ -140,47 +182,49 @@ async function embedBatch(texts: string[]): Promise<number[][]> {
 // ---------------------------------------------------------------------------
 
 export async function indexFile(
-    file: DriveFile,
-    maxChunkChars: number,
-    logger: PluginApi['logger'],
+  file: DriveFile,
+  maxChunkChars: number,
+  logger: PluginApi['logger'],
 ): Promise<IndexedDocument | null> {
-    let extracted: { content: string; mimeType: string; truncated: boolean };
-    try {
-        extracted = await extractContent(file.id, file.mimeType);
-    } catch (err) {
-        logger.warn(`drive-knowledge-rag: cannot extract "${file.name}" — ${err}`);
-        return null;
-    }
+  let extracted: { content: string; mimeType: string; truncated: boolean };
+  try {
+    extracted = await extractContent(file.id, file.mimeType);
+  } catch (err) {
+    logger.warn(`drive-knowledge-rag: cannot extract "${file.name}" — ${err}`);
+    return null;
+  }
 
-    if (!extracted.content || extracted.content.trim().length === 0) {
-        logger.debug(`drive-knowledge-rag: skipping empty file "${file.name}"`);
-        return null;
-    }
+  if (!extracted.content?.trim()) {
+    logger.debug(`drive-knowledge-rag: skipping empty file "${file.name}"`);
+    return null;
+  }
 
-    const rawChunks = chunkText(extracted.content, maxChunkChars);
-    if (rawChunks.length === 0) return null;
+  const rawChunks = chunkText(extracted.content, maxChunkChars);
+  if (rawChunks.length === 0) return null;
 
-    let embeddings: number[][];
-    try {
-        embeddings = await embedBatch(rawChunks.map((c) => c.text));
-    } catch (err) {
-        logger.warn(`drive-knowledge-rag: embedding failed for "${file.name}" — ${err}`);
-        return null;
-    }
+  let embeddings: number[][];
+  try {
+    embeddings = await embedBatch(rawChunks.map((c) => c.text));
+  } catch (err) {
+    logger.warn(
+      `drive-knowledge-rag: embedding failed for "${file.name}" — ${err}`,
+    );
+    return null;
+  }
 
-    const chunks: IndexedChunk[] = rawChunks.map((c, i) => ({
-        text: c.text,
-        embedding: embeddings[i],
-        startOffset: c.startOffset,
-    }));
+  const chunks: IndexedChunk[] = rawChunks.map((c, i) => ({
+    text: c.text,
+    embedding: embeddings[i],
+    startOffset: c.startOffset,
+  }));
 
-    return {
-        fileId: file.id,
-        name: file.name,
-        mimeType: file.mimeType,
-        modifiedTime: file.modifiedTime,
-        chunks,
-    };
+  return {
+    fileId: file.id,
+    name: file.name,
+    mimeType: file.mimeType,
+    modifiedTime: file.modifiedTime,
+    chunks,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -188,17 +232,17 @@ export async function indexFile(
 // ---------------------------------------------------------------------------
 
 export function removeStaleDocuments(
-    index: KnowledgeIndex,
-    currentFileIds: Set<string>,
+  index: KnowledgeIndex,
+  currentFileIds: Set<string>,
 ): { removed: number } {
-    let removed = 0;
-    for (const fileId of Object.keys(index.documents)) {
-        if (!currentFileIds.has(fileId)) {
-            delete index.documents[fileId];
-            removed++;
-        }
+  let removed = 0;
+  for (const fileId of Object.keys(index.documents)) {
+    if (!currentFileIds.has(fileId)) {
+      delete index.documents[fileId];
+      removed++;
     }
-    return { removed };
+  }
+  return { removed };
 }
 
 // ---------------------------------------------------------------------------
@@ -206,74 +250,81 @@ export function removeStaleDocuments(
 // ---------------------------------------------------------------------------
 
 export async function scanAndIndex(
-    folderIds: string[],
-    index: KnowledgeIndex,
-    maxChunkChars: number,
-    api: PluginApi,
-): Promise<{ added: number; updated: number; removed: number; skipped: number }> {
-    const logger = api.logger;
-    const stats = { added: 0, updated: 0, removed: 0, skipped: 0 };
+  folderIds: string[],
+  index: KnowledgeIndex,
+  maxChunkChars: number,
+  api: PluginApi,
+): Promise<{
+  added: number;
+  updated: number;
+  removed: number;
+  skipped: number;
+}> {
+  const logger = api.logger;
+  const stats = { added: 0, updated: 0, removed: 0, skipped: 0 };
 
-    if (folderIds.length === 0) {
-        logger.debug('drive-knowledge-rag: no folders configured — skipping scan');
-        return stats;
+  if (folderIds.length === 0) {
+    logger.debug('drive-knowledge-rag: no folders configured — skipping scan');
+    return stats;
+  }
+
+  // Collect all files across all configured folders
+  const allFiles = new Map<string, DriveFile>();
+
+  for (const folderId of folderIds) {
+    let files: DriveFile[];
+    try {
+      files = await listFolderContents(folderId);
+    } catch (err) {
+      logger.warn(
+        `drive-knowledge-rag: cannot list folder ${folderId} — ${err}`,
+      );
+      continue;
     }
-
-    // Collect all files across all configured folders
-    const allFiles = new Map<string, DriveFile>();
-
-    for (const folderId of folderIds) {
-        let files: DriveFile[];
-        try {
-            files = await listFolderContents(folderId, { recursive: true });
-        } catch (err) {
-            logger.warn(`drive-knowledge-rag: cannot list folder ${folderId} — ${err}`);
-            continue;
-        }
-        for (const file of files) {
-            allFiles.set(file.id, file);
-        }
+    for (const file of files) {
+      allFiles.set(file.id, file);
     }
+  }
 
-    // Remove documents whose source files are gone
-    const currentIds = new Set(allFiles.keys());
-    const { removed } = removeStaleDocuments(index, currentIds);
-    stats.removed = removed;
+  // Remove documents whose source files are gone
+  const currentIds = new Set(allFiles.keys());
+  const { removed } = removeStaleDocuments(index, currentIds);
+  stats.removed = removed;
 
-    // Index new or changed files
-    for (const file of allFiles.values()) {
-        const existing = index.documents[file.id];
+  // Index new or changed files
+  for (const file of allFiles.values()) {
+    const existing = index.documents[file.id];
 
-        if (existing && existing.modifiedTime === file.modifiedTime) {
-            stats.skipped++;
-            continue;
-        }
-
-        logger.info(
-            `drive-knowledge-rag: indexing "${file.name}" (${existing ? 'updated' : 'new'})`,
-        );
-
-        const doc = await indexFile(file, maxChunkChars, logger);
-        if (doc) {
-            const isNew = !existing;
-            index.documents[file.id] = doc;
-            if (isNew) {
-                stats.added++;
-            } else {
-                stats.updated++;
-            }
-        } else {
-            stats.skipped++;
-        }
+    if (existing && existing.modifiedTime === file.modifiedTime) {
+      stats.skipped++;
+      continue;
     }
-
-    index.lastScanAt = new Date().toISOString();
-    await saveIndex(api.dataDir, index);
 
     logger.info(
-        `drive-knowledge-rag: scan complete — ` +
-        `added=${stats.added} updated=${stats.updated} removed=${stats.removed} skipped=${stats.skipped}`,
+      `drive-knowledge-rag: indexing "${file.name}" (${existing ? 'updated' : 'new'})`,
     );
 
-    return stats;
+    const doc = await indexFile(file, maxChunkChars, logger);
+    if (doc) {
+      const isNew = !existing;
+      index.documents[file.id] = doc;
+      if (isNew) {
+        stats.added++;
+      } else {
+        stats.updated++;
+      }
+    } else {
+      stats.skipped++;
+    }
+  }
+
+  index.lastScanAt = new Date().toISOString();
+  await saveIndex(api.dataDir, index);
+
+  logger.info(
+    `drive-knowledge-rag: scan complete — ` +
+      `added=${stats.added} updated=${stats.updated} removed=${stats.removed} skipped=${stats.skipped}`,
+  );
+
+  return stats;
 }
