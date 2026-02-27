@@ -117,6 +117,23 @@ export function createConfigRouter(deps: ConfigRouterDeps): Router {
     }
   });
 
+  // GET /api/config/models — Available Gemini models
+  router.get('/config/models', async (_req, res) => {
+    try {
+      const { getAvailableModels } = await import('@nanogemclaw/gemini');
+      const { getDefaultModel } = await import('../config.js');
+      const models = getAvailableModels();
+      res.json({
+        data: {
+          models,
+          defaultModel: getDefaultModel(),
+        },
+      });
+    } catch {
+      res.status(500).json({ error: 'Failed to fetch available models' });
+    }
+  });
+
   // GET /api/config/secrets
   router.get('/config/secrets', (_req, res) => {
     const secretKeys = [

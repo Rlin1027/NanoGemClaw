@@ -154,15 +154,14 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
 
       // Validate geminiModel if provided
       if (geminiModel !== undefined) {
-        const validModels = [
-          'gemini-3-flash-preview',
-          'gemini-3-pro-preview',
-          'gemini-2.5-flash',
-          'gemini-2.5-pro',
-        ];
-        if (!validModels.includes(geminiModel)) {
-          res.status(400).json({ error: `Invalid model: ${geminiModel}` });
-          return;
+        // "auto" is always valid — means "use the latest auto-detected model"
+        if (geminiModel !== 'auto') {
+          const { getAvailableModels } = await import('@nanogemclaw/gemini');
+          const validModels = getAvailableModels().map((m) => m.id);
+          if (!validModels.includes(geminiModel)) {
+            res.status(400).json({ error: `Invalid model: ${geminiModel}` });
+            return;
+          }
         }
       }
 

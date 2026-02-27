@@ -12,6 +12,40 @@ import { useAvailableSkills, useGroupSkills, useToggleSkill } from '../hooks/use
 import { PreferencesPanel } from '../components/PreferencesPanel';
 import { ExportButton } from '../components/ExportButton';
 import { useLocale } from '../hooks/useLocale';
+import { useAvailableModels } from '../hooks/useAvailableModels';
+
+function ModelSelector({ value, onChange, disabled }: {
+    value: string;
+    onChange: (model: string) => void;
+    disabled?: boolean;
+}) {
+    const { t } = useTranslation('groups');
+    const { data, isLoading } = useAvailableModels();
+
+    const models = data?.models ?? [];
+    const defaultModel = data?.defaultModel ?? '';
+
+    return (
+        <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-800">
+            <label className="block text-sm font-medium text-slate-200 mb-2">{t('aiModel')}</label>
+            <select
+                value={value}
+                onChange={e => onChange(e.target.value)}
+                disabled={disabled || isLoading}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+            >
+                <option value="auto">
+                    {t('modelAuto')}{defaultModel ? ` (${defaultModel})` : ''}
+                </option>
+                {models.map(model => (
+                    <option key={model.id} value={model.id}>
+                        {model.displayName}
+                    </option>
+                ))}
+            </select>
+        </div>
+    );
+}
 
 function SkillsPanel({ groupFolder }: { groupFolder: string }) {
     const { t } = useTranslation('groups');
@@ -177,20 +211,11 @@ export function GroupDetailPage({ groupFolder, onBack }: GroupDetailPageProps) {
                         disabled={saving}
                     />
                     {/* Model Selector */}
-                    <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-800">
-                        <label className="block text-sm font-medium text-slate-200 mb-2">{t('aiModel')}</label>
-                        <select
-                            value={(group as any).geminiModel || 'gemini-3-flash-preview'}
-                            onChange={e => handleSettingChange({ geminiModel: e.target.value })}
-                            disabled={saving}
-                            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                        >
-                            <option value="gemini-3-flash-preview">{t('geminiFlash')}</option>
-                            <option value="gemini-3-pro-preview">{t('geminiPro')}</option>
-                            <option value="gemini-2.5-flash">{t('gemini25Flash')}</option>
-                            <option value="gemini-2.5-pro">{t('gemini25Pro')}</option>
-                        </select>
-                    </div>
+                    <ModelSelector
+                        value={(group as any).geminiModel || 'auto'}
+                        onChange={model => handleSettingChange({ geminiModel: model })}
+                        disabled={saving}
+                    />
                 </div>
             </div>
 

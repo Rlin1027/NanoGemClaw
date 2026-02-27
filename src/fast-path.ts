@@ -21,7 +21,7 @@
 
 import type { Content } from '@google/genai';
 
-import { FAST_PATH, GEMINI_MODEL, MAIN_GROUP_FOLDER } from './config.js';
+import { FAST_PATH, getDefaultModel } from './config.js';
 import { getOrCreateCache } from './context-cache.js';
 import { isGeminiClientAvailable, streamGenerate } from './gemini-client.js';
 import {
@@ -122,7 +122,9 @@ async function runFastPathInner(
   onProgress?: (info: ProgressInfo) => void,
 ): Promise<ContainerOutput> {
   const startTime = Date.now();
-  const model = group.geminiModel || GEMINI_MODEL;
+  const model = (!group.geminiModel || group.geminiModel === 'auto')
+    ? getDefaultModel()
+    : group.geminiModel;
 
   logger.info(
     { group: group.name, model, isMain: input.isMain },

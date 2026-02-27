@@ -42,6 +42,7 @@
     "geminiPro": "Gemini Pro",
     "gemini25Flash": "Gemini 2.5 Flash",
     "gemini25Pro": "Gemini 2.5 Pro",
+    "modelAuto": "自動（最新版）",
     "skills": "Skills",
     "preferences": "Preferences",
     "scheduledTasks": "Scheduled Tasks",

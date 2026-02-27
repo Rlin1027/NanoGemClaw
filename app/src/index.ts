@@ -59,6 +59,23 @@ async function main(): Promise<void> {
   await loadState();
   loadMaintenanceState();
 
+  // Auto-detect available Gemini models and set the default
+  try {
+    const { discoverModels, resolveLatestModel } = await import('@nanogemclaw/gemini');
+    const { setResolvedDefaultModel } = await import('@nanogemclaw/core');
+    const isEnvModelSet = !!process.env.GEMINI_MODEL;
+    await discoverModels();
+    if (!isEnvModelSet) {
+      const latest = resolveLatestModel('flash');
+      setResolvedDefaultModel(latest);
+      logger.info({ model: latest }, 'Model auto-detected → using as default');
+    } else {
+      logger.info({ model: process.env.GEMINI_MODEL }, 'Model from env (auto-detect skipped)');
+    }
+  } catch (err) {
+    logger.warn({ err }, 'Model discovery failed, using hardcoded default');
+  }
+
   // Load custom personas
   const { loadCustomPersonas } = await import('../../src/personas.js');
   loadCustomPersonas();
@@ -164,6 +181,7 @@ async function main(): Promise<void> {
       if (updates.enableWebSearch !== undefined) group.enableWebSearch = updates.enableWebSearch;
       if (updates.requireTrigger !== undefined) group.requireTrigger = updates.requireTrigger;
       if (updates.name !== undefined) group.name = updates.name;
+      if (updates.geminiModel !== undefined) group.geminiModel = updates.geminiModel;
       if (updates.enableFastPath !== undefined) group.enableFastPath = updates.enableFastPath;
 
       if (updates.persona !== undefined || updates.enableWebSearch !== undefined) {

@@ -4,6 +4,24 @@ import path from 'path';
 export const ASSISTANT_NAME = process.env.ASSISTANT_NAME || 'Andy';
 export const POLL_INTERVAL = 2000;
 export const SCHEDULER_POLL_INTERVAL = 60000;
+let _resolvedDefaultModel: string | null = null;
+
+/**
+ * Set the resolved default model (called at startup after model discovery).
+ * Only takes effect when GEMINI_MODEL env var is NOT explicitly set.
+ */
+export function setResolvedDefaultModel(modelId: string): void {
+  _resolvedDefaultModel = modelId;
+}
+
+/**
+ * Get the effective default model.
+ * Priority: GEMINI_MODEL env var > auto-discovered > hardcoded fallback
+ */
+export function getDefaultModel(): string {
+  return process.env.GEMINI_MODEL || _resolvedDefaultModel || 'gemini-3-flash-preview';
+}
+
 export const GEMINI_MODEL =
   process.env.GEMINI_MODEL || 'gemini-3-flash-preview';
 

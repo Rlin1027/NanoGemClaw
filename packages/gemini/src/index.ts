@@ -2,3 +2,4 @@
 export * from './gemini-client.js';
 export * from './context-cache.js';
 export * from './gemini-tools.js';
+export * from './model-discovery.js';

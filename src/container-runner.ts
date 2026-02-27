@@ -238,7 +238,7 @@ Only suggest follow-ups when they genuinely add value. Do not suggest them for s
     '-e',
     `GEMINI_ENABLE_SEARCH=${input.enableWebSearch !== false ? 'true' : 'false'}`,
     '-e',
-    `GEMINI_MODEL=${group.geminiModel || process.env.GEMINI_MODEL || 'gemini-3-flash-preview'}`,
+    `GEMINI_MODEL=${(!group.geminiModel || group.geminiModel === 'auto') ? (await import('./config.js')).getDefaultModel() : group.geminiModel}`,
     '-e',
     `CONTAINER_TIMEOUT=${CONTAINER_TIMEOUT}`,
   );
