@@ -13,5 +13,7 @@
     "settings": "設定",
     "addGroup": "新增群組",
     "dashboard": "儀表板",
-    "realTimeCommandCenter": "即時命令中心"
+    "realTimeCommandCenter": "即時命令中心",
+    "activityLogs": "活動日誌",
+    "schedule": "排程表"
 }

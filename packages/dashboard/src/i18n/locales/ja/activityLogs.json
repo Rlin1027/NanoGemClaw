@@ -1,0 +1,17 @@
+{
+    "title": "アクティビティログ",
+    "subtitle": "{{count}} 件の実行記録",
+    "noLogs": "過去 {{days}} 日間の実行記録はありません",
+    "loadingLogs": "アクティビティログを読み込み中...",
+    "allGroups": "すべてのグループ",
+    "today": "今日",
+    "yesterday": "昨日",
+    "success": "成功",
+    "error": "エラー",
+    "duration": "所要時間",
+    "expandResult": "詳細を表示",
+    "collapseResult": "詳細を非表示",
+    "prompt": "プロンプト",
+    "group": "グループ",
+    "scheduleType": "スケジュール"
+}

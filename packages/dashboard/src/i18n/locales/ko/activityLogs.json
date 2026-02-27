@@ -1,0 +1,17 @@
+{
+    "title": "활동 로그",
+    "subtitle": "{{count}}개 실행 기록",
+    "noLogs": "최근 {{days}}일간 실행 기록 없음",
+    "loadingLogs": "활동 로그 로딩 중...",
+    "allGroups": "모든 그룹",
+    "today": "오늘",
+    "yesterday": "어제",
+    "success": "성공",
+    "error": "오류",
+    "duration": "소요 시간",
+    "expandResult": "상세 보기",
+    "collapseResult": "상세 숨기기",
+    "prompt": "프롬프트",
+    "group": "그룹",
+    "scheduleType": "스케줄"
+}

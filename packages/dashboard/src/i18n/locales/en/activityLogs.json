@@ -1,0 +1,17 @@
+{
+    "title": "Activity Logs",
+    "subtitle": "{{count}} execution records",
+    "noLogs": "No execution logs found in the last {{days}} days",
+    "loadingLogs": "Loading activity logs...",
+    "allGroups": "All Groups",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "success": "Success",
+    "error": "Error",
+    "duration": "Duration",
+    "expandResult": "Show details",
+    "collapseResult": "Hide details",
+    "prompt": "Prompt",
+    "group": "Group",
+    "scheduleType": "Schedule"
+}

@@ -1,0 +1,17 @@
+{
+    "title": "活动日志",
+    "subtitle": "{{count}} 条执行记录",
+    "noLogs": "过去 {{days}} 天没有执行记录",
+    "loadingLogs": "正在加载活动日志...",
+    "allGroups": "所有群组",
+    "today": "今天",
+    "yesterday": "昨天",
+    "success": "成功",
+    "error": "错误",
+    "duration": "耗时",
+    "expandResult": "显示详情",
+    "collapseResult": "隐藏详情",
+    "prompt": "指令",
+    "group": "群组",
+    "scheduleType": "调度类型"
+}

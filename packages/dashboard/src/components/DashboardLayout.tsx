@@ -1,4 +1,4 @@
-import { LayoutDashboard, TerminalSquare, Settings, Database, Plus, CalendarClock, BarChart3, BookOpen, Calendar, Search } from "lucide-react";
+import { LayoutDashboard, TerminalSquare, Settings, Database, Plus, CalendarClock, BarChart3, BookOpen, Calendar, Search, ScrollText, CalendarRange } from "lucide-react";
 import { useTranslation } from 'react-i18next';
 import { cn } from "@/lib/utils";
 import { LanguageSwitcher } from './LanguageSwitcher';
@@ -71,6 +71,12 @@ export function DashboardLayout({ children, activeTab = 'overview', onTabChange,
                             active={activeTab === 'calendar'}
                             onClick={() => onTabChange?.('calendar')}
                         />
+                        <NavItem
+                            icon={<CalendarRange size={20} />}
+                            label={t('schedule')}
+                            active={activeTab === 'schedule'}
+                            onClick={() => onTabChange?.('schedule')}
+                        />
                     </div>
 
                     {/* Monitoring */}
@@ -81,6 +87,12 @@ export function DashboardLayout({ children, activeTab = 'overview', onTabChange,
                             label={t('analytics')}
                             active={activeTab === 'analytics'}
                             onClick={() => onTabChange?.('analytics')}
+                        />
+                        <NavItem
+                            icon={<ScrollText size={20} />}
+                            label={t('activityLogs')}
+                            active={activeTab === 'activity-logs'}
+                            onClick={() => onTabChange?.('activity-logs')}
                         />
                     </div>
 

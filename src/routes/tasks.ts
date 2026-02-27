@@ -7,6 +7,8 @@ import {
   updateTaskBody,
   updateTaskStatusBody,
   taskRunsQuery,
+  taskRunsActivityQuery,
+  tasksWeekQuery,
   taskIdParams,
 } from '../schemas/tasks.js';
 import { paginationQuery } from '../schemas/shared.js';
@@ -41,6 +43,128 @@ export function createTasksRouter(_deps: TasksRouterDeps = {}): Router {
         });
       } catch {
         res.status(500).json({ error: 'Failed to fetch tasks' });
+      }
+    },
+  );
+
+  // GET /api/task-runs (Activity Logs — must be before :taskId routes)
+  router.get(
+    '/task-runs',
+    validate({ query: taskRunsActivityQuery }),
+    async (req, res) => {
+      try {
+        const { getTaskRunLogsWithDetails } = await import('../db.js');
+        const { days, groupFolder } = req.query as unknown as z.infer<
+          typeof taskRunsActivityQuery
+        >;
+        const logs = getTaskRunLogsWithDetails(days, groupFolder);
+        res.json({ data: logs });
+      } catch {
+        res.status(500).json({ error: 'Failed to fetch activity logs' });
+      }
+    },
+  );
+
+  // GET /api/tasks/week (Weekly Schedule — must be before :taskId routes)
+  router.get(
+    '/tasks/week',
+    validate({ query: tasksWeekQuery }),
+    async (req, res) => {
+      try {
+        const { getTasksInDateRange } = await import('../db.js');
+        const { CronExpressionParser } = await import('cron-parser');
+        const { start, end } = req.query as unknown as z.infer<
+          typeof tasksWeekQuery
+        >;
+
+        const tasks = getTasksInDateRange(start, end);
+        const startDate = new Date(start);
+        const endDate = new Date(end);
+
+        interface ResolvedSlot {
+          task_id: string;
+          group_folder: string;
+          prompt: string;
+          schedule_type: string;
+          schedule_value: string;
+          status: string;
+          start_time: string;
+        }
+
+        const slots: ResolvedSlot[] = [];
+        const MAX_SLOTS_PER_TASK = 500;
+
+        for (const task of tasks) {
+          if (task.schedule_type === 'cron') {
+            try {
+              const interval = CronExpressionParser.parse(task.schedule_value, {
+                currentDate: startDate,
+                endDate,
+              });
+              let count = 0;
+              let next = interval.next();
+              while (next.toDate() <= endDate && count < MAX_SLOTS_PER_TASK) {
+                slots.push({
+                  task_id: task.id,
+                  group_folder: task.group_folder,
+                  prompt: task.prompt,
+                  schedule_type: task.schedule_type,
+                  schedule_value: task.schedule_value,
+                  status: task.status,
+                  start_time: next.toDate().toISOString(),
+                });
+                count++;
+                try {
+                  next = interval.next();
+                } catch {
+                  break;
+                }
+              }
+            } catch {
+              // Skip tasks with invalid cron expressions
+            }
+          } else if (task.schedule_type === 'interval') {
+            const ms = parseInt(task.schedule_value, 10);
+            if (!isNaN(ms) && ms > 0 && task.next_run) {
+              let nextRun = new Date(task.next_run);
+              // Walk backwards to find first occurrence in range
+              while (nextRun > startDate) {
+                nextRun = new Date(nextRun.getTime() - ms);
+              }
+              // Walk forward through range
+              let count = 0;
+              while (nextRun <= endDate && count < MAX_SLOTS_PER_TASK) {
+                if (nextRun >= startDate) {
+                  slots.push({
+                    task_id: task.id,
+                    group_folder: task.group_folder,
+                    prompt: task.prompt,
+                    schedule_type: task.schedule_type,
+                    schedule_value: task.schedule_value,
+                    status: task.status,
+                    start_time: nextRun.toISOString(),
+                  });
+                  count++;
+                }
+                nextRun = new Date(nextRun.getTime() + ms);
+              }
+            }
+          } else if (task.schedule_type === 'once' && task.next_run) {
+            slots.push({
+              task_id: task.id,
+              group_folder: task.group_folder,
+              prompt: task.prompt,
+              schedule_type: task.schedule_type,
+              schedule_value: task.schedule_value,
+              status: task.status,
+              start_time: task.next_run,
+            });
+          }
+        }
+
+        res.json({ data: slots });
+      } catch {
+        res.status(500).json({ error: 'Failed to fetch weekly schedule' });
       }
     },
   );

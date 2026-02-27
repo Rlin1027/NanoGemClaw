@@ -214,6 +214,86 @@ export function getTasksForGroupPaginated(
  * Batch: Get active task counts for all groups at once.
  * Returns Map<folder, activeCount>
  */
+/**
+ * Get task run logs with joined task details (prompt, group_folder, schedule_type).
+ * Used by the Activity Logs page.
+ */
+export function getTaskRunLogsWithDetails(
+  days: number,
+  groupFolder?: string,
+): Array<
+  TaskRunLog & { prompt: string; group_folder: string; schedule_type: string }
+> {
+  const db = getDatabase();
+  const cutoff = new Date(
+    Date.now() - days * 24 * 60 * 60 * 1000,
+  ).toISOString();
+
+  if (groupFolder) {
+    return db
+      .prepare(
+        `
+      SELECT trl.task_id, trl.run_at, trl.duration_ms, trl.status, trl.result, trl.error,
+             st.prompt, st.group_folder, st.schedule_type
+      FROM task_run_logs trl
+      JOIN scheduled_tasks st ON trl.task_id = st.id
+      WHERE trl.run_at >= ? AND st.group_folder = ?
+      ORDER BY trl.run_at DESC
+    `,
+      )
+      .all(cutoff, groupFolder) as Array<
+      TaskRunLog & {
+        prompt: string;
+        group_folder: string;
+        schedule_type: string;
+      }
+    >;
+  }
+
+  return db
+    .prepare(
+      `
+    SELECT trl.task_id, trl.run_at, trl.duration_ms, trl.status, trl.result, trl.error,
+           st.prompt, st.group_folder, st.schedule_type
+    FROM task_run_logs trl
+    JOIN scheduled_tasks st ON trl.task_id = st.id
+    WHERE trl.run_at >= ?
+    ORDER BY trl.run_at DESC
+  `,
+    )
+    .all(cutoff) as Array<
+    TaskRunLog & {
+      prompt: string;
+      group_folder: string;
+      schedule_type: string;
+    }
+  >;
+}
+
+/**
+ * Get tasks that fall within a date range.
+ * Returns active/paused cron/interval tasks + once tasks with next_run in range.
+ */
+export function getTasksInDateRange(
+  start: string,
+  end: string,
+): ScheduledTask[] {
+  const db = getDatabase();
+  return db
+    .prepare(
+      `
+    SELECT * FROM scheduled_tasks
+    WHERE (
+      (schedule_type IN ('cron', 'interval') AND status IN ('active', 'paused'))
+      OR
+      (schedule_type = 'once' AND next_run >= ? AND next_run <= ?)
+    )
+    ORDER BY created_at DESC
+  `,
+    )
+    .all(start, end) as ScheduledTask[];
+}
+
 export function getActiveTaskCountsBatch(): Map<string, number> {
   const db = getDatabase();
   const rows = db

@@ -1,0 +1,17 @@
+{
+    "title": "活動日誌",
+    "subtitle": "{{count}} 筆執行記錄",
+    "noLogs": "過去 {{days}} 天沒有執行記錄",
+    "loadingLogs": "正在載入活動日誌...",
+    "allGroups": "所有群組",
+    "today": "今天",
+    "yesterday": "昨天",
+    "success": "成功",
+    "error": "錯誤",
+    "duration": "耗時",
+    "expandResult": "顯示詳情",
+    "collapseResult": "隱藏詳情",
+    "prompt": "指令",
+    "group": "群組",
+    "scheduleType": "排程類型"
+}

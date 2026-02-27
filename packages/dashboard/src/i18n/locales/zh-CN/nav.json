@@ -13,5 +13,7 @@
     "settings": "Settings",
     "addGroup": "Add Group",
     "dashboard": "Dashboard",
-    "realTimeCommandCenter": "Real-time Command Center"
+    "realTimeCommandCenter": "Real-time Command Center",
+    "activityLogs": "活动日志",
+    "schedule": "排程表"
 }

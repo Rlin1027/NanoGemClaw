@@ -50,6 +50,25 @@ export const taskIdParams = z.object({
   taskId: z.string().min(1, 'Task ID is required'),
 });
 
+/** GET /api/task-runs query (Activity Logs) */
+export const taskRunsActivityQuery = z.object({
+  days: z
+    .string()
+    .optional()
+    .transform((val) => {
+      if (!val) return 7;
+      const n = parseInt(val, 10);
+      return isNaN(n) || n < 1 ? 7 : Math.min(n, 90);
+    }),
+  groupFolder: folderParam.optional(),
+});
+
+/** GET /api/tasks/week query (Weekly Schedule) */
+export const tasksWeekQuery = z.object({
+  start: z.string().datetime(),
+  end: z.string().datetime(),
+});
+
 /** GET /api/tasks/:taskId/runs query */
 export const taskRunsQuery = z.object({
   limit: z

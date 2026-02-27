@@ -10,6 +10,8 @@ import { TasksPage } from './pages/TasksPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { KnowledgePage } from './pages/KnowledgePage';
 import { CalendarPage } from './pages/CalendarPage';
+import { ActivityLogsPage } from './pages/ActivityLogsPage';
+import { SchedulePage } from './pages/SchedulePage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastContainer } from './components/ToastContainer';
 import { SearchOverlay } from './components/SearchOverlay';
@@ -207,6 +209,12 @@ function App() {
 
             {/* CALENDAR TAB */}
             {activeTab === 'calendar' && <CalendarPage />}
+
+            {/* ACTIVITY LOGS TAB */}
+            {activeTab === 'activity-logs' && <ActivityLogsPage />}
+
+            {/* SCHEDULE TAB */}
+            {activeTab === 'schedule' && <SchedulePage />}
 
                 </ErrorBoundary>
             </DashboardLayout>

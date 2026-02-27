@@ -1,0 +1,17 @@
+{
+    "title": "Registro de Actividad",
+    "subtitle": "{{count}} registros de ejecución",
+    "noLogs": "No hay registros en los últimos {{days}} días",
+    "loadingLogs": "Cargando registros...",
+    "allGroups": "Todos los Grupos",
+    "today": "Hoy",
+    "yesterday": "Ayer",
+    "success": "Éxito",
+    "error": "Error",
+    "duration": "Duración",
+    "expandResult": "Ver detalles",
+    "collapseResult": "Ocultar detalles",
+    "prompt": "Comando",
+    "group": "Grupo",
+    "scheduleType": "Programación"
+}

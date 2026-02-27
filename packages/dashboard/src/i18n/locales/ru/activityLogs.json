@@ -1,0 +1,17 @@
+{
+    "title": "Журнал активности",
+    "subtitle": "{{count}} записей выполнения",
+    "noLogs": "Нет записей за последние {{days}} дней",
+    "loadingLogs": "Загрузка журнала...",
+    "allGroups": "Все группы",
+    "today": "Сегодня",
+    "yesterday": "Вчера",
+    "success": "Успех",
+    "error": "Ошибка",
+    "duration": "Длительность",
+    "expandResult": "Показать детали",
+    "collapseResult": "Скрыть детали",
+    "prompt": "Команда",
+    "group": "Группа",
+    "scheduleType": "Расписание"
+}

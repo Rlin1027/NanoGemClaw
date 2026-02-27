@@ -15,6 +15,8 @@ import enAnalytics from './locales/en/analytics.json';
 import enLogs from './locales/en/logs.json';
 import enMemory from './locales/en/memory.json';
 import enGroups from './locales/en/groups.json';
+import enActivityLogs from './locales/en/activityLogs.json';
+import enSchedule from './locales/en/schedule.json';
 
 // Traditional Chinese translations
 import zhTWCommon from './locales/zh-TW/common.json';
@@ -29,6 +31,8 @@ import zhTWAnalytics from './locales/zh-TW/analytics.json';
 import zhTWLogs from './locales/zh-TW/logs.json';
 import zhTWMemory from './locales/zh-TW/memory.json';
 import zhTWGroups from './locales/zh-TW/groups.json';
+import zhTWActivityLogs from './locales/zh-TW/activityLogs.json';
+import zhTWSchedule from './locales/zh-TW/schedule.json';
 
 // Simplified Chinese translations
 import zhCNCommon from './locales/zh-CN/common.json';
@@ -43,6 +47,8 @@ import zhCNAnalytics from './locales/zh-CN/analytics.json';
 import zhCNLogs from './locales/zh-CN/logs.json';
 import zhCNMemory from './locales/zh-CN/memory.json';
 import zhCNGroups from './locales/zh-CN/groups.json';
+import zhCNActivityLogs from './locales/zh-CN/activityLogs.json';
+import zhCNSchedule from './locales/zh-CN/schedule.json';
 
 // Spanish translations
 import esCommon from './locales/es/common.json';
@@ -57,6 +63,8 @@ import esAnalytics from './locales/es/analytics.json';
 import esLogs from './locales/es/logs.json';
 import esMemory from './locales/es/memory.json';
 import esGroups from './locales/es/groups.json';
+import esActivityLogs from './locales/es/activityLogs.json';
+import esSchedule from './locales/es/schedule.json';
 
 // Japanese translations
 import jaCommon from './locales/ja/common.json';
@@ -71,6 +79,8 @@ import jaAnalytics from './locales/ja/analytics.json';
 import jaLogs from './locales/ja/logs.json';
 import jaMemory from './locales/ja/memory.json';
 import jaGroups from './locales/ja/groups.json';
+import jaActivityLogs from './locales/ja/activityLogs.json';
+import jaSchedule from './locales/ja/schedule.json';
 
 // Korean translations
 import koCommon from './locales/ko/common.json';
@@ -85,6 +95,8 @@ import koAnalytics from './locales/ko/analytics.json';
 import koLogs from './locales/ko/logs.json';
 import koMemory from './locales/ko/memory.json';
 import koGroups from './locales/ko/groups.json';
+import koActivityLogs from './locales/ko/activityLogs.json';
+import koSchedule from './locales/ko/schedule.json';
 
 // Portuguese translations
 import ptCommon from './locales/pt/common.json';
@@ -99,6 +111,8 @@ import ptAnalytics from './locales/pt/analytics.json';
 import ptLogs from './locales/pt/logs.json';
 import ptMemory from './locales/pt/memory.json';
 import ptGroups from './locales/pt/groups.json';
+import ptActivityLogs from './locales/pt/activityLogs.json';
+import ptSchedule from './locales/pt/schedule.json';
 
 // Russian translations
 import ruCommon from './locales/ru/common.json';
@@ -113,134 +127,153 @@ import ruAnalytics from './locales/ru/analytics.json';
 import ruLogs from './locales/ru/logs.json';
 import ruMemory from './locales/ru/memory.json';
 import ruGroups from './locales/ru/groups.json';
+import ruActivityLogs from './locales/ru/activityLogs.json';
+import ruSchedule from './locales/ru/schedule.json';
 
-i18n.use(LanguageDetector)
-    .use(initReactI18next)
-    .init({
-        resources: {
-            en: {
-                common: enCommon,
-                nav: enNav,
-                auth: enAuth,
-                overview: enOverview,
-                settings: enSettings,
-                tasks: enTasks,
-                knowledge: enKnowledge,
-                calendar: enCalendar,
-                analytics: enAnalytics,
-                logs: enLogs,
-                memory: enMemory,
-                groups: enGroups,
-            },
-            'zh-TW': {
-                common: zhTWCommon,
-                nav: zhTWNav,
-                auth: zhTWAuth,
-                overview: zhTWOverview,
-                settings: zhTWSettings,
-                tasks: zhTWTasks,
-                knowledge: zhTWKnowledge,
-                calendar: zhTWCalendar,
-                analytics: zhTWAnalytics,
-                logs: zhTWLogs,
-                memory: zhTWMemory,
-                groups: zhTWGroups,
-            },
-            'zh-CN': {
-                common: zhCNCommon,
-                nav: zhCNNav,
-                auth: zhCNAuth,
-                overview: zhCNOverview,
-                settings: zhCNSettings,
-                tasks: zhCNTasks,
-                knowledge: zhCNKnowledge,
-                calendar: zhCNCalendar,
-                analytics: zhCNAnalytics,
-                logs: zhCNLogs,
-                memory: zhCNMemory,
-                groups: zhCNGroups,
-            },
-            es: {
-                common: esCommon,
-                nav: esNav,
-                auth: esAuth,
-                overview: esOverview,
-                settings: esSettings,
-                tasks: esTasks,
-                knowledge: esKnowledge,
-                calendar: esCalendar,
-                analytics: esAnalytics,
-                logs: esLogs,
-                memory: esMemory,
-                groups: esGroups,
-            },
-            ja: {
-                common: jaCommon,
-                nav: jaNav,
-                auth: jaAuth,
-                overview: jaOverview,
-                settings: jaSettings,
-                tasks: jaTasks,
-                knowledge: jaKnowledge,
-                calendar: jaCalendar,
-                analytics: jaAnalytics,
-                logs: jaLogs,
-                memory: jaMemory,
-                groups: jaGroups,
-            },
-            ko: {
-                common: koCommon,
-                nav: koNav,
-                auth: koAuth,
-                overview: koOverview,
-                settings: koSettings,
-                tasks: koTasks,
-                knowledge: koKnowledge,
-                calendar: koCalendar,
-                analytics: koAnalytics,
-                logs: koLogs,
-                memory: koMemory,
-                groups: koGroups,
-            },
-            pt: {
-                common: ptCommon,
-                nav: ptNav,
-                auth: ptAuth,
-                overview: ptOverview,
-                settings: ptSettings,
-                tasks: ptTasks,
-                knowledge: ptKnowledge,
-                calendar: ptCalendar,
-                analytics: ptAnalytics,
-                logs: ptLogs,
-                memory: ptMemory,
-                groups: ptGroups,
-            },
-            ru: {
-                common: ruCommon,
-                nav: ruNav,
-                auth: ruAuth,
-                overview: ruOverview,
-                settings: ruSettings,
-                tasks: ruTasks,
-                knowledge: ruKnowledge,
-                calendar: ruCalendar,
-                analytics: ruAnalytics,
-                logs: ruLogs,
-                memory: ruMemory,
-                groups: ruGroups,
-            },
-        },
-        defaultNS: 'common',
-        fallbackLng: 'en',
-        detection: {
-            order: ['localStorage', 'navigator'],
-            lookupLocalStorage: 'nanogemclaw_language',
-            caches: ['localStorage'],
-        },
-        interpolation: {
-            escapeValue: false,
-        },
-    });
+i18n
+  .use(LanguageDetector)
+  .use(initReactI18next)
+  .init({
+    resources: {
+      en: {
+        common: enCommon,
+        nav: enNav,
+        auth: enAuth,
+        overview: enOverview,
+        settings: enSettings,
+        tasks: enTasks,
+        knowledge: enKnowledge,
+        calendar: enCalendar,
+        analytics: enAnalytics,
+        logs: enLogs,
+        memory: enMemory,
+        groups: enGroups,
+        activityLogs: enActivityLogs,
+        schedule: enSchedule,
+      },
+      'zh-TW': {
+        common: zhTWCommon,
+        nav: zhTWNav,
+        auth: zhTWAuth,
+        overview: zhTWOverview,
+        settings: zhTWSettings,
+        tasks: zhTWTasks,
+        knowledge: zhTWKnowledge,
+        calendar: zhTWCalendar,
+        analytics: zhTWAnalytics,
+        logs: zhTWLogs,
+        memory: zhTWMemory,
+        groups: zhTWGroups,
+        activityLogs: zhTWActivityLogs,
+        schedule: zhTWSchedule,
+      },
+      'zh-CN': {
+        common: zhCNCommon,
+        nav: zhCNNav,
+        auth: zhCNAuth,
+        overview: zhCNOverview,
+        settings: zhCNSettings,
+        tasks: zhCNTasks,
+        knowledge: zhCNKnowledge,
+        calendar: zhCNCalendar,
+        analytics: zhCNAnalytics,
+        logs: zhCNLogs,
+        memory: zhCNMemory,
+        groups: zhCNGroups,
+        activityLogs: zhCNActivityLogs,
+        schedule: zhCNSchedule,
+      },
+      es: {
+        common: esCommon,
+        nav: esNav,
+        auth: esAuth,
+        overview: esOverview,
+        settings: esSettings,
+        tasks: esTasks,
+        knowledge: esKnowledge,
+        calendar: esCalendar,
+        analytics: esAnalytics,
+        logs: esLogs,
+        memory: esMemory,
+        groups: esGroups,
+        activityLogs: esActivityLogs,
+        schedule: esSchedule,
+      },
+      ja: {
+        common: jaCommon,
+        nav: jaNav,
+        auth: jaAuth,
+        overview: jaOverview,
+        settings: jaSettings,
+        tasks: jaTasks,
+        knowledge: jaKnowledge,
+        calendar: jaCalendar,
+        analytics: jaAnalytics,
+        logs: jaLogs,
+        memory: jaMemory,
+        groups: jaGroups,
+        activityLogs: jaActivityLogs,
+        schedule: jaSchedule,
+      },
+      ko: {
+        common: koCommon,
+        nav: koNav,
+        auth: koAuth,
+        overview: koOverview,
+        settings: koSettings,
+        tasks: koTasks,
+        knowledge: koKnowledge,
+        calendar: koCalendar,
+        analytics: koAnalytics,
+        logs: koLogs,
+        memory: koMemory,
+        groups: koGroups,
+        activityLogs: koActivityLogs,
+        schedule: koSchedule,
+      },
+      pt: {
+        common: ptCommon,
+        nav: ptNav,
+        auth: ptAuth,
+        overview: ptOverview,
+        settings: ptSettings,
+        tasks: ptTasks,
+        knowledge: ptKnowledge,
+        calendar: ptCalendar,
+        analytics: ptAnalytics,
+        logs: ptLogs,
+        memory: ptMemory,
+        groups: ptGroups,
+        activityLogs: ptActivityLogs,
+        schedule: ptSchedule,
+      },
+      ru: {
+        common: ruCommon,
+        nav: ruNav,
+        auth: ruAuth,
+        overview: ruOverview,
+        settings: ruSettings,
+        tasks: ruTasks,
+        knowledge: ruKnowledge,
+        calendar: ruCalendar,
+        analytics: ruAnalytics,
+        logs: ruLogs,
+        memory: ruMemory,
+        groups: ruGroups,
+        activityLogs: ruActivityLogs,
+        schedule: ruSchedule,
+      },
+    },
+    defaultNS: 'common',
+    fallbackLng: 'en',
+    detection: {
+      order: ['localStorage', 'navigator'],
+      lookupLocalStorage: 'nanogemclaw_language',
+      caches: ['localStorage'],
+    },
+    interpolation: {
+      escapeValue: false,
+    },
+  });
 
 export default i18n;
