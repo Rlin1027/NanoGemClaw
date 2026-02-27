@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Security
+
+- **Fix 9 npm audit vulnerabilities** — Added npm overrides to force secure versions of `request` sub-dependencies: `form-data` 2.5.5 (critical → fixed), `qs` 6.14.2 (high → fixed), `tough-cookie` 5.1.2 (moderate → fixed). Upgraded dashboard `vite` from ^5.1.5 to ^6.2.0 to resolve esbuild dev server SSRF vulnerability (moderate → fixed).
+
 ### Added
 
 #### Google Ecosystem Integration — 6 Built-in Plugins
