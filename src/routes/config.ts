@@ -122,7 +122,21 @@ export function createConfigRouter(deps: ConfigRouterDeps): Router {
     try {
       const { getAvailableModels } = await import('@nanogemclaw/gemini');
       const { getDefaultModel } = await import('../config.js');
-      const models = getAvailableModels();
+      const { resolveAuth, discoverVertexModels } = await import('../auth.js');
+
+      let models = getAvailableModels();
+
+      // If OAuth and cache is only fallback, try refreshing from Vertex AI
+      const auth = await resolveAuth();
+      if (auth?.type === 'oauth' && models.length > 0) {
+        const { setExternalModels } = await import('@nanogemclaw/gemini');
+        const vertexModels = await discoverVertexModels(auth.token, auth.project);
+        if (vertexModels.length > 0) {
+          setExternalModels(vertexModels);
+          models = vertexModels;
+        }
+      }
+
       res.json({
         data: {
           models,

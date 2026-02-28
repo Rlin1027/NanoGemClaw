@@ -59,10 +59,26 @@ async function main(): Promise<void> {
 
   // Auto-detect available Gemini models and set the default
   try {
-    const { discoverModels, resolveLatestModel } = await import('@nanogemclaw/gemini');
+    const { discoverModels, resolveLatestModel, setExternalModels } = await import('@nanogemclaw/gemini');
     const { setResolvedDefaultModel } = await import('./config.js');
+    const { resolveAuth, discoverVertexModels } = await import('./auth.js');
     const isEnvModelSet = !!process.env.GEMINI_MODEL;
-    await discoverModels();
+
+    const auth = await resolveAuth();
+    if (auth?.type === 'oauth') {
+      // OAuth → use Vertex AI model discovery (SDK unavailable)
+      const vertexModels = await discoverVertexModels(auth.token, auth.project);
+      if (vertexModels.length > 0) {
+        setExternalModels(vertexModels);
+        console.log(`Vertex AI model discovery: found ${vertexModels.length} models`);
+      } else {
+        console.warn('Vertex AI model discovery returned 0 models, using fallback list');
+      }
+    } else {
+      // API key → use SDK model discovery
+      await discoverModels();
+    }
+
     if (!isEnvModelSet) {
       const latest = resolveLatestModel('flash');
       setResolvedDefaultModel(latest);
@@ -199,8 +215,8 @@ async function main(): Promise<void> {
       updates.enableWebSearch !== undefined
     ) {
       import('./context-cache.js')
-        .then(({ invalidateCache }) => {
-          invalidateCache(folder);
+        .then(async ({ invalidateCache }) => {
+          await invalidateCache(folder);
         })
         .catch(() => {});
     }

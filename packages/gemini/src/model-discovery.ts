@@ -168,6 +168,15 @@ export async function discoverModels(): Promise<DiscoveredModel[]> {
 }
 
 /**
+ * Inject externally-discovered models into the cache.
+ * Used by OAuth/Vertex AI path where the SDK is unavailable.
+ */
+export function setExternalModels(models: DiscoveredModel[]): void {
+  cachedModels = models;
+  cacheTimestamp = Date.now();
+}
+
+/**
  * Synchronous access to the cached model list.
  * Returns an empty array if `discoverModels()` has never been called.
  * Returns the fallback list otherwise.
