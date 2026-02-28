@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+---
+
+## [1.1.0] - 2026-02-28
+
 ### Added
 
 - **Auto-detect Gemini models at startup** — New model discovery service (`packages/gemini/src/model-discovery.ts`) queries the Gemini API for available models, caches results for 24 hours, and gracefully falls back to a hardcoded list when offline or on failure. Startup log shows the auto-detected default model.
