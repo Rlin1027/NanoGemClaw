@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useApiQuery, useApiMutation, apiFetch } from './useApi';
 
 export interface KnowledgeDoc {
@@ -49,9 +49,19 @@ export function useKnowledgeSearch(groupFolder: string) {
     const [results, setResults] = useState<KnowledgeSearchResult[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+    const abortRef = useRef<AbortController | null>(null);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            if (debounceRef.current) clearTimeout(debounceRef.current);
+            abortRef.current?.abort();
+        };
+    }, []);
 
     const search = useCallback((query: string) => {
         if (debounceRef.current) clearTimeout(debounceRef.current);
+        abortRef.current?.abort();
 
         if (!query || query.length < 3 || !groupFolder) {
             setResults([]);
@@ -61,20 +71,28 @@ export function useKnowledgeSearch(groupFolder: string) {
 
         setIsSearching(true);
         debounceRef.current = setTimeout(async () => {
+            const controller = new AbortController();
+            abortRef.current = controller;
             try {
                 const data = await apiFetch<KnowledgeSearchResult[]>(
-                    `/api/groups/${groupFolder}/knowledge/search?q=${encodeURIComponent(query)}`
+                    `/api/groups/${groupFolder}/knowledge/search?q=${encodeURIComponent(query)}`,
+                    { signal: controller.signal }
                 );
                 setResults(data);
             } catch {
-                setResults([]);
+                if (!controller.signal.aborted) {
+                    setResults([]);
+                }
             } finally {
-                setIsSearching(false);
+                if (!controller.signal.aborted) {
+                    setIsSearching(false);
+                }
             }
         }, 300);
     }, [groupFolder]);
 
     const clearSearch = useCallback(() => {
+        abortRef.current?.abort();
         setResults([]);
         setIsSearching(false);
     }, []);

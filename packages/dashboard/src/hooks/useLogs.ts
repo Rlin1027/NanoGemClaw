@@ -20,6 +20,7 @@ export function useLogs() {
     }, [paused]);
 
     useEffect(() => {
+        bufferRef.current = [];
         const socket = io(SERVER_URL || window.location.origin);
         socketRef.current = socket;
 

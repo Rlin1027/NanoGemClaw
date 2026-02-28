@@ -67,6 +67,7 @@ export function Terminal({ logs, isLoading, className, autoScroll = true }: Term
 
         terminalRef.current = term;
         fitAddonRef.current = fitAddon;
+        prevLogsLengthRef.current = 0;
 
         // Handle resize
         const handleResize = () => fitAddon.fit();

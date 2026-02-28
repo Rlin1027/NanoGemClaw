@@ -22,14 +22,22 @@ export function SearchOverlay({ isOpen, onClose }: SearchOverlayProps) {
     const inputRef = useRef<HTMLInputElement>(null);
     const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
+    // Cleanup debounce on unmount
+    useEffect(() => {
+        return () => {
+            if (debounceRef.current) clearTimeout(debounceRef.current);
+        };
+    }, []);
+
     // Focus input when opened
     useEffect(() => {
         if (isOpen) {
-            setTimeout(() => inputRef.current?.focus(), 50);
+            const timer = setTimeout(() => inputRef.current?.focus(), 50);
             setQuery('');
             setGroupFilter('');
             setSelectedIndex(0);
             clear();
+            return () => clearTimeout(timer);
         }
     }, [isOpen, clear]);
 

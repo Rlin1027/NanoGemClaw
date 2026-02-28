@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 const API_BASE = import.meta.env.VITE_API_URL || window.location.origin;
 
@@ -31,25 +31,51 @@ export function useApiQuery<T>(endpoint: string): UseApiQueryResult<T> {
     const [data, setData] = useState<T | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<Error | null>(null);
+    const controllerRef = useRef<AbortController | null>(null);
 
-    const fetchData = useCallback(async () => {
+    useEffect(() => {
+        const controller = new AbortController();
+        controllerRef.current = controller;
+        setIsLoading(true);
+        (async () => {
+            try {
+                const result = await apiFetch<T>(endpoint, { signal: controller.signal });
+                setData(result);
+                setError(null);
+            } catch (err) {
+                if (!controller.signal.aborted) {
+                    setError(err instanceof Error ? err : new Error('Unknown error'));
+                }
+            } finally {
+                if (!controller.signal.aborted) {
+                    setIsLoading(false);
+                }
+            }
+        })();
+        return () => controller.abort();
+    }, [endpoint]);
+
+    const refetch = useCallback(async () => {
+        controllerRef.current?.abort();
+        const controller = new AbortController();
+        controllerRef.current = controller;
         setIsLoading(true);
         try {
-            const result = await apiFetch<T>(endpoint);
+            const result = await apiFetch<T>(endpoint, { signal: controller.signal });
             setData(result);
             setError(null);
         } catch (err) {
-            setError(err instanceof Error ? err : new Error('Unknown error'));
+            if (!controller.signal.aborted) {
+                setError(err instanceof Error ? err : new Error('Unknown error'));
+            }
         } finally {
-            setIsLoading(false);
+            if (!controller.signal.aborted) {
+                setIsLoading(false);
+            }
         }
     }, [endpoint]);
 
-    useEffect(() => {
-        fetchData();
-    }, [fetchData]);
-
-    return { data, isLoading, error, refetch: fetchData };
+    return { data, isLoading, error, refetch };
 }
 
 interface UseApiMutationResult<T, V> {
