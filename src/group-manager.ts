@@ -127,21 +127,6 @@ export function updateGroupName(chatId: string, newName: string): boolean {
 }
 
 // ============================================================================
-// Group Name Sync
-// ============================================================================
-
-export function updateGroupName(chatId: string, newName: string): boolean {
-  const registeredGroups = getRegisteredGroups();
-  const group = registeredGroups[chatId];
-  if (!group || group.name === newName) return false;
-  const oldName = group.name;
-  group.name = newName;
-  saveJson(path.join(DATA_DIR, 'registered_groups.json'), registeredGroups);
-  logger.info({ chatId, oldName, newName }, 'Group name synced from Telegram');
-  return true;
-}
-
-// ============================================================================
 // Group Discovery
 // ============================================================================
 
