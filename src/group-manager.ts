@@ -79,10 +79,51 @@ export function registerGroup(chatId: string, group: RegisteredGroup): void {
   fs.mkdirSync(path.join(groupDir, 'media'), { recursive: true });
   fs.mkdirSync(path.join(groupDir, 'knowledge'), { recursive: true });
 
+  // Copy default GEMINI.md from global template if available
+  const globalPrompt = path.join(GROUPS_DIR, 'global', 'GEMINI.md');
+  const groupPrompt = path.join(groupDir, 'GEMINI.md');
+  if (fs.existsSync(globalPrompt) && !fs.existsSync(groupPrompt)) {
+    fs.copyFileSync(globalPrompt, groupPrompt);
+    logger.info({ folder: group.folder }, 'Created default GEMINI.md from global template');
+  }
+
   logger.info(
     { chatId, name: group.name, folder: group.folder },
     'Group registered',
   );
+}
+
+/**
+ * Backfill GEMINI.md for all registered groups that are missing it.
+ * Called at startup to patch existing groups.
+ */
+export function ensureGroupDefaults(): void {
+  const globalPrompt = path.join(GROUPS_DIR, 'global', 'GEMINI.md');
+  if (!fs.existsSync(globalPrompt)) return;
+
+  const registeredGroups = getRegisteredGroups();
+  for (const [chatId, group] of Object.entries(registeredGroups)) {
+    const groupPrompt = path.join(GROUPS_DIR, group.folder, 'GEMINI.md');
+    if (!fs.existsSync(groupPrompt)) {
+      fs.copyFileSync(globalPrompt, groupPrompt);
+      logger.info({ chatId, folder: group.folder }, 'Created default GEMINI.md from global template');
+    }
+  }
+}
+
+// ============================================================================
+// Group Name Sync
+// ============================================================================
+
+export function updateGroupName(chatId: string, newName: string): boolean {
+  const registeredGroups = getRegisteredGroups();
+  const group = registeredGroups[chatId];
+  if (!group || group.name === newName) return false;
+  const oldName = group.name;
+  group.name = newName;
+  saveJson(path.join(DATA_DIR, 'registered_groups.json'), registeredGroups);
+  logger.info({ chatId, oldName, newName }, 'Group name synced from Telegram');
+  return true;
 }
 
 // ============================================================================

@@ -25,7 +25,7 @@ import {
 } from './db.js';
 import { loadMaintenanceState } from './maintenance.js';
 import { getBot, getRegisteredGroups, getTypingIntervals } from './state.js';
-import { loadState, saveState, registerGroup } from './group-manager.js';
+import { loadState, saveState, registerGroup, ensureGroupDefaults } from './group-manager.js';
 import { connectTelegram } from './telegram-bot.js';
 import { closeAllWatchers } from './ipc-watcher.js';
 import { saveJson } from './utils.js';
@@ -55,6 +55,7 @@ async function main(): Promise<void> {
   initKnowledgeIndex(dbInstance);
 
   await loadState();
+  ensureGroupDefaults();
   loadMaintenanceState();
 
   // Auto-detect available Gemini models and set the default
