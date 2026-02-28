@@ -358,7 +358,7 @@ export async function executeFunctionCall(
       default:
         return {
           name,
-          response: { success: false, error: `Unknown function: ${name}` },
+          response: { success: false, error: `Unknown function: ${name}. This function is not available. Respond with text directly.` },
         };
     }
   } catch (err) {

@@ -9,7 +9,11 @@ import {
   SCHEDULER,
   TIMEZONE,
 } from './config.js';
-import { runContainerAgent, writeTasksSnapshot } from './container-runner.js';
+import {
+  runContainerAgent,
+  writeTasksSnapshot,
+  type ContainerOutput,
+} from './container-runner.js';
 import {
   getAllTasks,
   getDueTasks,
@@ -17,9 +21,12 @@ import {
   logTaskRun,
   updateTaskAfterRun,
 } from './db.js';
+import { isFastPathEligible, runFastPath } from './fast-path.js';
+import { readGroupGeminiMd } from './group-manager.js';
 import { logger } from './logger.js';
 import { isMaintenanceMode } from './maintenance.js';
-import { RegisteredGroup, ScheduledTask } from './types.js';
+import { getEffectiveSystemPrompt } from './personas.js';
+import { RegisteredGroup, ScheduledTask, type IpcContext } from './types.js';
 
 export interface SchedulerDependencies {
   sendMessage: (jid: string, text: string) => Promise<void>;
@@ -95,33 +102,85 @@ async function runTask(
     task.context_mode === 'group' ? sessions[task.group_folder] : undefined;
 
   try {
-    const output = await runContainerAgent(group, {
-      prompt: task.prompt,
-      sessionId,
-      groupFolder: task.group_folder,
-      chatJid: chatJid || task.chat_jid,
-      isMain,
-      isScheduledTask: true,
-      systemPrompt: group.systemPrompt,
-      enableWebSearch: group.enableWebSearch ?? true,
-    });
+    // Resolve system prompt: GEMINI.md > group.systemPrompt > persona > default
+    const geminiMdContent = readGroupGeminiMd(task.group_folder);
+    const systemPrompt = getEffectiveSystemPrompt(
+      geminiMdContent || group.systemPrompt,
+      group.persona,
+    );
+
+    // Enrich prompt with current time so Gemini doesn't need to call bash
+    const now = new Date();
+    const timeStr = now.toLocaleString('zh-TW', { timeZone: TIMEZONE, dateStyle: 'full', timeStyle: 'medium' });
+    const enrichedPrompt = `[Current time: ${timeStr}]\n[This is an automated scheduled task. Respond with text directly.]\n\n${task.prompt}`;
+
+    // Choose execution path: fast path (preferred) or container fallback
+    let output: ContainerOutput;
+    const effectiveChatJid = chatJid || task.chat_jid;
+
+    if (isFastPathEligible(group, false)) {
+      logger.info(
+        { taskId: task.id, group: task.group_folder },
+        'Scheduled task using fast path',
+      );
+
+      const ipcContext: IpcContext = {
+        sourceGroup: task.group_folder,
+        isMain,
+        registeredGroups: deps.registeredGroups(),
+        sendMessage: deps.sendMessage,
+      };
+
+      output = await runFastPath(
+        group,
+        {
+          prompt: enrichedPrompt,
+          groupFolder: task.group_folder,
+          chatJid: effectiveChatJid,
+          isMain,
+          systemPrompt,
+          enableWebSearch: group.enableWebSearch ?? true,
+          conversationHistory: [], // Scheduled tasks use independent context
+        },
+        ipcContext,
+      );
+    } else {
+      logger.info(
+        { taskId: task.id, group: task.group_folder },
+        'Scheduled task using container path',
+      );
+
+      output = await runContainerAgent(group, {
+        prompt: enrichedPrompt,
+        sessionId,
+        groupFolder: task.group_folder,
+        chatJid: effectiveChatJid,
+        isMain,
+        isScheduledTask: true,
+        systemPrompt: geminiMdContent || group.systemPrompt,
+        enableWebSearch: group.enableWebSearch ?? true,
+      });
+    }
 
     if (output.status === 'error') {
       error = output.error || 'Unknown error';
     } else {
       result = output.result;
 
-      // Emit completion sentinel so plugins (e.g. google-tasks) can detect it.
-      // The afterMessage hook watches for "@task-complete:<id>" in bot replies.
-      if (chatJid) {
+      if (chatJid && result) {
         try {
-          await deps.sendMessage(chatJid, `@task-complete:${task.id}`);
-        } catch (sentinelErr) {
+          // Embed sentinel in result so plugins (e.g. google-tasks) can still detect it
+          // but users see the actual content, not a raw sentinel
+          await deps.sendMessage(chatJid, `${result}\n\n@task-complete:${task.id}`);
+        } catch (sendErr) {
           logger.warn(
-            { taskId: task.id, sentinelErr },
-            'Failed to emit task completion sentinel',
+            { taskId: task.id, sendErr },
+            'Failed to send task result',
           );
         }
+      } else if (chatJid && !result) {
+        // No result — log internally, don't send confusing sentinel to user
+        logger.warn({ taskId: task.id }, 'Task produced no text output');
       }
     }
 
