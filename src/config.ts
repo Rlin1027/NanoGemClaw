@@ -19,11 +19,11 @@ export function setResolvedDefaultModel(modelId: string): void {
  * Priority: GEMINI_MODEL env var > auto-discovered > hardcoded fallback
  */
 export function getDefaultModel(): string {
-  return process.env.GEMINI_MODEL || _resolvedDefaultModel || 'gemini-2.5-flash';
+  return process.env.GEMINI_MODEL || _resolvedDefaultModel || 'gemini-3-flash-preview';
 }
 
 export const GEMINI_MODEL =
-  process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  process.env.GEMINI_MODEL || 'gemini-3-flash-preview';
 
 // Telegram Bot Configuration
 export const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';

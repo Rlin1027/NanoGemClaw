@@ -82,7 +82,7 @@ Summary:`;
     let stdout = '';
     let stderr = '';
 
-    const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+    const model = process.env.GEMINI_MODEL || 'gemini-3-flash-preview';
     const gemini = spawn(
       'gemini',
       ['--model', model, '-p', prompt, '--output-format', 'text'],

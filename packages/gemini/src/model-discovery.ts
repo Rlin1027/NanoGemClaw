@@ -32,8 +32,8 @@ export interface DiscoveredModel {
 
 const FALLBACK_MODELS: DiscoveredModel[] = [
   {
-    id: 'gemini-2.5-flash',
-    displayName: 'Gemini 2.5 Flash',
+    id: 'gemini-3-flash-preview',
+    displayName: 'Gemini 3 Flash Preview',
     family: 'flash',
     inputTokenLimit: 1048576,
     outputTokenLimit: 65536,
@@ -178,7 +178,7 @@ export function getAvailableModels(): DiscoveredModel[] {
 export function resolveLatestModel(family: string = 'flash'): string {
   const models = getAvailableModels();
   const match = models.find((m) => m.family === family);
-  return match?.id ?? 'gemini-2.5-flash';
+  return match?.id ?? 'gemini-3-flash-preview';
 }
 
 /**

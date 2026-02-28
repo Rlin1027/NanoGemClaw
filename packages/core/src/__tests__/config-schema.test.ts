@@ -36,7 +36,7 @@ describe('envSchema', () => {
     it('provides default GEMINI_MODEL', () => {
       const result = envSchema.safeParse(REQUIRED_BASE);
       expect(result.success).toBe(true);
-      if (result.success) expect(result.data.GEMINI_MODEL).toBe('gemini-2.5-flash');
+      if (result.success) expect(result.data.GEMINI_MODEL).toBe('gemini-3-flash-preview');
     });
 
     it('provides default CONTAINER_IMAGE', () => {
