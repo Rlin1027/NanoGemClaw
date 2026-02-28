@@ -158,8 +158,13 @@ npm run build:dashboard
 ### 4. エージェントコンテナのビルド
 
 ```bash
+# macOS で Apple Container を使用する場合：先にシステムサービスを起動
+container system start
+
 bash container/build.sh
 ```
+
+> Docker を使用する場合は `container system start` をスキップしてください。
 
 ### 5. 起動
 
@@ -167,9 +172,16 @@ bash container/build.sh
 npm run dev
 ```
 
-`http://localhost:3000` を開いて Web ダッシュボードにアクセスしてください。
+バックエンド API は `http://localhost:3000` で起動します。開発モードで Web ダッシュボードにアクセスするには、別のターミナルでフロントエンド開発サーバーを起動してください：
 
-> 詳しいステップバイステップガイドは [docs/GUIDE.md](docs/GUIDE.md) をご覧ください。
+```bash
+cd packages/dashboard
+npm run dev                # ダッシュボード: http://localhost:5173（/api → :3000 にプロキシ）
+```
+
+> 本番環境（`npm start`）では、ダッシュボードは `http://localhost:3000` から直接配信されます。
+
+詳しいステップバイステップガイドは [docs/GUIDE.md](docs/GUIDE.md) をご覧ください。
 
 ---
 
@@ -439,25 +451,33 @@ React + Vite + TailwindCSS の SPA で 9 モジュール構成:
 
 ---
 
-## Web ダッシュボード
+## ウェブダッシュボード
+
+### 開発モード
 
 ```bash
-# ローカルアクセス (デフォルト)
-open http://localhost:3000
+# ターミナル 1：バックエンドを起動
+npm run dev
 
-# LAN アクセス
-DASHBOARD_HOST=0.0.0.0 npm run dev
+# ターミナル 2：ダッシュボードフロントエンドを起動
+cd packages/dashboard
+npm run dev                # http://localhost:5173（/api → :3000 にプロキシ）
 ```
 
-`Cmd+K` / `Ctrl+K` のグローバル検索オーバーレイに対応しています。
-
-### 本番環境向けビルド
+### 本番環境
 
 ```bash
 npm run build:dashboard    # フロントエンドをビルド
 npm run build              # バックエンドをビルド
-npm start                  # :3000 でダッシュボードを配信
+npm start                  # すべて http://localhost:3000 で配信
 ```
+
+```bash
+# LAN アクセス
+DASHBOARD_HOST=0.0.0.0 npm start
+```
+
+`Cmd+K` / `Ctrl+K` グローバル検索オーバーレイをサポート。
 
 ---
 
@@ -491,6 +511,8 @@ npx tsc --noEmit          # フロントエンドの型チェック
 - **ダッシュボードが空白?** ビルド前に `cd packages/dashboard && npm install` を実行してください。
 - **CORS エラー?** `DASHBOARD_ORIGINS` 環境変数を確認してください。
 - **コンテナ EROFS エラー?** Apple Container はネストされた重複バインドマウントをサポートしていません。
+- **コンテナ XPC エラー？** 先に `container system start` を実行してください。Apple Container のシステムサービスはビルド前に起動が必要です。
+- **localhost:3000 で `Cannot GET /`？** 開発モードではポート 3000 は API のみです。ダッシュボードは別途起動してください：`cd packages/dashboard && npm run dev`（ポート 5173）。
 - **Fast Path が動作しない?** `GEMINI_API_KEY` が設定されているか確認してください。OAuth のみの設定はコンテナパスにフォールバックします。
 - **Fast Path を無効にしたい?** `FAST_PATH_ENABLED=false` でグローバルに無効化するか、ダッシュボードでグループごとに切り替えてください。
 - **レート制限された?** `.env` の `RATE_LIMIT_MAX` と `RATE_LIMIT_WINDOW` を調整してください。

@@ -158,8 +158,13 @@ npm run build:dashboard
 ### 4. 에이전트 컨테이너 빌드
 
 ```bash
+# macOS에서 Apple Container 사용 시: 먼저 시스템 서비스를 시작하세요
+container system start
+
 bash container/build.sh
 ```
+
+> Docker를 사용하는 경우 `container system start`는 건너뛰세요.
 
 ### 5. 시작
 
@@ -167,9 +172,16 @@ bash container/build.sh
 npm run dev
 ```
 
-`http://localhost:3000`에서 웹 대시보드에 접속하세요.
+백엔드 API는 `http://localhost:3000`에서 시작됩니다. 개발 모드에서 웹 대시보드에 접속하려면 별도의 터미널에서 프론트엔드 개발 서버를 시작하세요:
 
-> 자세한 단계별 가이드는 [docs/GUIDE.md](docs/GUIDE.md)를 참조하세요.
+```bash
+cd packages/dashboard
+npm run dev                # 대시보드: http://localhost:5173 (/api → :3000으로 프록시)
+```
+
+> 프로덕션 환경(`npm start`)에서는 대시보드가 `http://localhost:3000`에서 직접 제공됩니다.
+
+자세한 단계별 가이드는 [docs/GUIDE.md](docs/GUIDE.md)를 참조하세요.
 
 ---
 
@@ -441,23 +453,31 @@ graph LR
 
 ## 웹 대시보드
 
-```bash
-# 로컬 접근 (기본)
-open http://localhost:3000
+### 개발 모드
 
-# LAN 접근
-DASHBOARD_HOST=0.0.0.0 npm run dev
+```bash
+# 터미널 1: 백엔드 시작
+npm run dev
+
+# 터미널 2: 대시보드 프론트엔드 시작
+cd packages/dashboard
+npm run dev                # http://localhost:5173 (/api → :3000으로 프록시)
 ```
 
-`Cmd+K` / `Ctrl+K` 글로벌 검색 오버레이를 지원합니다.
-
-### 프로덕션용 빌드
+### 프로덕션
 
 ```bash
 npm run build:dashboard    # 프론트엔드 빌드
 npm run build              # 백엔드 빌드
-npm start                  # :3000에서 대시보드 서빙
+npm start                  # 모든 서비스를 http://localhost:3000에서 제공
 ```
+
+```bash
+# LAN 접속
+DASHBOARD_HOST=0.0.0.0 npm start
+```
+
+`Cmd+K` / `Ctrl+K` 전역 검색 오버레이를 지원합니다.
 
 ---
 
@@ -491,6 +511,8 @@ npx tsc --noEmit          # 프론트엔드 타입 체크
 - **대시보드가 빈 페이지인가요?** 빌드 전에 `cd packages/dashboard && npm install`을 실행하세요.
 - **CORS 에러가 있나요?** `DASHBOARD_ORIGINS` 환경 변수를 확인하세요.
 - **컨테이너 EROFS 에러가 있나요?** Apple Container는 중첩 겹침 바인드 마운트를 지원하지 않습니다.
+- **컨테이너 XPC 오류?** 먼저 `container system start`를 실행하세요. Apple Container의 시스템 서비스가 빌드 전에 실행되어야 합니다.
+- **localhost:3000에서 `Cannot GET /`?** 개발 모드에서 포트 3000은 API 전용입니다. 대시보드를 별도로 시작하세요: `cd packages/dashboard && npm run dev` (포트 5173).
 - **Fast Path가 작동하지 않나요?** `GEMINI_API_KEY`가 설정되어 있는지 확인하세요. OAuth 전용 설정은 컨테이너 경로로 폴백합니다.
 - **Fast Path를 비활성화하고 싶으신가요?** 전역으로 `FAST_PATH_ENABLED=false`를 설정하거나, 대시보드에서 그룹별로 토글하세요.
 - **레이트 리미트에 걸렸나요?** `.env`에서 `RATE_LIMIT_MAX`와 `RATE_LIMIT_WINDOW`를 조정하세요.

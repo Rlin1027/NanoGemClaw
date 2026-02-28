@@ -158,8 +158,13 @@ npm run build:dashboard
 ### 4. Compilar el Contenedor del Agente
 
 ```bash
+# macOS con Apple Container: iniciar el servicio del sistema primero
+container system start
+
 bash container/build.sh
 ```
+
+> Si usas Docker en lugar de Apple Container, omite `container system start`.
 
 ### 5. Iniciar
 
@@ -167,9 +172,16 @@ bash container/build.sh
 npm run dev
 ```
 
-Abre `http://localhost:3000` para acceder al Panel Web.
+La API del backend se inicia en `http://localhost:3000`. Para acceder al Panel Web durante el desarrollo, inicia el servidor frontend en otra terminal:
 
-> Para una guía detallada paso a paso, consulta [docs/GUIDE.md](docs/GUIDE.md).
+```bash
+cd packages/dashboard
+npm run dev                # Panel en http://localhost:5173 (/api proxy → :3000)
+```
+
+> En producción (`npm start`), el panel se sirve directamente en `http://localhost:3000`.
+
+Para una guía detallada paso a paso, consulta [docs/GUIDE.md](docs/GUIDE.md).
 
 ---
 
@@ -439,23 +451,31 @@ SPA React + Vite + TailwindCSS con 9 módulos:
 
 ## Panel Web
 
-```bash
-# Acceso local (por defecto)
-open http://localhost:3000
+### Desarrollo
 
+```bash
+# Terminal 1: Iniciar backend
+npm run dev
+
+# Terminal 2: Iniciar frontend del panel
+cd packages/dashboard
+npm run dev                # http://localhost:5173 (/api proxy → :3000)
+```
+
+### Producción
+
+```bash
+npm run build:dashboard    # Compilar frontend
+npm run build              # Compilar backend
+npm start                  # Todo servido en http://localhost:3000
+```
+
+```bash
 # Acceso LAN
-DASHBOARD_HOST=0.0.0.0 npm run dev
+DASHBOARD_HOST=0.0.0.0 npm start
 ```
 
 Soporta la superposición de búsqueda global `Cmd+K` / `Ctrl+K`.
-
-### Compilar para Producción
-
-```bash
-npm run build:dashboard    # Compila el frontend
-npm run build              # Compila el backend
-npm start                  # Sirve el panel en :3000
-```
 
 ---
 
@@ -489,6 +509,8 @@ npx tsc --noEmit          # Verificación de tipos del frontend
 - **¿Página en blanco en el panel?** Ejecuta `cd packages/dashboard && npm install` antes de compilar.
 - **¿Errores CORS?** Revisa la variable de entorno `DASHBOARD_ORIGINS`.
 - **¿Error EROFS en el contenedor?** Apple Container no admite montajes bind anidados que se superpongan.
+- **¿Error XPC del contenedor?** Ejecuta `container system start` primero. El servicio del sistema de Apple Container debe estar en ejecución antes de compilar.
+- **¿`Cannot GET /` en localhost:3000?** En modo desarrollo, el puerto 3000 es solo API. Inicia el panel aparte: `cd packages/dashboard && npm run dev` (puerto 5173).
 - **¿La ruta rápida no funciona?** Asegúrate de que `GEMINI_API_KEY` esté configurado. Las configuraciones solo con OAuth vuelven a la ruta del contenedor.
 - **¿Quieres deshabilitar la ruta rápida?** Establece `FAST_PATH_ENABLED=false` globalmente, o alterna por grupo en el panel.
 - **¿Límite de tasa alcanzado?** Ajusta `RATE_LIMIT_MAX` y `RATE_LIMIT_WINDOW` en `.env`.

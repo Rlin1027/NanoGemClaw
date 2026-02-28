@@ -158,8 +158,13 @@ npm run build:dashboard
 ### 4. 构建 Agent 容器
 
 ```bash
+# macOS 使用 Apple Container：需先启动系统服务
+container system start
+
 bash container/build.sh
 ```
+
+> 若使用 Docker 而非 Apple Container，可跳过 `container system start`。
 
 ### 5. 启动
 
@@ -167,9 +172,16 @@ bash container/build.sh
 npm run dev
 ```
 
-打开 `http://localhost:3000` 访问 Web 控制面板。
+后端 API 启动于 `http://localhost:3000`。开发模式下若要访问 Web 控制面板，需在另一个终端启动前端开发服务器：
 
-> 详细的分步骤指南请参阅 [docs/GUIDE.md](docs/GUIDE.md)。
+```bash
+cd packages/dashboard
+npm run dev                # 控制面板位于 http://localhost:5173（/api 代理至 :3000）
+```
+
+> 生产环境（`npm start`）下，控制面板直接由 `http://localhost:3000` 提供服务。
+
+详细的分步骤指南请参阅 [docs/GUIDE.md](docs/GUIDE.md)。
 
 ---
 
@@ -441,23 +453,31 @@ React + Vite + TailwindCSS SPA，包含 9 个模块：
 
 ## Web 控制面板
 
-```bash
-# 本地访问（默认）
-open http://localhost:3000
+### 开发模式
 
-# 局域网访问
-DASHBOARD_HOST=0.0.0.0 npm run dev
+```bash
+# 终端 1：启动后端
+npm run dev
+
+# 终端 2：启动控制面板前端
+cd packages/dashboard
+npm run dev                # http://localhost:5173（/api 代理至 :3000）
 ```
 
-支持 `Cmd+K` / `Ctrl+K` 全局搜索浮层。
-
-### 生产环境构建
+### 生产环境
 
 ```bash
 npm run build:dashboard    # 构建前端
 npm run build              # 构建后端
-npm start                  # 在 :3000 提供控制面板
+npm start                  # 所有服务由 http://localhost:3000 提供
 ```
+
+```bash
+# 局域网访问
+DASHBOARD_HOST=0.0.0.0 npm start
+```
+
+支持 `Cmd+K` / `Ctrl+K` 全局搜索浮层。
 
 ---
 
@@ -491,6 +511,8 @@ npx tsc --noEmit          # 前端类型检查
 - **控制面板空白页？** 构建前先运行 `cd packages/dashboard && npm install`。
 - **CORS 错误？** 检查 `DASHBOARD_ORIGINS` 环境变量。
 - **容器 EROFS 错误？** Apple Container 不支持嵌套重叠绑定挂载。
+- **容器 XPC 错误？** 请先执行 `container system start`。Apple Container 的系统服务必须在构建前启动。
+- **localhost:3000 出现 `Cannot GET /`？** 开发模式下 port 3000 仅提供 API。请另外启动控制面板：`cd packages/dashboard && npm run dev`（port 5173）。
 - **快速通道不工作？** 确保已设置 `GEMINI_API_KEY`。仅使用 OAuth 的配置会回退到容器通道。
 - **想禁用快速通道？** 全局设置 `FAST_PATH_ENABLED=false`，或在控制面板中按群组切换。
 - **被速率限制？** 在 `.env` 中调整 `RATE_LIMIT_MAX` 和 `RATE_LIMIT_WINDOW`。
