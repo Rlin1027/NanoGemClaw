@@ -12,6 +12,10 @@ const {
   mockIsMaintenanceMode,
   mockMkdirSync,
   mockLogger,
+  mockIsFastPathEligible,
+  mockRunFastPath,
+  mockReadGroupGeminiMd,
+  mockGetEffectiveSystemPrompt,
 } = vi.hoisted(() => {
   process.env.TELEGRAM_BOT_TOKEN = 'test-token';
   return {
@@ -30,6 +34,10 @@ const {
       error: vi.fn(),
       debug: vi.fn(),
     },
+    mockIsFastPathEligible: vi.fn(),
+    mockRunFastPath: vi.fn(),
+    mockReadGroupGeminiMd: vi.fn(),
+    mockGetEffectiveSystemPrompt: vi.fn(),
   };
 });
 
@@ -52,6 +60,28 @@ vi.mock('../logger.js', () => ({
 
 vi.mock('../maintenance.js', () => ({
   isMaintenanceMode: mockIsMaintenanceMode,
+}));
+
+vi.mock('../fast-path.js', () => ({
+  isFastPathEligible: mockIsFastPathEligible,
+  runFastPath: mockRunFastPath,
+}));
+
+vi.mock('../group-manager.js', () => ({
+  readGroupGeminiMd: mockReadGroupGeminiMd,
+  // Re-export other functions used by transitive imports
+  getAvailableGroups: vi.fn().mockReturnValue([]),
+  registerGroup: vi.fn(),
+  ensureGroupDefaults: vi.fn(),
+  updateGroupName: vi.fn(),
+  loadState: vi.fn(),
+  saveState: vi.fn(),
+}));
+
+vi.mock('../personas.js', () => ({
+  getEffectiveSystemPrompt: mockGetEffectiveSystemPrompt,
+  PERSONAS: {},
+  getAllPersonas: vi.fn().mockReturnValue({}),
 }));
 
 vi.mock('../config.js', () => ({
@@ -120,6 +150,15 @@ describe('task-scheduler', () => {
       status: 'success',
       result: 'Task completed successfully',
     });
+
+    // Default: use container path (fast path disabled)
+    mockIsFastPathEligible.mockReturnValue(false);
+    mockRunFastPath.mockResolvedValue({
+      status: 'success',
+      result: 'Fast path result',
+    });
+    mockReadGroupGeminiMd.mockReturnValue(undefined);
+    mockGetEffectiveSystemPrompt.mockReturnValue('Test system prompt');
   });
 
   afterEach(() => {

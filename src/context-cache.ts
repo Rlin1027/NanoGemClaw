@@ -81,7 +81,7 @@ export async function getOrCreateCache(
   knowledgeContent?: string,
   memoryContext?: string,
 ): Promise<string | null> {
-  const client = getGeminiClient();
+  const client = await getGeminiClient();
   if (!client) return null;
 
   const cacheableContent = buildCacheableContent(
@@ -174,14 +174,14 @@ export async function getOrCreateCache(
 /**
  * Invalidate the cache for a group (e.g. when config changes).
  */
-export function invalidateCache(groupFolder: string): void {
+export async function invalidateCache(groupFolder: string): Promise<void> {
   const existing = cacheRegistry.get(groupFolder);
   if (existing) {
     cacheRegistry.delete(groupFolder);
     logger.debug({ groupFolder }, 'Context cache invalidated');
 
     // Best-effort delete from Gemini API
-    const client = getGeminiClient();
+    const client = await getGeminiClient();
     if (client) {
       client.caches.delete({ name: existing.cacheName }).catch(() => {
         // Ignore delete failures
