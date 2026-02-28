@@ -14,7 +14,7 @@ import { logger } from './logger.js';
 
 // Configuration
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-const MODEL = 'gemini-2.0-flash-preview-image-generation';
+const MODEL = 'gemini-3.1-flash-image-preview';
 const API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const OAUTH_CREDS_PATH = path.join(os.homedir(), '.gemini', 'oauth_creds.json');
 
@@ -106,7 +106,7 @@ async function getAuth(): Promise<{ header: string; key: string } | null> {
 export async function generateImage(
   prompt: string,
   outputDir: string,
-  _options: {
+  options: {
     aspectRatio?: '1:1' | '16:9' | '9:16' | '4:3' | '3:4';
     numberOfImages?: number;
   } = {},
@@ -136,6 +136,9 @@ export async function generateImage(
       contents: [{ parts: [{ text: `Generate an image: ${prompt}` }] }],
       generationConfig: {
         responseModalities: ['IMAGE', 'TEXT'],
+        imageConfig: {
+          aspectRatio: options.aspectRatio || '1:1',
+        },
       },
     };
 
@@ -203,7 +206,7 @@ export async function generateImage(
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     logger.error(
-      { err, prompt: prompt.slice(0, 50) },
+      { err: errorMessage, prompt: prompt.slice(0, 50) },
       'Failed to generate image',
     );
 
