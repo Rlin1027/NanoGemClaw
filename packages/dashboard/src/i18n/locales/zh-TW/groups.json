@@ -63,5 +63,10 @@
     "disabled": "已停用",
     "activeTasks": "活躍任務",
     "console": "主控台",
-    "hideCard": "隱藏卡片"
+    "hideCard": "隱藏卡片",
+    "dangerZone": "危險區域",
+    "unregisterConfirm": "確定要取消註冊此群組嗎？群組資料不會被刪除。",
+    "unregisterDesc": "移除此群組的註冊，群組資料夾會保留。",
+    "unregisterSuccess": "已取消註冊",
+    "failedToUnregister": "取消註冊失敗"
 }

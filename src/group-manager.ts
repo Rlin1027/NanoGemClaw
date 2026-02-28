@@ -131,6 +131,21 @@ export function readGroupGeminiMd(groupFolder: string): string | undefined {
 }
 
 // ============================================================================
+// Group Unregistration
+// ============================================================================
+
+export function unregisterGroup(folder: string): boolean {
+  const registeredGroups = getRegisteredGroups();
+  const entry = Object.entries(registeredGroups).find(([, g]) => g.folder === folder);
+  if (!entry) return false;
+  const [chatId] = entry;
+  delete registeredGroups[chatId];
+  saveJson(path.join(DATA_DIR, 'registered_groups.json'), registeredGroups);
+  logger.info({ chatId, folder }, 'Group unregistered');
+  return true;
+}
+
+// ============================================================================
 // Group Name Sync
 // ============================================================================
 

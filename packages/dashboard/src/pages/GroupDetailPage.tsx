@@ -1,4 +1,4 @@
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGroupDetail } from '../hooks/useGroupDetail';
@@ -13,6 +13,7 @@ import { PreferencesPanel } from '../components/PreferencesPanel';
 import { ExportButton } from '../components/ExportButton';
 import { useLocale } from '../hooks/useLocale';
 import { useAvailableModels } from '../hooks/useAvailableModels';
+import { apiFetch } from '../hooks/useApi';
 
 function ModelSelector({ value, onChange, disabled }: {
     value: string;
@@ -119,6 +120,7 @@ export function GroupDetailPage({ groupFolder, onBack }: GroupDetailPageProps) {
     const [showTaskForm, setShowTaskForm] = useState(false);
     const [editingTask, setEditingTask] = useState<any>(null);
     const [saving, setSaving] = useState(false);
+    const [unregistering, setUnregistering] = useState(false);
 
     const handleSettingChange = async (updates: Record<string, any>) => {
         setSaving(true);
@@ -129,6 +131,20 @@ export function GroupDetailPage({ groupFolder, onBack }: GroupDetailPageProps) {
             showToast(err instanceof Error ? err.message : t('failedToUpdateSettings'));
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleUnregister = async () => {
+        if (!confirm(t('unregisterConfirm'))) return;
+        setUnregistering(true);
+        try {
+            await apiFetch(`/api/groups/${groupFolder}`, { method: 'DELETE' });
+            showToast(t('unregisterSuccess'), 'success');
+            onBack();
+        } catch (err) {
+            showToast(err instanceof Error ? err.message : t('failedToUnregister'));
+        } finally {
+            setUnregistering(false);
         }
     };
 
@@ -248,6 +264,25 @@ export function GroupDetailPage({ groupFolder, onBack }: GroupDetailPageProps) {
                     onEdit={task => setEditingTask(task)}
                     showGroup={false}
                 />
+            </div>
+
+            {/* Danger Zone */}
+            <div className="space-y-2">
+                <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider">{t('dangerZone')}</h3>
+                <div className="p-4 bg-red-500/5 border border-red-500/20 rounded-lg flex items-center justify-between">
+                    <div>
+                        <div className="text-sm font-medium text-slate-200">{t('unregister')}</div>
+                        <div className="text-xs text-slate-400">{t('unregisterDesc')}</div>
+                    </div>
+                    <button
+                        onClick={handleUnregister}
+                        disabled={unregistering}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
+                    >
+                        {unregistering ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                        {t('unregister')}
+                    </button>
+                </div>
             </div>
 
             {/* Errors */}

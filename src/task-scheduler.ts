@@ -141,6 +141,7 @@ async function runTask(
           systemPrompt,
           enableWebSearch: group.enableWebSearch ?? true,
           conversationHistory: [], // Scheduled tasks use independent context
+          disableFunctionCalling: true, // Prevent duplicate task creation & hallucinated tool calls
         },
         ipcContext,
       );

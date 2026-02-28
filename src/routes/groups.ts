@@ -29,6 +29,7 @@ interface GroupsRouterDeps {
         updates: Record<string, unknown>,
       ) => DashboardGroup | null)
     | null;
+  groupUnregistrar: ((folder: string) => boolean) | null;
   chatJidResolver: ((folder: string) => string | null) | null;
   emitDashboardEvent: (event: string, data: unknown) => void;
 }
@@ -90,6 +91,26 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
       } catch {
         res.status(500).json({ error: 'Registration failed' });
       }
+    },
+  );
+
+  // DELETE /api/groups/:folder
+  router.delete(
+    '/groups/:folder',
+    validate({ params: folderParams }),
+    (req, res) => {
+      const { folder } = req.params as unknown as z.infer<typeof folderParams>;
+      if (!deps.groupUnregistrar) {
+        res.status(503).json({ error: 'Group unregistration not available' });
+        return;
+      }
+      const deleted = deps.groupUnregistrar(folder);
+      if (!deleted) {
+        res.status(404).json({ error: 'Group not found' });
+        return;
+      }
+      deps.emitDashboardEvent('groups:update', deps.groupsProvider());
+      res.json({ data: { success: true } });
     },
   );
 

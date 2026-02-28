@@ -63,5 +63,10 @@
     "statusSyncing": "Syncing",
     "activeTasks": "Active Tasks",
     "console": "Console",
-    "hideCard": "Hide Card"
+    "hideCard": "Hide Card",
+    "dangerZone": "危险区域",
+    "unregisterConfirm": "确定要取消注册此群组吗？群组数据不会被删除。",
+    "unregisterDesc": "移除此群组的注册，群组文件夹会保留。",
+    "unregisterSuccess": "已取消注册",
+    "failedToUnregister": "取消注册失败"
 }

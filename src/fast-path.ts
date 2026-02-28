@@ -71,6 +71,9 @@ export interface FastPathInput {
   systemPrompt?: string;
   memoryContext?: string;
   enableWebSearch?: boolean;
+  /** Disable function calling — only googleSearch remains available.
+   *  Used by scheduled tasks to prevent duplicate task creation. */
+  disableFunctionCalling?: boolean;
   /** Recent conversation history for multi-turn context */
   conversationHistory?: Array<{ role: 'user' | 'model'; text: string }>;
 }
@@ -146,6 +149,11 @@ After your response, if there are natural follow-up questions the user might ask
 Only suggest follow-ups when they genuinely add value. Do not suggest them for simple greetings or short answers.`;
     }
 
+    // Override any remaining container-specific tool references in GEMINI.md
+    if (!input.disableFunctionCalling) {
+      systemInstruction += `\n\n## Tool Usage Rules\nYou are in direct conversation mode. ONLY use the function declarations provided to you. Do NOT call send_message, mcp__nanoclaw__send_message, or any tool not in your function declarations. Always respond with text directly to the user.`;
+    }
+
     // Fetch query-relevant knowledge (NOT cached — varies per query)
     let knowledgeContent = '';
     try {
@@ -168,11 +176,24 @@ Only suggest follow-ups when they genuinely add value. Do not suggest them for s
       input.memoryContext,
     );
 
+    // Filter out model messages that are purely function-call artifacts
+    // to prevent Gemini from replaying previous function call patterns
+    const FUNCTION_RESULT_PATTERNS = [
+      /^✅\s/, /^⏸️\s/, /^▶️\s/, /^🗑️\s/, /^🎨\s/,  // summarizeFunctionResult outputs
+      /^現在的精確時間是\s/,                              // scheduled task time reports
+    ];
+
+    const cleanedHistory = (input.conversationHistory || []).filter((msg) => {
+      if (msg.role !== 'model') return true;
+      // Keep model messages that have substantial text (not just function results)
+      return !FUNCTION_RESULT_PATTERNS.some((pattern) => pattern.test(msg.text.trim()));
+    });
+
     // Build content messages with conversation history for multi-turn context
     const contents: Content[] = [];
 
-    if (input.conversationHistory && input.conversationHistory.length > 0) {
-      for (const msg of input.conversationHistory) {
+    if (cleanedHistory.length > 0) {
+      for (const msg of cleanedHistory) {
         contents.push({
           role: msg.role as 'user' | 'model',
           parts: [{ text: msg.text }],
@@ -200,7 +221,9 @@ Only suggest follow-ups when they genuinely add value. Do not suggest them for s
     }
 
     // Build tools — functionDeclarations and googleSearch are mutually exclusive
-    const fnDeclarations = buildFunctionDeclarations(input.isMain);
+    const fnDeclarations = input.disableFunctionCalling
+      ? []
+      : buildFunctionDeclarations(input.isMain);
     const tools: any[] = [];
 
     if (fnDeclarations.length > 0) {
@@ -318,11 +341,12 @@ Only suggest follow-ups when they genuinely add value. Do not suggest them for s
       ];
 
       // Stream follow-up response after function calls
+      // Omit tools — force text-only response after function results.
+      // Follow-up stream only captures text; function calls were silently dropped.
       const followUpOptions = {
         model,
         systemInstruction: cachedContent ? undefined : systemInstruction,
         contents: followUpContents,
-        tools,
         cachedContent: cachedContent || undefined,
       };
 
@@ -353,6 +377,43 @@ Only suggest follow-ups when they genuinely add value. Do not suggest them for s
           responseTokens =
             (responseTokens || 0) +
             (followChunk.usageMetadata.candidatesTokenCount || 0);
+        }
+      }
+
+      // If function calls succeeded but no text was generated,
+      // synthesize a confirmation so message-handler doesn't treat it as error.
+      if (!fullText) {
+        const summaries = functionResults
+          .filter((r) => r.response.success)
+          .map((r) => summarizeFunctionResult(r))
+          .filter(Boolean);
+        if (summaries.length > 0) {
+          fullText = summaries.join('\n');
+        }
+      }
+
+      // If ALL function calls failed and still no text, retry without tools
+      // to force a plain text response (e.g. Gemini hallucinated send_message)
+      if (!fullText) {
+        logger.warn(
+          { group: group.name, failedCalls: pendingFunctionCalls.map(fc => fc.name) },
+          'Fast path: all function calls produced no text, retrying without tools',
+        );
+        const retryOptions = {
+          model,
+          systemInstruction: cachedContent ? undefined : systemInstruction,
+          contents,  // Original contents (without function call results)
+          cachedContent: cachedContent || undefined,
+        };
+        for await (const retryChunk of streamGenerate(retryOptions)) {
+          if (retryChunk.text) {
+            textParts.push(retryChunk.text);
+            fullText = textParts.join('');
+          }
+          if (retryChunk.usageMetadata) {
+            promptTokens = (promptTokens || 0) + (retryChunk.usageMetadata.promptTokenCount || 0);
+            responseTokens = (responseTokens || 0) + (retryChunk.usageMetadata.candidatesTokenCount || 0);
+          }
         }
       }
     }
@@ -407,6 +468,32 @@ Only suggest follow-ups when they genuinely add value. Do not suggest them for s
 // ============================================================================
 // Function Call Handler
 // ============================================================================
+
+/**
+ * Generate a user-facing summary for a successful function call result.
+ * Used as fallback when Gemini's follow-up produces no text.
+ */
+function summarizeFunctionResult(result: FunctionCallResult): string {
+  const { name, response } = result;
+  switch (name) {
+    case 'schedule_task':
+      return `✅ 定時任務已建立 (ID: ${response.task_id})`;
+    case 'pause_task':
+      return `⏸️ 任務已暫停 (ID: ${response.task_id})`;
+    case 'resume_task':
+      return `▶️ 任務已恢復 (ID: ${response.task_id})`;
+    case 'cancel_task':
+      return `🗑️ 任務已取消 (ID: ${response.task_id})`;
+    case 'generate_image':
+      return ''; // Image already sent via bot.sendPhoto
+    case 'set_preference':
+      return `✅ 偏好已更新: ${response.key}`;
+    case 'register_group':
+      return `✅ 群組已註冊 (ID: ${response.chat_id})`;
+    default:
+      return '';
+  }
+}
 
 async function handleFunctionCalls(
   calls: Array<{ name: string; args: Record<string, any> }>,

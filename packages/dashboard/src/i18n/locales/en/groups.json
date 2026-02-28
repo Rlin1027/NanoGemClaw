@@ -63,5 +63,10 @@
     "statusSyncing": "Syncing",
     "activeTasks": "Active Tasks",
     "console": "Console",
-    "hideCard": "Hide Card"
+    "hideCard": "Hide Card",
+    "dangerZone": "Danger Zone",
+    "unregisterConfirm": "Are you sure you want to unregister this group? Group data will not be deleted.",
+    "unregisterDesc": "Remove this group's registration. The group folder will be preserved.",
+    "unregisterSuccess": "Group unregistered",
+    "failedToUnregister": "Failed to unregister group"
 }

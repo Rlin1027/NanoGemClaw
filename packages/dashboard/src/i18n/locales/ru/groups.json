@@ -63,5 +63,10 @@
     "statusSyncing": "Syncing",
     "activeTasks": "Active Tasks",
     "console": "Console",
-    "hideCard": "Hide Card"
+    "hideCard": "Hide Card",
+    "dangerZone": "Опасная зона",
+    "unregisterConfirm": "Вы уверены, что хотите отменить регистрацию этой группы? Данные группы не будут удалены.",
+    "unregisterDesc": "Удалить регистрацию этой группы. Папка группы будет сохранена.",
+    "unregisterSuccess": "Регистрация отменена",
+    "failedToUnregister": "Не удалось отменить регистрацию"
 }

@@ -56,6 +56,7 @@ let groupRegistrar: ((chatId: string, name: string) => DashboardGroup) | null =
 let groupUpdater:
   | ((folder: string, updates: Record<string, any>) => DashboardGroup | null)
   | null = null;
+let groupUnregistrar: ((folder: string) => boolean) | null = null;
 let chatJidResolver: ((folder: string) => string | null) | null = null;
 
 /**
@@ -237,6 +238,9 @@ export function startDashboardServer() {
       get groupUpdater() {
         return groupUpdater;
       },
+      get groupUnregistrar() {
+        return groupUnregistrar;
+      },
       get chatJidResolver() {
         return chatJidResolver;
       },
@@ -333,6 +337,13 @@ export function setGroupUpdater(
   fn: (folder: string, updates: Record<string, any>) => DashboardGroup | null,
 ) {
   groupUpdater = fn;
+}
+
+/**
+ * Inject the group unregistration function
+ */
+export function setGroupUnregistrar(fn: (folder: string) => boolean) {
+  groupUnregistrar = fn;
 }
 
 /**

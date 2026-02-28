@@ -25,7 +25,7 @@ import {
 } from './db.js';
 import { loadMaintenanceState } from './maintenance.js';
 import { getBot, getRegisteredGroups, getTypingIntervals } from './state.js';
-import { loadState, saveState, registerGroup, ensureGroupDefaults } from './group-manager.js';
+import { loadState, saveState, registerGroup, unregisterGroup, ensureGroupDefaults } from './group-manager.js';
 import { connectTelegram } from './telegram-bot.js';
 import { closeAllWatchers } from './ipc-watcher.js';
 import { saveJson } from './utils.js';
@@ -136,6 +136,7 @@ async function main(): Promise<void> {
     setGroupsProvider,
     setGroupRegistrar,
     setGroupUpdater,
+    setGroupUnregistrar,
     setChatJidResolver,
     emitDashboardEvent,
   } = await import('./server.js');
@@ -186,6 +187,9 @@ async function main(): Promise<void> {
     });
     return { id: folder, name, folder };
   });
+
+  // Inject group unregistrar
+  setGroupUnregistrar((folder: string) => unregisterGroup(folder));
 
   // Inject group updater for dashboard settings API
   setGroupUpdater((folder: string, updates: Record<string, any>) => {

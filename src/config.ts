@@ -109,9 +109,18 @@ export const TRIGGER_PATTERN = new RegExp(
 );
 
 // Timezone for scheduled tasks (cron expressions, etc.)
-// Uses system timezone by default
-export const TIMEZONE =
-  process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone;
+// Uses system timezone by default, with validation
+function resolveTimezone(): string {
+  const tz = process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  // Intl may return "Etc/Unknown" on misconfigured systems / containers
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: tz });
+    return tz;
+  } catch {
+    return 'UTC';
+  }
+}
+export const TIMEZONE = resolveTimezone();
 
 // ============================================================================
 // Organized Constants (for better discoverability)

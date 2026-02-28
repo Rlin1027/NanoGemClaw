@@ -63,5 +63,10 @@
     "statusSyncing": "Syncing",
     "activeTasks": "Active Tasks",
     "console": "Console",
-    "hideCard": "Hide Card"
+    "hideCard": "Hide Card",
+    "dangerZone": "危険ゾーン",
+    "unregisterConfirm": "このグループの登録を解除しますか？グループデータは削除されません。",
+    "unregisterDesc": "このグループの登録を解除します。グループフォルダは保持されます。",
+    "unregisterSuccess": "登録を解除しました",
+    "failedToUnregister": "登録解除に失敗しました"
 }

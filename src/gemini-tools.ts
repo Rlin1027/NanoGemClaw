@@ -34,7 +34,7 @@ export function buildFunctionDeclarations(isMain: boolean): any[] {
       name: 'schedule_task',
       description:
         'Schedule a recurring, interval-based, or one-time task for the group. ' +
-        'Use this when the user wants to set up automated actions.',
+        'ONLY call this when the user EXPLICITLY asks to schedule, set up, or create a recurring/timed task in their CURRENT message.',
       parameters: {
         type: 'OBJECT',
         properties: {
@@ -108,7 +108,9 @@ export function buildFunctionDeclarations(isMain: boolean): any[] {
     {
       name: 'generate_image',
       description:
-        'Generate an image based on a text description using Gemini image generation.',
+        'Generate an image based on a text description. ' +
+        'ONLY call this when the user EXPLICITLY asks to create, draw, or generate an image in their CURRENT message. ' +
+        'Do NOT call this based on previous conversation history or when the user is asking a text question.',
       parameters: {
         type: 'OBJECT',
         properties: {

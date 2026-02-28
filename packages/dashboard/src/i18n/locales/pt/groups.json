@@ -63,5 +63,10 @@
     "statusSyncing": "Syncing",
     "activeTasks": "Active Tasks",
     "console": "Console",
-    "hideCard": "Hide Card"
+    "hideCard": "Hide Card",
+    "dangerZone": "Zona de perigo",
+    "unregisterConfirm": "Tem certeza de que deseja cancelar o registro deste grupo? Os dados do grupo não serão excluídos.",
+    "unregisterDesc": "Remover o registro deste grupo. A pasta do grupo será preservada.",
+    "unregisterSuccess": "Registro cancelado",
+    "failedToUnregister": "Falha ao cancelar o registro"
 }

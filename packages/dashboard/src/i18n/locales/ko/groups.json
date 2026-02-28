@@ -63,5 +63,10 @@
     "statusSyncing": "Syncing",
     "activeTasks": "Active Tasks",
     "console": "Console",
-    "hideCard": "Hide Card"
+    "hideCard": "Hide Card",
+    "dangerZone": "위험 구역",
+    "unregisterConfirm": "이 그룹의 등록을 취소하시겠습니까? 그룹 데이터는 삭제되지 않습니다.",
+    "unregisterDesc": "이 그룹의 등록을 해제합니다. 그룹 폴더는 유지됩니다.",
+    "unregisterSuccess": "등록이 취소되었습니다",
+    "failedToUnregister": "등록 취소에 실패했습니다"
 }
