@@ -572,7 +572,7 @@ Only suggest follow-ups when they genuinely add value. Do not suggest them for s
 // Backward compatibility re-exports
 export { GroupLockManager, groupLockManager } from './group-lock-manager.js';
 export {
-  AvailableGroup,
+  type AvailableGroup,
   writeTasksSnapshot,
   writeGroupsSnapshot,
 } from './container-ipc.js';

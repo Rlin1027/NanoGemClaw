@@ -158,8 +158,13 @@ npm run build:dashboard
 ### 4. 建置 Agent 容器
 
 ```bash
+# macOS 使用 Apple Container：需先啟動系統服務
+container system start
+
 bash container/build.sh
 ```
+
+> 若使用 Docker 而非 Apple Container，可跳過 `container system start`。
 
 ### 5. 啟動
 
@@ -167,9 +172,16 @@ bash container/build.sh
 npm run dev
 ```
 
-開啟 `http://localhost:3000` 即可存取網頁儀表板。
+後端 API 啟動於 `http://localhost:3000`。開發模式下若要存取網頁儀表板，需在另一個終端機啟動前端開發伺服器：
 
-> 如需詳細的逐步指南，請參閱 [docs/GUIDE.md](docs/GUIDE.md)。
+```bash
+cd packages/dashboard
+npm run dev                # 儀表板位於 http://localhost:5173（/api 代理至 :3000）
+```
+
+> 正式環境（`npm start`）下，儀表板會直接由 `http://localhost:3000` 提供服務。
+
+如需詳細的逐步指南，請參閱 [docs/GUIDE.md](docs/GUIDE.md)。
 
 ---
 
@@ -441,23 +453,31 @@ React + Vite + TailwindCSS SPA，包含 9 個模組：
 
 ## 網頁儀表板
 
-```bash
-# 本機存取（預設）
-open http://localhost:3000
+### 開發模式
 
-# 區域網路存取
-DASHBOARD_HOST=0.0.0.0 npm run dev
+```bash
+# 終端機 1：啟動後端
+npm run dev
+
+# 終端機 2：啟動儀表板前端
+cd packages/dashboard
+npm run dev                # http://localhost:5173（/api 代理至 :3000）
 ```
 
-支援 `Cmd+K` / `Ctrl+K` 全域搜尋覆蓋層。
-
-### 正式環境建置
+### 正式環境
 
 ```bash
 npm run build:dashboard    # 建置前端
 npm run build              # 建置後端
-npm start                  # 在 :3000 提供儀表板服務
+npm start                  # 所有服務由 http://localhost:3000 提供
 ```
+
+```bash
+# 區域網路存取
+DASHBOARD_HOST=0.0.0.0 npm start
+```
+
+支援 `Cmd+K` / `Ctrl+K` 全域搜尋覆蓋層。
 
 ---
 
@@ -491,6 +511,8 @@ npx tsc --noEmit          # 前端型別檢查
 - **儀表板空白頁？** 建置前請先執行 `cd packages/dashboard && npm install`。
 - **CORS 錯誤？** 檢查 `DASHBOARD_ORIGINS` 環境變數。
 - **容器 EROFS 錯誤？** Apple Container 不支援巢狀重疊的 bind mounts。
+- **容器 XPC 錯誤？** 請先執行 `container system start`。Apple Container 的系統服務必須在建置前啟動。
+- **localhost:3000 出現 `Cannot GET /`？** 開發模式下 port 3000 僅提供 API。請另外啟動儀表板：`cd packages/dashboard && npm run dev`（port 5173）。
 - **快速路徑無法運作？** 確認已設定 `GEMINI_API_KEY`。僅使用 OAuth 的設定會自動回退至容器路徑。
 - **想停用快速路徑？** 全域設定 `FAST_PATH_ENABLED=false`，或在儀表板中按群組切換。
 - **遭到速率限制？** 在 `.env` 中調整 `RATE_LIMIT_MAX` 和 `RATE_LIMIT_WINDOW`。

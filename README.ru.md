@@ -158,8 +158,13 @@ npm run build:dashboard
 ### 4. Сборка контейнера агента
 
 ```bash
+# macOS с Apple Container: сначала запустите системный сервис
+container system start
+
 bash container/build.sh
 ```
+
+> Если используете Docker вместо Apple Container, пропустите `container system start`.
 
 ### 5. Запуск
 
@@ -167,9 +172,16 @@ bash container/build.sh
 npm run dev
 ```
 
-Откройте `http://localhost:3000` для доступа к веб-панели управления.
+API бэкенда запускается на `http://localhost:3000`. Для доступа к веб-панели в режиме разработки запустите фронтенд-сервер в отдельном терминале:
 
-> Подробное пошаговое руководство смотрите в [docs/GUIDE.md](docs/GUIDE.md).
+```bash
+cd packages/dashboard
+npm run dev                # Панель на http://localhost:5173 (/api проксируется на :3000)
+```
+
+> В продакшн-режиме (`npm start`) панель управления обслуживается напрямую на `http://localhost:3000`.
+
+Подробное пошаговое руководство смотрите в [docs/GUIDE.md](docs/GUIDE.md).
 
 ---
 
@@ -439,23 +451,31 @@ React + Vite + TailwindCSS SPA с 9 модулями:
 
 ## Веб-панель управления
 
-```bash
-# Локальный доступ (по умолчанию)
-open http://localhost:3000
+### Режим разработки
 
-# Доступ по LAN
-DASHBOARD_HOST=0.0.0.0 npm run dev
+```bash
+# Терминал 1: Запуск бэкенда
+npm run dev
+
+# Терминал 2: Запуск фронтенда панели
+cd packages/dashboard
+npm run dev                # http://localhost:5173 (/api проксируется на :3000)
 ```
 
-Поддерживает глобальный оверлей поиска `Cmd+K` / `Ctrl+K`.
-
-### Сборка для продакшена
+### Продакшн
 
 ```bash
 npm run build:dashboard    # Сборка фронтенда
 npm run build              # Сборка бэкенда
-npm start                  # Панель на порту :3000
+npm start                  # Всё обслуживается на http://localhost:3000
 ```
+
+```bash
+# Доступ по LAN
+DASHBOARD_HOST=0.0.0.0 npm start
+```
+
+Поддержка глобального поиска `Cmd+K` / `Ctrl+K`.
 
 ---
 
@@ -489,6 +509,8 @@ npx tsc --noEmit          # Проверка типов фронтенда
 - **Пустая страница панели?** Запустите `cd packages/dashboard && npm install` перед сборкой.
 - **Ошибки CORS?** Проверьте переменную окружения `DASHBOARD_ORIGINS`.
 - **Ошибка EROFS контейнера?** Apple Container не поддерживает вложенные перекрывающиеся bind-монтирования.
+- **Ошибка XPC контейнера?** Сначала выполните `container system start`. Системный сервис Apple Container должен быть запущен перед сборкой.
+- **`Cannot GET /` на localhost:3000?** В режиме разработки порт 3000 — только API. Запустите панель отдельно: `cd packages/dashboard && npm run dev` (порт 5173).
 - **Fast path не работает?** Убедитесь, что `GEMINI_API_KEY` установлен. Настройки только с OAuth откатываются к контейнерному пути.
 - **Хотите отключить fast path?** Установите `FAST_PATH_ENABLED=false` глобально или переключите по группам в панели.
 - **Превышен лимит запросов?** Настройте `RATE_LIMIT_MAX` и `RATE_LIMIT_WINDOW` в `.env`.

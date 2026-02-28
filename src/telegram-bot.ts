@@ -17,7 +17,7 @@ import {
   processMessage,
   startMediaCleanupScheduler,
 } from './message-handler.js';
-import { saveState } from './group-manager.js';
+import { saveState, updateGroupName } from './group-manager.js';
 import { startIpcWatcher } from './ipc-watcher.js';
 import { startSchedulerLoop } from './task-scheduler.js';
 import { formatError } from './utils.js';
@@ -91,6 +91,11 @@ export async function connectTelegram(): Promise<void> {
     storeChatMetadata(chatId, timestamp, chatName);
 
     const registeredGroups = getRegisteredGroups();
+
+    // Auto-sync group name from Telegram
+    if (registeredGroups[chatId] && registeredGroups[chatId].name !== chatName) {
+      updateGroupName(chatId, chatName);
+    }
 
     // Store message if registered group
     if (registeredGroups[chatId] && content) {

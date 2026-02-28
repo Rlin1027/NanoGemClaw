@@ -158,8 +158,13 @@ npm run build:dashboard
 ### 4. Build Agent Container
 
 ```bash
+# macOS with Apple Container: start the system service first
+container system start
+
 bash container/build.sh
 ```
+
+> If using Docker instead of Apple Container, skip `container system start`.
 
 ### 5. Start
 
@@ -167,9 +172,16 @@ bash container/build.sh
 npm run dev
 ```
 
-Open `http://localhost:3000` to access the Web Dashboard.
+The backend API starts at `http://localhost:3000`. To access the Web Dashboard during development, start the frontend dev server in a separate terminal:
 
-> For a detailed step-by-step guide, see [docs/GUIDE.md](docs/GUIDE.md).
+```bash
+cd packages/dashboard
+npm run dev                # Dashboard at http://localhost:5173 (proxies /api → :3000)
+```
+
+> In production (`npm start`), the dashboard is bundled and served directly at `http://localhost:3000`.
+
+For a detailed step-by-step guide, see [docs/GUIDE.md](docs/GUIDE.md).
 
 ---
 
@@ -441,23 +453,31 @@ React + Vite + TailwindCSS SPA with 9 modules:
 
 ## Web Dashboard
 
-```bash
-# Local access (default)
-open http://localhost:3000
+### Development
 
-# LAN access
-DASHBOARD_HOST=0.0.0.0 npm run dev
+```bash
+# Terminal 1: Start backend
+npm run dev
+
+# Terminal 2: Start dashboard frontend
+cd packages/dashboard
+npm run dev                # http://localhost:5173 (proxies /api → :3000)
 ```
 
-Supports `Cmd+K` / `Ctrl+K` global search overlay.
-
-### Build for Production
+### Production
 
 ```bash
 npm run build:dashboard    # Build frontend
 npm run build              # Build backend
-npm start                  # Serves dashboard at :3000
+npm start                  # Serves everything at http://localhost:3000
 ```
+
+```bash
+# LAN access
+DASHBOARD_HOST=0.0.0.0 npm start
+```
+
+Supports `Cmd+K` / `Ctrl+K` global search overlay.
 
 ---
 
@@ -491,6 +511,8 @@ npx tsc --noEmit          # Type check frontend
 - **Dashboard blank page?** Run `cd packages/dashboard && npm install` before building.
 - **CORS errors?** Check `DASHBOARD_ORIGINS` env var.
 - **Container EROFS error?** Apple Container doesn't support nested overlapping bind mounts.
+- **Container XPC error?** Run `container system start` first. Apple Container's system service must be running before builds.
+- **`Cannot GET /` on localhost:3000?** In dev mode, port 3000 is API-only. Start the dashboard separately: `cd packages/dashboard && npm run dev` (serves on port 5173).
 - **Fast path not working?** Ensure `GEMINI_API_KEY` is set. OAuth-only setups fall back to container path.
 - **Want to disable fast path?** Set `FAST_PATH_ENABLED=false` globally, or toggle per group in the dashboard.
 - **Rate limited?** Adjust `RATE_LIMIT_MAX` and `RATE_LIMIT_WINDOW` in `.env`.
