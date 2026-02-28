@@ -55,7 +55,7 @@ describe('config.ts', () => {
     });
 
     it('should have default Gemini model', () => {
-      expect(GEMINI_MODEL).toBe('gemini-3-flash-preview');
+      expect(GEMINI_MODEL).toBe('gemini-2.5-flash');
     });
 
     it('should have default container image', () => {

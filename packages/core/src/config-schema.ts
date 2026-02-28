@@ -41,7 +41,7 @@ export const envSchema = z.object({
   ASSISTANT_NAME: z.string().optional().default('Andy'),
 
   // Gemini
-  GEMINI_MODEL: z.string().optional().default('gemini-3-flash-preview'),
+  GEMINI_MODEL: z.string().optional().default('gemini-2.5-flash'),
   GEMINI_API_KEY: z.string().optional(),
   GOOGLE_API_KEY: z.string().optional(),
 

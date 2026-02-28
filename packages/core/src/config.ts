@@ -84,7 +84,7 @@ export function createConfig(
   const defaults: NanoGemClawConfig = {
     assistantName: env.ASSISTANT_NAME ?? 'Andy',
     telegramBotToken: env.TELEGRAM_BOT_TOKEN ?? '',
-    geminiModel: env.GEMINI_MODEL ?? 'gemini-3-flash-preview',
+    geminiModel: env.GEMINI_MODEL ?? 'gemini-2.5-flash',
     pollInterval: 2000,
     schedulerPollInterval: 60000,
     containerImage: env.CONTAINER_IMAGE ?? 'nanogemclaw-agent:latest',
@@ -199,14 +199,14 @@ export function getDefaultModel(): string {
     _singletonEnv?.GEMINI_MODEL ??
     process.env.GEMINI_MODEL ??
     _resolvedDefaultModel ??
-    'gemini-3-flash-preview'
+    'gemini-2.5-flash'
   );
 }
 
 export const GEMINI_MODEL =
   _singletonEnv?.GEMINI_MODEL ??
   process.env.GEMINI_MODEL ??
-  'gemini-3-flash-preview';
+  'gemini-2.5-flash';
 
 export const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 
