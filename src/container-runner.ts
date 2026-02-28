@@ -176,10 +176,12 @@ async function runContainerAgentInternal(
 
   const mounts = buildVolumeMounts(group, input.isMain);
 
-  // Resolve system prompt with persona
+  // Resolve system prompt: GEMINI.md > input.systemPrompt > persona > default
   const { getEffectiveSystemPrompt } = await import('./personas.js');
+  const { readGroupGeminiMd } = await import('./group-manager.js');
+  const geminiMdContent = readGroupGeminiMd(input.groupFolder);
   let systemPrompt = getEffectiveSystemPrompt(
-    input.systemPrompt,
+    geminiMdContent || input.systemPrompt,
     input.persona,
   );
 

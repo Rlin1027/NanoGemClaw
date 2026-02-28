@@ -145,6 +145,10 @@ export async function runAgent(
     const { getMemoryContext } = await import('./memory-summarizer.js');
     const memoryContext = getMemoryContext(group.folder);
 
+    // Read GEMINI.md system prompt (shared by both fast path and container path)
+    const { readGroupGeminiMd } = await import('./group-manager.js');
+    const geminiMdContent = readGroupGeminiMd(group.folder);
+
     // ========================================================================
     // Fast Path: Direct Gemini API with streaming + function calling
     // ========================================================================
@@ -154,10 +158,10 @@ export async function runAgent(
     if (isFastPathEligible(group, hasMedia)) {
       logger.info({ group: group.name }, 'Using fast path (direct API)');
 
-      // Resolve system prompt with persona
+      // Resolve system prompt: GEMINI.md > group.systemPrompt > persona > default
       const { getEffectiveSystemPrompt } = await import('./personas.js');
       const systemPrompt = getEffectiveSystemPrompt(
-        group.systemPrompt,
+        geminiMdContent || group.systemPrompt,
         group.persona,
       );
 
@@ -280,7 +284,7 @@ export async function runAgent(
           groupFolder: group.folder,
           chatJid: chatId,
           isMain,
-          systemPrompt: group.systemPrompt,
+          systemPrompt: geminiMdContent || group.systemPrompt,
           persona: group.persona,
           enableWebSearch: group.enableWebSearch ?? true,
           mediaPath: mediaPath

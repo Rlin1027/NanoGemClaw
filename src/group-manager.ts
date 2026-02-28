@@ -112,6 +112,25 @@ export function ensureGroupDefaults(): void {
 }
 
 // ============================================================================
+// Group GEMINI.md Reader
+// ============================================================================
+
+/**
+ * Read the GEMINI.md system prompt file for a group.
+ * Returns the file content if it exists and is non-empty, otherwise undefined.
+ */
+export function readGroupGeminiMd(groupFolder: string): string | undefined {
+  const filePath = path.join(GROUPS_DIR, groupFolder, 'GEMINI.md');
+  try {
+    if (!fs.existsSync(filePath)) return undefined;
+    const content = fs.readFileSync(filePath, 'utf-8').trim();
+    return content || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// ============================================================================
 // Group Name Sync
 // ============================================================================
 
