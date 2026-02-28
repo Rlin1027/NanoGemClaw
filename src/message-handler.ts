@@ -7,7 +7,7 @@ import TelegramBot from 'node-telegram-bot-api';
 import path from 'path';
 
 import { ASSISTANT_NAME, TRIGGER_PATTERN } from './config.js';
-import { getMessagesSince } from './db.js';
+import { getMessagesSince, storeMessage } from './db.js';
 import { logger } from './logger.js';
 import { isMaintenanceMode } from './maintenance.js';
 import {
@@ -19,6 +19,7 @@ import {
 import {
   sendMessage,
   sendMessageWithButtons,
+  storeSuggestion,
   setTyping,
   QuickReplyButton,
 } from './telegram-helpers.js';
@@ -320,7 +321,7 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
           buttons.push([
             {
               text: `💡 ${suggestion}`,
-              callbackData: JSON.stringify({ type: 'reply', data: suggestion }),
+              callbackData: storeSuggestion(suggestion),
             },
           ]);
         }
@@ -332,6 +333,22 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
         buttons,
         threadIdNum,
       );
+
+      // Store bot response for conversation history
+      // Without this, Gemini only sees consecutive user messages and
+      // loses context of previous replies (e.g. repeating function calls)
+      if (cleanText) {
+        storeMessage(
+          `bot-${Date.now()}`,
+          chatId,
+          ASSISTANT_NAME,
+          ASSISTANT_NAME,
+          cleanText,
+          new Date().toISOString(),
+          true,
+          threadIdStr ?? null,
+        );
+      }
     } else if (ipcAlreadySent && statusMsg) {
       // IPC handled the response; just clean up status message
       await bot

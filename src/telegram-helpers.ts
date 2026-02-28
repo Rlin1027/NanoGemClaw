@@ -8,6 +8,36 @@ import { getBot, setTypingInterval, clearTypingInterval } from './state.js';
 import { formatError } from './utils.js';
 
 // ============================================================================
+// Suggestion Store (callback_data is limited to 64 bytes by Telegram)
+// ============================================================================
+
+const suggestionStore = new Map<number, string>();
+let suggestionCounter = 0;
+const MAX_SUGGESTIONS = 200;
+
+/**
+ * Store a suggestion text and return a short callback_data key.
+ */
+export function storeSuggestion(text: string): string {
+  const id = ++suggestionCounter;
+  suggestionStore.set(id, text);
+  // Evict oldest entries when store grows too large
+  if (suggestionStore.size > MAX_SUGGESTIONS) {
+    const firstKey = suggestionStore.keys().next().value;
+    if (firstKey !== undefined) suggestionStore.delete(firstKey);
+  }
+  return `suggest:${id}`;
+}
+
+/**
+ * Retrieve a stored suggestion by callback_data key.
+ */
+export function getSuggestion(callbackData: string): string | undefined {
+  const id = parseInt(callbackData.split(':')[1], 10);
+  return Number.isNaN(id) ? undefined : suggestionStore.get(id);
+}
+
+// ============================================================================
 // Typing Indicator
 // ============================================================================
 
