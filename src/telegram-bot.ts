@@ -10,13 +10,14 @@ import { getBot, setBot, getRegisteredGroups, getSessions } from './state.js';
 import {
   sendMessage,
   sendMessageWithButtons,
+  getSuggestion,
   QuickReplyButton,
 } from './telegram-helpers.js';
 import {
   processMessage,
   startMediaCleanupScheduler,
 } from './message-handler.js';
-import { saveState } from './group-manager.js';
+import { saveState, updateGroupName } from './group-manager.js';
 import { startIpcWatcher } from './ipc-watcher.js';
 import { startSchedulerLoop } from './task-scheduler.js';
 import { formatError } from './utils.js';
@@ -90,6 +91,11 @@ export async function connectTelegram(): Promise<void> {
     storeChatMetadata(chatId, timestamp, chatName);
 
     const registeredGroups = getRegisteredGroups();
+
+    // Auto-sync group name from Telegram
+    if (registeredGroups[chatId] && registeredGroups[chatId].name !== chatName) {
+      updateGroupName(chatId, chatName);
+    }
 
     // Store message if registered group
     if (registeredGroups[chatId] && content) {
@@ -266,6 +272,43 @@ export async function connectTelegram(): Promise<void> {
       const [action, ...params] = data.split(':');
 
       switch (action) {
+        case 'suggest': {
+          const suggestionText = getSuggestion(data);
+          if (suggestionText) {
+            const senderName = query.from.first_name;
+            const senderId = query.from.id.toString();
+            const timestamp = new Date().toISOString();
+            const msgId = `suggest-${Date.now()}`;
+            const fullText = `@${ASSISTANT_NAME} ${suggestionText}`;
+            const threadId = query.message?.message_thread_id;
+
+            storeMessage(
+              msgId,
+              chatId,
+              senderId,
+              senderName,
+              fullText,
+              timestamp,
+              false,
+              threadId?.toString() ?? null,
+            );
+
+            const fakeMsg: TelegramBot.Message = {
+              message_id: parseInt(msgId.replace('suggest-', '')),
+              chat: { id: parseInt(chatId), type: 'group' },
+              date: Math.floor(Date.now() / 1000),
+              text: fullText,
+              from: {
+                id: query.from.id,
+                is_bot: false,
+                first_name: senderName,
+              },
+              message_thread_id: threadId,
+            };
+            await processMessage(fakeMsg);
+          }
+          break;
+        }
         case 'confirm':
           await sendMessage(
             chatId,
