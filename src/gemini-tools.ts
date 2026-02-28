@@ -233,7 +233,7 @@ export function buildFunctionDeclarations(isMain: boolean): any[] {
         },
         required: ['key', 'value'],
       },
-      _metadata: { readOnly: false, requiresExplicitIntent: false, dangerLevel: 'safe' } as ToolMetadata,
+      _metadata: { readOnly: true, requiresExplicitIntent: false, dangerLevel: 'safe' } as ToolMetadata,
     },
   ];
 
