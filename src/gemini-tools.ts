@@ -65,7 +65,10 @@ export function buildFunctionDeclarations(isMain: boolean): any[] {
     },
     {
       name: 'pause_task',
-      description: 'Pause an active scheduled task by its ID.',
+      description:
+        'Pause an active scheduled task by its ID. ' +
+        'You MUST call list_tasks first to get the correct task ID. ' +
+        'ONLY call this when the user EXPLICITLY asks to pause a specific task in their CURRENT message.',
       parameters: {
         type: 'OBJECT',
         properties: {
@@ -79,7 +82,10 @@ export function buildFunctionDeclarations(isMain: boolean): any[] {
     },
     {
       name: 'resume_task',
-      description: 'Resume a paused scheduled task by its ID.',
+      description:
+        'Resume a paused scheduled task by its ID. ' +
+        'You MUST call list_tasks first to get the correct task ID. ' +
+        'ONLY call this when the user EXPLICITLY asks to resume a specific task in their CURRENT message.',
       parameters: {
         type: 'OBJECT',
         properties: {
@@ -92,8 +98,21 @@ export function buildFunctionDeclarations(isMain: boolean): any[] {
       },
     },
     {
+      name: 'list_tasks',
+      description:
+        'List all scheduled tasks for this group. Call this FIRST before pause_task, resume_task, or cancel_task to get the correct task ID. ' +
+        'Returns task IDs, prompts, schedules, and statuses.',
+      parameters: {
+        type: 'OBJECT',
+        properties: {},
+      },
+    },
+    {
       name: 'cancel_task',
-      description: 'Cancel and delete a scheduled task by its ID.',
+      description:
+        'Cancel and delete a scheduled task by its ID. ' +
+        'You MUST call list_tasks first to get the correct task ID. ' +
+        'ONLY call this when the user EXPLICITLY asks to cancel or delete a specific task in their CURRENT message.',
       parameters: {
         type: 'OBJECT',
         properties: {
@@ -125,7 +144,9 @@ export function buildFunctionDeclarations(isMain: boolean): any[] {
     {
       name: 'set_preference',
       description:
-        'Store a user preference for the group. Allowed keys: language, nickname, response_style, interests, timezone, custom_instructions.',
+        'Store a user preference for the group. Allowed keys: language, nickname, response_style, interests, timezone, custom_instructions. ' +
+        'ONLY call this when the user EXPLICITLY asks to change a setting or preference in their CURRENT message. ' +
+        'Do NOT infer preferences from conversation context or history.',
       parameters: {
         type: 'OBJECT',
         properties: {
@@ -156,7 +177,8 @@ export function buildFunctionDeclarations(isMain: boolean): any[] {
     declarations.push({
       name: 'register_group',
       description:
-        'Register a new Telegram group/chat for the assistant. Only available to the main group.',
+        'Register a new Telegram group/chat for the assistant. Only available to the main group. ' +
+        'ONLY call this when the user EXPLICITLY asks to register a new group in their CURRENT message.',
       parameters: {
         type: 'OBJECT',
         properties: {
@@ -264,8 +286,40 @@ export async function executeFunctionCall(
         };
       }
 
+      case 'list_tasks': {
+        const { getTasksForGroup } = await import('./db.js');
+        const tasks = getTasksForGroup(groupFolder);
+        return {
+          name,
+          response: {
+            success: true,
+            tasks: tasks.map(t => ({
+              id: t.id,
+              prompt: t.prompt.slice(0, 100),
+              schedule_type: t.schedule_type,
+              schedule_value: t.schedule_value,
+              status: t.status,
+              next_run: t.next_run,
+            })),
+          },
+        };
+      }
+
       case 'pause_task': {
-        const { updateTask: pauseUpdate } = await import('./db.js');
+        const { updateTask: pauseUpdate, getTaskById: pauseLookup } = await import('./db.js');
+        const pauseTarget = pauseLookup(args.task_id);
+        if (!pauseTarget) {
+          return {
+            name,
+            response: { success: false, error: `Task not found: ${args.task_id}. Use list_tasks to get valid task IDs.` },
+          };
+        }
+        if (pauseTarget.status !== 'active') {
+          return {
+            name,
+            response: { success: false, error: `Task is not active (current status: ${pauseTarget.status}). Only active tasks can be paused.` },
+          };
+        }
         pauseUpdate(args.task_id, { status: 'paused' });
         return {
           name,
@@ -274,7 +328,20 @@ export async function executeFunctionCall(
       }
 
       case 'resume_task': {
-        const { updateTask: resumeUpdate } = await import('./db.js');
+        const { updateTask: resumeUpdate, getTaskById: resumeLookup } = await import('./db.js');
+        const resumeTarget = resumeLookup(args.task_id);
+        if (!resumeTarget) {
+          return {
+            name,
+            response: { success: false, error: `Task not found: ${args.task_id}. Use list_tasks to get valid task IDs.` },
+          };
+        }
+        if (resumeTarget.status !== 'paused') {
+          return {
+            name,
+            response: { success: false, error: `Task is not paused (current status: ${resumeTarget.status}). Only paused tasks can be resumed.` },
+          };
+        }
         resumeUpdate(args.task_id, { status: 'active' });
         return {
           name,
@@ -283,7 +350,14 @@ export async function executeFunctionCall(
       }
 
       case 'cancel_task': {
-        const { deleteTask } = await import('./db.js');
+        const { deleteTask, getTaskById } = await import('./db.js');
+        const task = getTaskById(args.task_id);
+        if (!task) {
+          return {
+            name,
+            response: { success: false, error: `Task not found: ${args.task_id}. Use list_tasks to get valid task IDs.` },
+          };
+        }
         deleteTask(args.task_id);
         return {
           name,

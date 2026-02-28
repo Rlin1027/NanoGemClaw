@@ -243,7 +243,11 @@ export const FAST_PATH = {
   /** How often to emit streaming progress updates (ms) */
   STREAMING_INTERVAL_MS: 500,
   /** Max conversation history messages to include in context */
-  MAX_HISTORY_MESSAGES: 50,
+  MAX_HISTORY_MESSAGES: 20,
+  /** Max function calls allowed per single turn (prevents hallucinated tool spam) */
+  MAX_CALLS_PER_TURN: 2,
+  /** Max rounds of function calling per message (e.g. list_tasks → cancel_task = 2 rounds) */
+  MAX_TOOL_ROUNDS: 3,
   /** Timeout for fast path API calls (ms, default: 3 minutes) */
   TIMEOUT_MS: safeParseInt(process.env.FAST_PATH_TIMEOUT_MS, 180000),
 } as const;

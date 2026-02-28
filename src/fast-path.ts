@@ -34,6 +34,124 @@ import { logger } from './logger.js';
 import type { RegisteredGroup, IpcContext } from './types.js';
 
 // ============================================================================
+// Tool Safety Classification
+// ============================================================================
+
+/** Read-only tools safe to call on any query */
+const READ_ONLY_TOOLS = new Set(['list_tasks']);
+
+/** Mutating tools that require explicit user intent */
+const MUTATING_TOOLS = new Set([
+  'cancel_task',
+  'pause_task',
+  'resume_task',
+  'schedule_task',
+  'set_preference',
+  'generate_image',
+  'register_group',
+]);
+
+/**
+ * Filter a mixed batch of function calls: if both read-only and mutating tools
+ * are present, drop the mutating ones (their args are hallucinated because the
+ * model hasn't seen list results yet).
+ *
+ * Mutates arrays in-place. Returns true if any mutating calls were dropped.
+ */
+function filterMixedBatch(
+  pendingFunctionCalls: Array<{ name: string; args: Record<string, any> }>,
+  rawFunctionCallParts: any[],
+  groupName: string,
+): boolean {
+  const hasReadOnly = pendingFunctionCalls.some((fc) => READ_ONLY_TOOLS.has(fc.name));
+  const hasMutating = pendingFunctionCalls.some((fc) => MUTATING_TOOLS.has(fc.name));
+
+  if (!hasReadOnly || !hasMutating) return false;
+
+  const dropped = pendingFunctionCalls.filter((fc) => MUTATING_TOOLS.has(fc.name));
+  logger.warn(
+    { group: groupName, dropped: dropped.map((fc) => fc.name) },
+    'Fast path: dropping mutating tools from mixed batch (hallucinated args)',
+  );
+
+  // Keep only non-mutating calls
+  const readOnly = pendingFunctionCalls.filter((fc) => !MUTATING_TOOLS.has(fc.name));
+  pendingFunctionCalls.length = 0;
+  pendingFunctionCalls.push(...readOnly);
+
+  // Sync rawFunctionCallParts
+  const readOnlyNames = new Set(readOnly.map((fc) => fc.name));
+  const filteredRaw = rawFunctionCallParts.filter(
+    (p: any) => p.functionCall && readOnlyNames.has(p.functionCall.name),
+  );
+  rawFunctionCallParts.length = 0;
+  rawFunctionCallParts.push(...filteredRaw);
+
+  return true;
+}
+
+/**
+ * Sort function calls so read-only tools come first, then truncate to limit.
+ * This ensures read-only tools survive the MAX_CALLS_PER_TURN cut.
+ *
+ * Mutates arrays in-place.
+ */
+function prioritizedTruncate(
+  pendingFunctionCalls: Array<{ name: string; args: Record<string, any> }>,
+  rawFunctionCallParts: any[],
+  limit: number,
+  groupName: string,
+  round?: number,
+): void {
+  // Sort: read-only first, then mutating
+  pendingFunctionCalls.sort((a, b) => {
+    const aPriority = READ_ONLY_TOOLS.has(a.name) ? 0 : 1;
+    const bPriority = READ_ONLY_TOOLS.has(b.name) ? 0 : 1;
+    return aPriority - bPriority;
+  });
+
+  const dropped = pendingFunctionCalls.slice(limit).map((fc) => fc.name);
+  logger.warn(
+    {
+      group: groupName,
+      ...(round != null && { round }),
+      total: pendingFunctionCalls.length,
+      kept: limit,
+      dropped,
+    },
+    round != null
+      ? 'Fast path: dropping excess function calls in round'
+      : 'Fast path: dropping excess function calls',
+  );
+
+  // Build kept name→count map to sync rawFunctionCallParts
+  const keptCalls = pendingFunctionCalls.slice(0, limit);
+  const keptNameCounts = new Map<string, number>();
+  for (const fc of keptCalls) {
+    keptNameCounts.set(fc.name, (keptNameCounts.get(fc.name) || 0) + 1);
+  }
+
+  // Filter rawFunctionCallParts to match kept calls
+  const filteredRaw: any[] = [];
+  const seenCounts = new Map<string, number>();
+  for (const p of rawFunctionCallParts) {
+    if (p.functionCall) {
+      const name = p.functionCall.name;
+      const seen = seenCounts.get(name) || 0;
+      const allowed = keptNameCounts.get(name) || 0;
+      if (seen < allowed) {
+        filteredRaw.push(p);
+        seenCounts.set(name, seen + 1);
+      }
+    }
+  }
+  rawFunctionCallParts.length = 0;
+  rawFunctionCallParts.push(...filteredRaw);
+
+  pendingFunctionCalls.length = limit;
+}
+
+// ============================================================================
 // Eligibility Check
 // ============================================================================
 
@@ -151,7 +269,16 @@ Only suggest follow-ups when they genuinely add value. Do not suggest them for s
 
     // Override any remaining container-specific tool references in GEMINI.md
     if (!input.disableFunctionCalling) {
-      systemInstruction += `\n\n## Tool Usage Rules\nYou are in direct conversation mode. ONLY use the function declarations provided to you. Do NOT call send_message, mcp__nanoclaw__send_message, or any tool not in your function declarations. Always respond with text directly to the user.`;
+      systemInstruction += `\n\n## Tool Usage Rules
+You are in direct conversation mode. IMPORTANT RULES:
+1. ONLY use functions from your function declarations list
+2. Do NOT call send_message or mcp__nanoclaw__send_message
+3. Do NOT call ANY function unless the user's CURRENT message EXPLICITLY requests that action
+4. If the user asks a QUESTION, respond with TEXT only — do NOT call functions
+5. NEVER schedule tasks, generate images, or change preferences based on conversation history
+6. When in doubt, respond with text instead of calling a function
+7. For task-related questions (有幾個/有哪些/列出/查看 tasks), you may call list_tasks to gather info, but NEVER call cancel_task/pause_task/resume_task — those are destructive actions
+8. NEVER call cancel_task, pause_task, or resume_task UNLESS the user's current message contains an explicit action verb like 取消/刪除/暫停/恢復/停止`;
     }
 
     // Fetch query-relevant knowledge (NOT cached — varies per query)
@@ -178,15 +305,32 @@ Only suggest follow-ups when they genuinely add value. Do not suggest them for s
 
     // Filter out model messages that are purely function-call artifacts
     // to prevent Gemini from replaying previous function call patterns
-    const FUNCTION_RESULT_PATTERNS = [
+    const FUNCTION_RESULT_START_PATTERNS = [
       /^✅\s/, /^⏸️\s/, /^▶️\s/, /^🗑️\s/, /^🎨\s/,  // summarizeFunctionResult outputs
       /^現在的精確時間是\s/,                              // scheduled task time reports
+    ];
+    // Patterns that indicate function-call artifact content anywhere in text
+    const FUNCTION_RESULT_CONTAINS_PATTERNS = [
+      /偏好已更新/,
+      /定時任務已建立/,
+      /任務已暫停/,
+      /任務已恢復/,
+      /任務已取消/,
+      /已經將.*時區.*設定為/,
+      /已經.*設定了.*任務/,
+      /重新設定了.*任務/,
+      /Generated:/,
     ];
 
     const cleanedHistory = (input.conversationHistory || []).filter((msg) => {
       if (msg.role !== 'model') return true;
-      // Keep model messages that have substantial text (not just function results)
-      return !FUNCTION_RESULT_PATTERNS.some((pattern) => pattern.test(msg.text.trim()));
+      const text = msg.text.trim();
+      // Filter messages that start with function result indicators
+      if (FUNCTION_RESULT_START_PATTERNS.some((p) => p.test(text))) return false;
+      // For short model messages (< 200 chars), also filter if they contain
+      // function result artifacts — these are typically auto-generated confirmations
+      if (text.length < 200 && FUNCTION_RESULT_CONTAINS_PATTERNS.some((p) => p.test(text))) return false;
+      return true;
     });
 
     // Build content messages with conversation history for multi-turn context
@@ -305,115 +449,151 @@ Only suggest follow-ups when they genuinely add value. Do not suggest them for s
       }
     }
 
-    // Handle function calls if any
-    if (pendingFunctionCalls.length > 0) {
-      const functionResults = await handleFunctionCalls(
+    // Filter mixed batches: if both read-only and mutating tools are present,
+    // drop mutating ones (their args are hallucinated — model hasn't seen list results)
+    filterMixedBatch(pendingFunctionCalls, rawFunctionCallParts, group.name);
+
+    // Limit function calls per turn — prioritize read-only tools when truncating
+    if (pendingFunctionCalls.length > FAST_PATH.MAX_CALLS_PER_TURN) {
+      prioritizedTruncate(
         pendingFunctionCalls,
-        ipcContext,
-        input.groupFolder,
-        input.chatJid,
+        rawFunctionCallParts,
+        FAST_PATH.MAX_CALLS_PER_TURN,
+        group.name,
       );
+    }
 
-      // Send function results back to model for final response
-      // Use raw parts when available to preserve thoughtSignature (Gemini 3+)
-      const modelParts =
-        rawFunctionCallParts.length > 0
-          ? rawFunctionCallParts
-          : pendingFunctionCalls.map((fc) => ({
-              functionCall: { name: fc.name, args: fc.args },
-            }));
+    // Handle function calls — supports multi-round tool use
+    // (e.g., list_tasks → cancel_task requires 2 rounds)
+    if (pendingFunctionCalls.length > 0) {
+      const allFunctionResults: FunctionCallResult[] = [];
 
-      const followUpContents: Content[] = [
-        ...contents,
-        {
-          role: 'model' as const,
-          parts: modelParts,
-        },
-        {
-          role: 'user' as const,
-          parts: functionResults.map((fr) => ({
-            functionResponse: {
-              name: fr.name,
-              response: fr.response,
-            },
-          })),
-        },
-      ];
+      for (let round = 1; round <= FAST_PATH.MAX_TOOL_ROUNDS; round++) {
+        // 1. Execute pending function calls
+        const functionResults = await handleFunctionCalls(
+          pendingFunctionCalls,
+          ipcContext,
+          input.groupFolder,
+          input.chatJid,
+        );
+        allFunctionResults.push(...functionResults);
 
-      // Stream follow-up response after function calls
-      // Omit tools — force text-only response after function results.
-      // Follow-up stream only captures text; function calls were silently dropped.
-      const followUpOptions = {
-        model,
-        systemInstruction: cachedContent ? undefined : systemInstruction,
-        contents: followUpContents,
-        cachedContent: cachedContent || undefined,
-      };
+        // 2. Append model function_call + user function_response to contents
+        const modelParts =
+          rawFunctionCallParts.length > 0
+            ? rawFunctionCallParts.slice()
+            : pendingFunctionCalls.map((fc) => ({
+                functionCall: { name: fc.name, args: fc.args },
+              }));
 
-      for await (const followChunk of streamGenerate(followUpOptions)) {
-        if (followChunk.text) {
-          textParts.push(followChunk.text);
-          fullText = textParts.join('');
+        contents.push(
+          {
+            role: 'model' as const,
+            parts: modelParts,
+          },
+          {
+            role: 'user' as const,
+            parts: functionResults.map((fr) => ({
+              functionResponse: {
+                name: fr.name,
+                response: fr.response,
+              },
+            })),
+          },
+        );
 
-          if (onProgress) {
-            const now = Date.now();
-            if (now - lastProgressTime >= FAST_PATH.STREAMING_INTERVAL_MS) {
-              lastProgressTime = now;
-              onProgress({
-                type: 'message',
-                content: fullText.slice(0, 100),
-                contentDelta: followChunk.text,
-                contentSnapshot: fullText,
-                isComplete: false,
-              });
+        // Clear for next round
+        pendingFunctionCalls.length = 0;
+        rawFunctionCallParts.length = 0;
+
+        // 3. Send results back to Gemini
+        // Last round: omit tools to force text-only response
+        const isLastRound = round >= FAST_PATH.MAX_TOOL_ROUNDS;
+        const followUpOptions = {
+          model,
+          systemInstruction: cachedContent ? undefined : systemInstruction,
+          contents,
+          tools: isLastRound ? undefined : tools.length > 0 ? tools : undefined,
+          cachedContent: cachedContent || undefined,
+        };
+
+        for await (const followChunk of streamGenerate(followUpOptions)) {
+          if (followChunk.text) {
+            textParts.push(followChunk.text);
+            fullText = textParts.join('');
+
+            if (onProgress) {
+              const now = Date.now();
+              if (now - lastProgressTime >= FAST_PATH.STREAMING_INTERVAL_MS) {
+                lastProgressTime = now;
+                onProgress({
+                  type: 'message',
+                  content: fullText.slice(0, 100),
+                  contentDelta: followChunk.text,
+                  contentSnapshot: fullText,
+                  isComplete: false,
+                });
+              }
             }
+          }
+
+          // Collect function calls for next round
+          if (followChunk.functionCalls) {
+            pendingFunctionCalls.push(...followChunk.functionCalls);
+
+            if (followChunk.rawModelParts) {
+              rawFunctionCallParts.push(
+                ...followChunk.rawModelParts.filter((p: any) => p.functionCall),
+              );
+            }
+
+            if (onProgress) {
+              for (const fc of followChunk.functionCalls) {
+                onProgress({ type: 'tool_use', toolName: fc.name });
+              }
+            }
+          }
+
+          if (followChunk.usageMetadata) {
+            promptTokens =
+              (promptTokens || 0) +
+              (followChunk.usageMetadata.promptTokenCount || 0);
+            responseTokens =
+              (responseTokens || 0) +
+              (followChunk.usageMetadata.candidatesTokenCount || 0);
           }
         }
 
-        if (followChunk.usageMetadata) {
-          promptTokens =
-            (promptTokens || 0) +
-            (followChunk.usageMetadata.promptTokenCount || 0);
-          responseTokens =
-            (responseTokens || 0) +
-            (followChunk.usageMetadata.candidatesTokenCount || 0);
+        // Filter mixed batches in loop rounds too
+        filterMixedBatch(pendingFunctionCalls, rawFunctionCallParts, group.name);
+
+        // Limit function calls per turn — prioritize read-only tools
+        if (pendingFunctionCalls.length > FAST_PATH.MAX_CALLS_PER_TURN) {
+          prioritizedTruncate(
+            pendingFunctionCalls,
+            rawFunctionCallParts,
+            FAST_PATH.MAX_CALLS_PER_TURN,
+            group.name,
+            round,
+          );
         }
+
+        // 4. Got text or no more function calls → done
+        if (fullText || pendingFunctionCalls.length === 0) break;
+
+        logger.info(
+          { group: group.name, round, nextCalls: pendingFunctionCalls.map(fc => fc.name) },
+          'Fast path: continuing to next tool round',
+        );
       }
 
-      // If function calls succeeded but no text was generated,
-      // synthesize a confirmation so message-handler doesn't treat it as error.
+      // Synthesize confirmation if no text was generated across all rounds
       if (!fullText) {
-        const summaries = functionResults
-          .filter((r) => r.response.success)
+        const summaries = allFunctionResults
           .map((r) => summarizeFunctionResult(r))
           .filter(Boolean);
         if (summaries.length > 0) {
           fullText = summaries.join('\n');
-        }
-      }
-
-      // If ALL function calls failed and still no text, retry without tools
-      // to force a plain text response (e.g. Gemini hallucinated send_message)
-      if (!fullText) {
-        logger.warn(
-          { group: group.name, failedCalls: pendingFunctionCalls.map(fc => fc.name) },
-          'Fast path: all function calls produced no text, retrying without tools',
-        );
-        const retryOptions = {
-          model,
-          systemInstruction: cachedContent ? undefined : systemInstruction,
-          contents,  // Original contents (without function call results)
-          cachedContent: cachedContent || undefined,
-        };
-        for await (const retryChunk of streamGenerate(retryOptions)) {
-          if (retryChunk.text) {
-            textParts.push(retryChunk.text);
-            fullText = textParts.join('');
-          }
-          if (retryChunk.usageMetadata) {
-            promptTokens = (promptTokens || 0) + (retryChunk.usageMetadata.promptTokenCount || 0);
-            responseTokens = (responseTokens || 0) + (retryChunk.usageMetadata.candidatesTokenCount || 0);
-          }
         }
       }
     }
@@ -475,6 +655,12 @@ Only suggest follow-ups when they genuinely add value. Do not suggest them for s
  */
 function summarizeFunctionResult(result: FunctionCallResult): string {
   const { name, response } = result;
+
+  // Handle failures — surface error to user instead of silent swallow
+  if (response.success === false && response.error) {
+    return `❌ ${response.error}`;
+  }
+
   switch (name) {
     case 'schedule_task':
       return `✅ 定時任務已建立 (ID: ${response.task_id})`;
