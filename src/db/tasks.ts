@@ -113,6 +113,33 @@ export function deleteTask(id: string): void {
   deleteTx(id);
 }
 
+/**
+ * Delete all tasks (and their run logs) for a group folder.
+ * Used during group unregistration to clean up resources.
+ * Returns the number of tasks deleted.
+ */
+export function deleteTasksByGroup(groupFolder: string): number {
+  const db = getDatabase();
+  const deleteTx = db.transaction((folder: string) => {
+    // Get task IDs first to delete run logs
+    const taskIds = db
+      .prepare('SELECT id FROM scheduled_tasks WHERE group_folder = ?')
+      .all(folder) as Array<{ id: string }>;
+
+    if (taskIds.length > 0) {
+      const placeholders = taskIds.map(() => '?').join(',');
+      const ids = taskIds.map((t) => t.id);
+      db.prepare(`DELETE FROM task_run_logs WHERE task_id IN (${placeholders})`).run(...ids);
+    }
+
+    const result = db
+      .prepare('DELETE FROM scheduled_tasks WHERE group_folder = ?')
+      .run(folder);
+    return result.changes;
+  });
+  return deleteTx(groupFolder);
+}
+
 export function getDueTasks(): ScheduledTask[] {
   const db = getDatabase();
   const now = new Date().toISOString();

@@ -302,6 +302,31 @@ export function getPluginGeminiTools(): Array<
 }
 
 /**
+ * Get metadata for all plugin tools that declare it.
+ * Returns array of { name, metadata } for registration into the central registry.
+ */
+export function getPluginToolMetadataEntries(): Array<{
+  name: string;
+  metadata: { readOnly: boolean; requiresExplicitIntent: boolean; dangerLevel: 'safe' | 'moderate' | 'destructive' };
+}> {
+  const entries: Array<{
+    name: string;
+    metadata: { readOnly: boolean; requiresExplicitIntent: boolean; dangerLevel: 'safe' | 'moderate' | 'destructive' };
+  }> = [];
+  for (const tool of getPluginGeminiTools()) {
+    entries.push({
+      name: tool.name,
+      metadata: {
+        readOnly: tool.metadata?.readOnly ?? false,
+        requiresExplicitIntent: tool.metadata?.requiresExplicitIntent ?? false,
+        dangerLevel: tool.metadata?.dangerLevel ?? 'moderate',
+      },
+    });
+  }
+  return entries;
+}
+
+/**
  * Get all IPC handler contributions from all enabled plugins.
  */
 export function getPluginIpcHandlers(): Array<

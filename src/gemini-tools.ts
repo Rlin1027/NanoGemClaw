@@ -9,8 +9,43 @@
  * the same permission model and validation logic.
  */
 
-import type { IpcContext } from './types.js';
+import type { IpcContext, ToolMetadata } from './types.js';
 import { logger } from './logger.js';
+
+// ============================================================================
+// Tool Metadata Registry
+// ============================================================================
+
+/** Metadata registry for all built-in tools */
+const toolMetadataRegistry = new Map<string, ToolMetadata>();
+
+/** Plugin tool metadata registry (populated by plugin-loader) */
+const pluginToolMetadataRegistry = new Map<string, ToolMetadata>();
+
+/**
+ * Get metadata for a tool by name.
+ * Checks built-in tools first, then plugin tools.
+ * Returns undefined for unknown tools.
+ */
+export function getToolMetadata(name: string): ToolMetadata | undefined {
+  return toolMetadataRegistry.get(name) ?? pluginToolMetadataRegistry.get(name);
+}
+
+/**
+ * Register metadata for a plugin tool.
+ * Called by plugin-loader during plugin initialization.
+ */
+export function registerPluginToolMetadata(name: string, metadata: ToolMetadata): void {
+  pluginToolMetadataRegistry.set(name, metadata);
+}
+
+/**
+ * Clear cached declarations (needed when plugin tools change the registry).
+ */
+export function clearDeclarationCache(): void {
+  cachedMainDeclarations = null;
+  cachedNonMainDeclarations = null;
+}
 
 // ============================================================================
 // Function Declarations for Gemini
@@ -62,6 +97,7 @@ export function buildFunctionDeclarations(isMain: boolean): any[] {
         },
         required: ['prompt', 'schedule_type', 'schedule_value'],
       },
+      _metadata: { readOnly: false, requiresExplicitIntent: true, dangerLevel: 'moderate' } as ToolMetadata,
     },
     {
       name: 'pause_task',
@@ -79,6 +115,7 @@ export function buildFunctionDeclarations(isMain: boolean): any[] {
         },
         required: ['task_id'],
       },
+      _metadata: { readOnly: false, requiresExplicitIntent: true, dangerLevel: 'moderate' } as ToolMetadata,
     },
     {
       name: 'resume_task',
@@ -96,6 +133,7 @@ export function buildFunctionDeclarations(isMain: boolean): any[] {
         },
         required: ['task_id'],
       },
+      _metadata: { readOnly: false, requiresExplicitIntent: true, dangerLevel: 'moderate' } as ToolMetadata,
     },
     {
       name: 'list_tasks',
@@ -106,6 +144,7 @@ export function buildFunctionDeclarations(isMain: boolean): any[] {
         type: 'OBJECT',
         properties: {},
       },
+      _metadata: { readOnly: true, requiresExplicitIntent: false, dangerLevel: 'safe' } as ToolMetadata,
     },
     {
       name: 'cancel_task',
@@ -123,6 +162,7 @@ export function buildFunctionDeclarations(isMain: boolean): any[] {
         },
         required: ['task_id'],
       },
+      _metadata: { readOnly: false, requiresExplicitIntent: true, dangerLevel: 'destructive' } as ToolMetadata,
     },
     {
       name: 'generate_image',
@@ -140,6 +180,7 @@ export function buildFunctionDeclarations(isMain: boolean): any[] {
         },
         required: ['prompt'],
       },
+      _metadata: { readOnly: false, requiresExplicitIntent: true, dangerLevel: 'moderate' } as ToolMetadata,
     },
     {
       name: 'set_preference',
@@ -169,6 +210,30 @@ export function buildFunctionDeclarations(isMain: boolean): any[] {
         },
         required: ['key', 'value'],
       },
+      _metadata: { readOnly: false, requiresExplicitIntent: true, dangerLevel: 'moderate' } as ToolMetadata,
+    },
+    {
+      name: 'remember_fact',
+      description:
+        'Store a fact about the user or group for future reference. Use this to remember important information ' +
+        'the user shares, such as their name, preferences, pets, location, birthday, etc. ' +
+        'The fact will be available in future conversations.',
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          key: {
+            type: 'STRING',
+            description:
+              'A short descriptive key for the fact (e.g. "user_name", "pet_name", "favorite_food", "birthday", "location")',
+          },
+          value: {
+            type: 'STRING',
+            description: 'The fact value to remember',
+          },
+        },
+        required: ['key', 'value'],
+      },
+      _metadata: { readOnly: false, requiresExplicitIntent: false, dangerLevel: 'safe' } as ToolMetadata,
     },
   ];
 
@@ -193,17 +258,28 @@ export function buildFunctionDeclarations(isMain: boolean): any[] {
         },
         required: ['chat_id', 'name'],
       },
+      _metadata: { readOnly: false, requiresExplicitIntent: true, dangerLevel: 'moderate' } as ToolMetadata,
     });
   }
 
-  // Cache for reuse
-  if (isMain) {
-    cachedMainDeclarations = declarations;
-  } else {
-    cachedNonMainDeclarations = declarations;
+  // Register all metadata into the registry (strip _metadata before sending to Gemini)
+  for (const decl of declarations) {
+    if (decl._metadata) {
+      toolMetadataRegistry.set(decl.name, decl._metadata);
+    }
   }
 
-  return declarations;
+  // Strip _metadata from declarations (Gemini API doesn't understand it)
+  const cleanDeclarations = declarations.map(({ _metadata, ...rest }) => rest);
+
+  // Cache for reuse
+  if (isMain) {
+    cachedMainDeclarations = cleanDeclarations;
+  } else {
+    cachedNonMainDeclarations = cleanDeclarations;
+  }
+
+  return cleanDeclarations;
 }
 
 // ============================================================================
@@ -407,6 +483,17 @@ export async function executeFunctionCall(
         const { setPreference } = await import('./db.js');
         setPreference(groupFolder, args.key, String(args.value));
         return { name, response: { success: true, key: args.key } };
+      }
+
+      case 'remember_fact': {
+        const { upsertFact } = await import('./db.js');
+        const factKey = String(args.key).slice(0, 50).replace(/[^\w_-]/g, '_');
+        const factValue = String(args.value).slice(0, 500);
+        upsertFact(groupFolder, factKey, factValue, 'user_set', 1.0);
+        return {
+          name,
+          response: { success: true, key: factKey, remembered: true },
+        };
       }
 
       case 'register_group': {

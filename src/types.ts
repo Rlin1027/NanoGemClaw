@@ -139,6 +139,38 @@ export interface InlineKeyboardConfig {
 // IPC Payloads (shared contract between host and container)
 // ============================================================================
 
+// ============================================================================
+// Tool Metadata (self-describing tool safety classification)
+// ============================================================================
+
+export interface ToolMetadata {
+  /** true = safe to call on any query (e.g. list_tasks) */
+  readOnly: boolean;
+  /** true = only call when user explicitly asks (e.g. cancel_task) */
+  requiresExplicitIntent: boolean;
+  /** Safety classification for the tool */
+  dangerLevel: 'safe' | 'moderate' | 'destructive';
+}
+
+// ============================================================================
+// Group State Bag (unified group state accessor)
+// ============================================================================
+
+export interface GroupStateBag {
+  /** Group configuration from registered_groups.json */
+  config: RegisteredGroup;
+  /** Telegram chat ID (key in registeredGroups map) */
+  chatId: string;
+  /** Active session ID for the group, if any */
+  sessionId: string | undefined;
+  /** Whether this is the main (admin) group */
+  isMain: boolean;
+  /** Resolved group directory path */
+  groupDir: string;
+  /** Whether a context cache exists for this group */
+  hasContextCache: boolean;
+}
+
 export interface SuggestActionsPayload {
   actions: Array<{
     label: string;

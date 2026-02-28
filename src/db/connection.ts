@@ -184,8 +184,34 @@ export function initDatabase(): void {
     }
   }
 
+  if (currentVersion < 4) {
+    db.exec('BEGIN');
+    try {
+      // Migration v4: Structured facts table for user knowledge extraction
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS facts (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          group_folder TEXT NOT NULL,
+          key TEXT NOT NULL,
+          value TEXT NOT NULL,
+          source TEXT DEFAULT 'extracted',
+          confidence REAL DEFAULT 0.8,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          UNIQUE(group_folder, key)
+        );
+        CREATE INDEX IF NOT EXISTS idx_facts_group ON facts(group_folder);
+      `);
+      db.exec('PRAGMA user_version = 4');
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+  }
+
   // Future migrations go here:
-  // if (currentVersion < 4) { ... db.exec('PRAGMA user_version = 4'); }
+  // if (currentVersion < 5) { ... db.exec('PRAGMA user_version = 5'); }
 }
 
 /**

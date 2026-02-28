@@ -27,6 +27,7 @@ import { formatError } from './utils.js';
 import { extractMediaInfo, downloadMedia } from './media-handler.js';
 import { handleAdminCommand } from './admin-commands.js';
 import { runAgent } from './agent-executor.js';
+import { extractFacts } from './fact-extractor.js';
 import { extractFollowUps } from './response-parser.js';
 
 export { startMediaCleanupScheduler } from './media-handler.js';
@@ -269,6 +270,13 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
     { group: group.name, messageCount: missedMessages.length },
     'Processing message',
   );
+
+  // Extract structured facts from user message (fire-and-forget)
+  try {
+    extractFacts(content, group.folder);
+  } catch {
+    // Non-critical: don't fail message processing if extraction errors
+  }
 
   const ipcMessageSentChats = getIpcMessageSentChats();
   await setTyping(chatId, true, threadIdNum);

@@ -27,29 +27,30 @@ import { isGeminiClientAvailable, streamGenerate } from './gemini-client.js';
 import {
   buildFunctionDeclarations,
   executeFunctionCall,
+  getToolMetadata,
   type FunctionCallResult,
 } from './gemini-tools.js';
 import type { ContainerOutput, ProgressInfo } from './container-runner.js';
+import { extractFacts } from './fact-extractor.js';
 import { logger } from './logger.js';
 import type { RegisteredGroup, IpcContext } from './types.js';
 
 // ============================================================================
-// Tool Safety Classification
+// Tool Safety Classification (metadata-driven)
 // ============================================================================
 
-/** Read-only tools safe to call on any query */
-const READ_ONLY_TOOLS = new Set(['list_tasks']);
+/** Check if a tool is read-only via its metadata. Unknown tools default to false. */
+function isReadOnly(name: string): boolean {
+  return getToolMetadata(name)?.readOnly === true;
+}
 
-/** Mutating tools that require explicit user intent */
-const MUTATING_TOOLS = new Set([
-  'cancel_task',
-  'pause_task',
-  'resume_task',
-  'schedule_task',
-  'set_preference',
-  'generate_image',
-  'register_group',
-]);
+/** Check if a tool is mutating via its metadata. Unknown tools default to true (safe fallback). */
+function isMutating(name: string): boolean {
+  const meta = getToolMetadata(name);
+  // Unknown tools (including unregistered plugin tools) are treated as mutating
+  if (!meta) return true;
+  return !meta.readOnly;
+}
 
 /**
  * Filter a mixed batch of function calls: if both read-only and mutating tools
@@ -63,19 +64,19 @@ function filterMixedBatch(
   rawFunctionCallParts: any[],
   groupName: string,
 ): boolean {
-  const hasReadOnly = pendingFunctionCalls.some((fc) => READ_ONLY_TOOLS.has(fc.name));
-  const hasMutating = pendingFunctionCalls.some((fc) => MUTATING_TOOLS.has(fc.name));
+  const hasReadOnly = pendingFunctionCalls.some((fc) => isReadOnly(fc.name));
+  const hasMutating = pendingFunctionCalls.some((fc) => isMutating(fc.name));
 
   if (!hasReadOnly || !hasMutating) return false;
 
-  const dropped = pendingFunctionCalls.filter((fc) => MUTATING_TOOLS.has(fc.name));
+  const dropped = pendingFunctionCalls.filter((fc) => isMutating(fc.name));
   logger.warn(
     { group: groupName, dropped: dropped.map((fc) => fc.name) },
     'Fast path: dropping mutating tools from mixed batch (hallucinated args)',
   );
 
   // Keep only non-mutating calls
-  const readOnly = pendingFunctionCalls.filter((fc) => !MUTATING_TOOLS.has(fc.name));
+  const readOnly = pendingFunctionCalls.filter((fc) => !isMutating(fc.name));
   pendingFunctionCalls.length = 0;
   pendingFunctionCalls.push(...readOnly);
 
@@ -105,8 +106,8 @@ function prioritizedTruncate(
 ): void {
   // Sort: read-only first, then mutating
   pendingFunctionCalls.sort((a, b) => {
-    const aPriority = READ_ONLY_TOOLS.has(a.name) ? 0 : 1;
-    const bPriority = READ_ONLY_TOOLS.has(b.name) ? 0 : 1;
+    const aPriority = isReadOnly(a.name) ? 0 : 1;
+    const bPriority = isReadOnly(b.name) ? 0 : 1;
     return aPriority - bPriority;
   });
 
@@ -622,6 +623,13 @@ You are in direct conversation mode. IMPORTANT RULES:
       'Fast path: completed',
     );
 
+    // Extract facts from the user's input (fire-and-forget)
+    try {
+      extractFacts(input.prompt, input.groupFolder);
+    } catch {
+      // Non-critical: don't fail the response if extraction errors
+    }
+
     return {
       status: 'success',
       result: fullText || null,
@@ -676,6 +684,8 @@ function summarizeFunctionResult(result: FunctionCallResult): string {
       return `✅ 偏好已更新: ${response.key}`;
     case 'register_group':
       return `✅ 群組已註冊 (ID: ${response.chat_id})`;
+    case 'remember_fact':
+      return `✅ 已記住: ${response.key}`;
     default:
       return '';
   }

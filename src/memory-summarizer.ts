@@ -12,6 +12,7 @@ import {
   getMessagesForSummary,
   deleteOldMessages,
   upsertMemorySummary,
+  getFacts,
 } from './db.js';
 import { MEMORY } from './config.js';
 import { logger } from './logger.js';
@@ -216,16 +217,31 @@ export async function summarizeConversation(
 }
 
 /**
- * Get the memory context for a group (summary + stats)
+ * Get the memory context for a group (facts + summary).
+ * Facts are injected first for higher visibility in the prompt.
  */
 export function getMemoryContext(groupFolder: string): string | null {
   const summary = getMemorySummary(groupFolder);
-  if (!summary) return null;
+  const facts = getFacts(groupFolder);
 
-  return `[CONVERSATION HISTORY SUMMARY]
+  if (!summary && facts.length === 0) return null;
+
+  let context = '';
+
+  if (facts.length > 0) {
+    context += '[USER FACTS]\n';
+    context += facts.map((f) => `- ${f.key}: ${f.value}`).join('\n');
+    context += '\n[END FACTS]\n\n';
+  }
+
+  if (summary) {
+    context += `[CONVERSATION HISTORY SUMMARY]
 Last updated: ${summary.updated_at}
 Messages archived: ${summary.messages_archived}
 
 ${summary.summary}
 [END SUMMARY]`;
+  }
+
+  return context || null;
 }

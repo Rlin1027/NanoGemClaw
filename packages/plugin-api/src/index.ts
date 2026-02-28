@@ -75,6 +75,15 @@ export interface GeminiToolContribution {
   permission: 'main' | 'any';
   /** Execute the tool */
   execute(args: Record<string, unknown>, context: ToolExecutionContext): Promise<string>;
+  /** Optional safety metadata for fast-path filtering */
+  metadata?: {
+    /** true = safe to call on any query (default: false) */
+    readOnly?: boolean;
+    /** true = only call when user explicitly asks (default: false) */
+    requiresExplicitIntent?: boolean;
+    /** Safety classification (default: 'moderate') */
+    dangerLevel?: 'safe' | 'moderate' | 'destructive';
+  };
 }
 
 export interface ToolExecutionContext {

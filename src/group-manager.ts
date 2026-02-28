@@ -4,9 +4,10 @@
 import fs from 'fs';
 import path from 'path';
 
-import { DATA_DIR, GROUPS_DIR } from './config.js';
-import { getAllChats } from './db.js';
+import { DATA_DIR, GROUPS_DIR, MAIN_GROUP_FOLDER } from './config.js';
+import { getAllChats, deleteTasksByGroup, deleteFactsByGroup } from './db.js';
 import { AvailableGroup } from './container-runner.js';
+import { invalidateCache } from './context-cache.js';
 import { logger } from './logger.js';
 import {
   getRegisteredGroups,
@@ -16,7 +17,7 @@ import {
   getLastAgentTimestamp,
   setLastAgentTimestamp,
 } from './state.js';
-import { RegisteredGroup } from './types.js';
+import { RegisteredGroup, GroupStateBag } from './types.js';
 import { loadJson, saveJson } from './utils.js';
 
 // ============================================================================
@@ -131,17 +132,85 @@ export function readGroupGeminiMd(groupFolder: string): string | undefined {
 }
 
 // ============================================================================
+// Group State Accessor
+// ============================================================================
+
+/**
+ * Get unified state for a group by chat ID.
+ * Consolidates config, session, isMain, and derived fields into one bag.
+ * Returns null if the chat ID is not registered.
+ */
+export function getGroupState(chatId: string): GroupStateBag | null {
+  const registeredGroups = getRegisteredGroups();
+  const config = registeredGroups[chatId];
+  if (!config) return null;
+
+  const sessions = getSessions();
+  const isMain = config.folder === MAIN_GROUP_FOLDER;
+
+  return {
+    config,
+    chatId,
+    sessionId: sessions[config.folder],
+    isMain,
+    groupDir: path.join(GROUPS_DIR, config.folder),
+    hasContextCache: false, // Will be enriched by caller if needed
+  };
+}
+
+// ============================================================================
 // Group Unregistration
 // ============================================================================
 
+/**
+ * Unregister a group and clean up all associated resources:
+ * - Scheduled tasks and their run logs
+ * - Context cache
+ * - Session entry
+ * Does NOT delete the group directory (preserves history).
+ */
 export function unregisterGroup(folder: string): boolean {
   const registeredGroups = getRegisteredGroups();
   const entry = Object.entries(registeredGroups).find(([, g]) => g.folder === folder);
   if (!entry) return false;
   const [chatId] = entry;
+
+  // Clean up scheduled tasks
+  try {
+    const deletedTasks = deleteTasksByGroup(folder);
+    if (deletedTasks > 0) {
+      logger.info({ folder, deletedTasks }, 'Cleaned up scheduled tasks for unregistered group');
+    }
+  } catch (err) {
+    logger.warn({ folder, err }, 'Failed to clean up tasks during unregistration');
+  }
+
+  // Clean up facts
+  try {
+    const deletedFacts = deleteFactsByGroup(folder);
+    if (deletedFacts > 0) {
+      logger.info({ folder, deletedFacts }, 'Cleaned up facts for unregistered group');
+    }
+  } catch (err) {
+    logger.warn({ folder, err }, 'Failed to clean up facts during unregistration');
+  }
+
+  // Invalidate context cache
+  invalidateCache(folder).catch(() => {
+    // Best-effort cache cleanup
+  });
+
+  // Clean up session
+  const sessions = getSessions();
+  if (sessions[folder]) {
+    delete sessions[folder];
+    saveJson(path.join(DATA_DIR, 'sessions.json'), sessions);
+  }
+
+  // Remove from registered groups
   delete registeredGroups[chatId];
   saveJson(path.join(DATA_DIR, 'registered_groups.json'), registeredGroups);
-  logger.info({ chatId, folder }, 'Group unregistered');
+  logger.info({ chatId, folder }, 'Group unregistered (tasks, cache, session cleaned)');
   return true;
 }
 
