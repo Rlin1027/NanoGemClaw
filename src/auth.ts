@@ -147,10 +147,16 @@ export async function discoverProject(
 // Vertex AI Endpoint
 // ============================================================================
 
-const VERTEX_LOCATION = process.env.VERTEX_AI_LOCATION || 'us-central1';
+const VERTEX_LOCATION = process.env.VERTEX_AI_LOCATION || 'global';
 
 /**
  * Build the Vertex AI base URL for a given model and method.
+ *
+ * Global endpoint (default): https://aiplatform.googleapis.com/v1beta1/projects/.../locations/global/...
+ * Regional endpoint: https://{region}-aiplatform.googleapis.com/v1beta1/projects/.../locations/{region}/...
+ *
+ * Preview/experimental models are only available on the global endpoint.
+ * See: https://github.com/google-gemini/gemini-cli/issues/19055
  */
 export function buildVertexUrl(
   project: string,
@@ -158,10 +164,16 @@ export function buildVertexUrl(
   method: 'generateContent' | 'streamGenerateContent',
   streaming?: boolean,
 ): string {
-  const base = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1beta1`;
-  const path = `projects/${project}/locations/${VERTEX_LOCATION}/publishers/google/models/${model}:${method}`;
+  const location = VERTEX_LOCATION;
+  // Global endpoint has no region prefix in hostname; regional endpoints do
+  const host =
+    location === 'global'
+      ? 'aiplatform.googleapis.com'
+      : `${location}-aiplatform.googleapis.com`;
+  const base = `https://${host}/v1beta1`;
+  const resourcePath = `projects/${project}/locations/${location}/publishers/google/models/${model}:${method}`;
   const suffix = streaming ? '?alt=sse' : '';
-  return `${base}/${path}${suffix}`;
+  return `${base}/${resourcePath}${suffix}`;
 }
 
 // ============================================================================
@@ -229,8 +241,12 @@ export async function discoverVertexModels(
   token: string,
   _project: string,
 ): Promise<VertexModel[]> {
-  const location = process.env.VERTEX_AI_LOCATION || 'us-central1';
-  const url = `https://${location}-aiplatform.googleapis.com/v1beta1/publishers/google/models`;
+  const location = process.env.VERTEX_AI_LOCATION || 'global';
+  const host =
+    location === 'global'
+      ? 'aiplatform.googleapis.com'
+      : `${location}-aiplatform.googleapis.com`;
+  const url = `https://${host}/v1beta1/publishers/google/models`;
 
   try {
     const r = await fetch(url, {
@@ -298,6 +314,21 @@ export async function discoverVertexModels(
     );
     return [];
   }
+}
+
+// ============================================================================
+// API Key Only Auth
+// ============================================================================
+
+/**
+ * Resolve API key authentication only (ignoring OAuth).
+ * Used for endpoints that require API key auth (e.g. consumer API image generation).
+ * OAuth's cloud-platform scope doesn't cover generativelanguage.googleapis.com.
+ */
+export function resolveApiKeyAuth(): { type: 'apikey'; apiKey: string } | null {
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  if (apiKey) return { type: 'apikey', apiKey };
+  return null;
 }
 
 // ============================================================================

@@ -2,32 +2,23 @@
  * Image Generation Module
  *
  * Generates images using Gemini's generateContent API with image output.
- * Supports both API key and OAuth authentication.
- * Auth priority: GEMINI_API_KEY env → OAuth token from ~/.gemini/oauth_creds.json
+ * Supports both API key and OAuth authentication via the shared auth module.
+ * Auth priority: OAuth → GEMINI_API_KEY → GOOGLE_API_KEY
  */
 
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
-import { spawn } from 'child_process';
+import { resolveAuth, resolveApiKeyAuth, isAuthAvailable } from './auth.js';
 import { logger } from './logger.js';
 
 // Configuration
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const MODEL = 'gemini-3.1-flash-image-preview';
 const API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
-const OAUTH_CREDS_PATH = path.join(os.homedir(), '.gemini', 'oauth_creds.json');
 
 interface ImageGenerationResult {
   success: boolean;
   imagePath?: string;
   error?: string;
-}
-
-interface OAuthCreds {
-  access_token: string;
-  refresh_token?: string;
-  expires_at?: number;
 }
 
 interface GenerateContentResponse {
@@ -47,59 +38,6 @@ interface GenerateContentResponse {
   };
 }
 
-function readOAuthCreds(): OAuthCreds | null {
-  try {
-    if (!fs.existsSync(OAUTH_CREDS_PATH)) return null;
-    const raw = fs.readFileSync(OAUTH_CREDS_PATH, 'utf-8');
-    const creds = JSON.parse(raw) as OAuthCreds;
-    if (!creds.access_token) return null;
-    return creds;
-  } catch {
-    return null;
-  }
-}
-
-function isTokenExpired(creds: OAuthCreds): boolean {
-  if (!creds.expires_at) return false;
-  // Consider expired if less than 60s remaining
-  return Date.now() >= creds.expires_at * 1000 - 60_000;
-}
-
-function refreshTokenViaCli(): Promise<boolean> {
-  return new Promise((resolve) => {
-    const proc = spawn('gemini', ['-p', '.', '--output-format', 'text'], {
-      stdio: 'pipe',
-      timeout: 15_000,
-    });
-    proc.on('close', () => resolve(true));
-    proc.on('error', () => resolve(false));
-  });
-}
-
-async function getAuth(): Promise<{ header: string; key: string } | null> {
-  // Priority 1: API key from environment
-  if (GEMINI_API_KEY) {
-    return { header: `x-goog-api-key`, key: GEMINI_API_KEY };
-  }
-
-  // Priority 2: OAuth token
-  let creds = readOAuthCreds();
-  if (!creds) return null;
-
-  if (isTokenExpired(creds)) {
-    logger.info('OAuth token expired, refreshing via Gemini CLI');
-    const ok = await refreshTokenViaCli();
-    if (!ok) {
-      logger.warn('Failed to refresh OAuth token via CLI');
-      return null;
-    }
-    creds = readOAuthCreds();
-    if (!creds) return null;
-  }
-
-  return { header: 'Authorization', key: `Bearer ${creds.access_token}` };
-}
-
 /**
  * Generate an image using Gemini generateContent API
  */
@@ -111,7 +49,7 @@ export async function generateImage(
     numberOfImages?: number;
   } = {},
 ): Promise<ImageGenerationResult> {
-  const auth = await getAuth();
+  const auth = await resolveAuth();
   if (!auth) {
     return {
       success: false,
@@ -129,7 +67,9 @@ export async function generateImage(
   try {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      [auth.header]: auth.key,
+      ...(auth.type === 'apikey'
+        ? { 'x-goog-api-key': auth.apiKey }
+        : { Authorization: `Bearer ${auth.token}` }),
     };
 
     const body = {
@@ -142,12 +82,30 @@ export async function generateImage(
       },
     };
 
-    const response = await fetch(url, {
+    let response = await fetch(url, {
       method: 'POST',
       headers,
       signal: controller.signal,
       body: JSON.stringify(body),
     });
+
+    // OAuth 403: cloud-platform scope doesn't cover consumer API image generation.
+    // Retry with API key if available.
+    if (response.status === 403 && auth.type === 'oauth') {
+      const apiKeyAuth = resolveApiKeyAuth();
+      if (apiKeyAuth) {
+        logger.info('OAuth 403 on image generation, retrying with API key');
+        response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKeyAuth.apiKey,
+          },
+          signal: controller.signal,
+          body: JSON.stringify(body),
+        });
+      }
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -194,7 +152,7 @@ export async function generateImage(
         duration: Date.now() - startTime,
         prompt: prompt.slice(0, 50),
         path: filePath,
-        authType: auth.header === 'Authorization' ? 'oauth' : 'apikey',
+        authType: auth.type,
       },
       'Image generated',
     );
@@ -223,7 +181,5 @@ export async function generateImage(
  * Check if image generation is available
  */
 export function isImageGenAvailable(): boolean {
-  if (GEMINI_API_KEY) return true;
-  const creds = readOAuthCreds();
-  return creds !== null;
+  return isAuthAvailable();
 }
