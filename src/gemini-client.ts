@@ -71,6 +71,8 @@ export interface StreamGenerateOptions {
 export interface StreamChunk {
   text?: string;
   functionCalls?: Array<{ name: string; args: Record<string, any> }>;
+  /** Raw model parts from the API response, preserved for thought signature continuity (Gemini 3+) */
+  rawModelParts?: any[];
   usageMetadata?: {
     promptTokenCount?: number;
     candidatesTokenCount?: number;
@@ -121,6 +123,12 @@ export async function* streamGenerate(
         name: fc.name!,
         args: (fc.args as Record<string, any>) || {},
       }));
+
+      // Preserve raw parts for thought signature support (Gemini 3+)
+      const rawParts = chunk.candidates?.[0]?.content?.parts;
+      if (rawParts) {
+        result.rawModelParts = rawParts;
+      }
     }
 
     // Extract usage metadata (usually on last chunk)

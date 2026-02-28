@@ -199,14 +199,16 @@ Only suggest follow-ups when they genuinely add value. Do not suggest them for s
       systemInstruction += `\n\n${input.memoryContext}`;
     }
 
-    // Build tools
-    const tools = [
-      { functionDeclarations: buildFunctionDeclarations(input.isMain) },
-    ];
+    // Build tools — functionDeclarations and googleSearch are mutually exclusive
+    const fnDeclarations = buildFunctionDeclarations(input.isMain);
+    const tools: any[] = [];
 
-    // Add web search tool if enabled
-    if (input.enableWebSearch !== false) {
-      tools.push({ googleSearch: {} } as any);
+    if (fnDeclarations.length > 0) {
+      // Function calling takes priority (googleSearch is incompatible)
+      tools.push({ functionDeclarations: fnDeclarations });
+    } else if (input.enableWebSearch !== false) {
+      // Only use googleSearch when no function declarations
+      tools.push({ googleSearch: {} });
     }
 
     // Stream the response (use array for O(n) concatenation instead of O(n²))
@@ -219,6 +221,7 @@ Only suggest follow-ups when they genuinely add value. Do not suggest them for s
       name: string;
       args: Record<string, any>;
     }> = [];
+    const rawFunctionCallParts: any[] = [];
 
     const streamOptions = {
       model,
@@ -254,6 +257,13 @@ Only suggest follow-ups when they genuinely add value. Do not suggest them for s
       if (chunk.functionCalls) {
         pendingFunctionCalls.push(...chunk.functionCalls);
 
+        // Preserve raw parts for thought signature support (Gemini 3+)
+        if (chunk.rawModelParts) {
+          rawFunctionCallParts.push(
+            ...chunk.rawModelParts.filter((p: any) => p.functionCall),
+          );
+        }
+
         // Notify progress about tool use
         if (onProgress) {
           for (const fc of chunk.functionCalls) {
@@ -282,13 +292,19 @@ Only suggest follow-ups when they genuinely add value. Do not suggest them for s
       );
 
       // Send function results back to model for final response
+      // Use raw parts when available to preserve thoughtSignature (Gemini 3+)
+      const modelParts =
+        rawFunctionCallParts.length > 0
+          ? rawFunctionCallParts
+          : pendingFunctionCalls.map((fc) => ({
+              functionCall: { name: fc.name, args: fc.args },
+            }));
+
       const followUpContents: Content[] = [
         ...contents,
         {
           role: 'model' as const,
-          parts: pendingFunctionCalls.map((fc) => ({
-            functionCall: { name: fc.name, args: fc.args },
-          })),
+          parts: modelParts,
         },
         {
           role: 'user' as const,
