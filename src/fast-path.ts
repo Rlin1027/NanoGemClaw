@@ -61,7 +61,7 @@ function isMutating(name: string): boolean {
  */
 function filterMixedBatch(
   pendingFunctionCalls: Array<{ name: string; args: Record<string, any> }>,
-  rawFunctionCallParts: any[],
+  _rawFunctionCallParts: any[],
   groupName: string,
 ): boolean {
   const hasReadOnly = pendingFunctionCalls.some((fc) => isReadOnly(fc.name));
@@ -80,13 +80,10 @@ function filterMixedBatch(
   pendingFunctionCalls.length = 0;
   pendingFunctionCalls.push(...readOnly);
 
-  // Sync rawFunctionCallParts
-  const readOnlyNames = new Set(readOnly.map((fc) => fc.name));
-  const filteredRaw = rawFunctionCallParts.filter(
-    (p: any) => p.functionCall && readOnlyNames.has(p.functionCall.name),
-  );
-  rawFunctionCallParts.length = 0;
-  rawFunctionCallParts.push(...filteredRaw);
+  // Note: rawFunctionCallParts is intentionally NOT filtered here.
+  // All raw parts (including dropped calls) must be preserved to maintain
+  // thought signature integrity for Gemini 3+ models.
+  // Dropped calls receive rejection responses instead of being removed.
 
   return true;
 }
@@ -99,7 +96,7 @@ function filterMixedBatch(
  */
 function prioritizedTruncate(
   pendingFunctionCalls: Array<{ name: string; args: Record<string, any> }>,
-  rawFunctionCallParts: any[],
+  _rawFunctionCallParts: any[],
   limit: number,
   groupName: string,
   round?: number,
@@ -125,30 +122,8 @@ function prioritizedTruncate(
       : 'Fast path: dropping excess function calls',
   );
 
-  // Build kept name→count map to sync rawFunctionCallParts
-  const keptCalls = pendingFunctionCalls.slice(0, limit);
-  const keptNameCounts = new Map<string, number>();
-  for (const fc of keptCalls) {
-    keptNameCounts.set(fc.name, (keptNameCounts.get(fc.name) || 0) + 1);
-  }
-
-  // Filter rawFunctionCallParts to match kept calls
-  const filteredRaw: any[] = [];
-  const seenCounts = new Map<string, number>();
-  for (const p of rawFunctionCallParts) {
-    if (p.functionCall) {
-      const name = p.functionCall.name;
-      const seen = seenCounts.get(name) || 0;
-      const allowed = keptNameCounts.get(name) || 0;
-      if (seen < allowed) {
-        filteredRaw.push(p);
-        seenCounts.set(name, seen + 1);
-      }
-    }
-  }
-  rawFunctionCallParts.length = 0;
-  rawFunctionCallParts.push(...filteredRaw);
-
+  // Note: rawFunctionCallParts is NOT truncated — all raw parts must be
+  // preserved for Gemini 3+ thought signature compatibility.
   pendingFunctionCalls.length = limit;
 }
 
@@ -425,11 +400,10 @@ You are in direct conversation mode. IMPORTANT RULES:
       if (chunk.functionCalls) {
         pendingFunctionCalls.push(...chunk.functionCalls);
 
-        // Preserve raw parts for thought signature support (Gemini 3+)
+        // Preserve ALL raw model parts for thought signature continuity (Gemini 3+).
+        // Must include non-functionCall parts (e.g. thought) for signature validation.
         if (chunk.rawModelParts) {
-          rawFunctionCallParts.push(
-            ...chunk.rawModelParts.filter((p: any) => p.functionCall),
-          );
+          rawFunctionCallParts.push(...chunk.rawModelParts);
         }
 
         // Notify progress about tool use
@@ -479,12 +453,57 @@ You are in direct conversation mode. IMPORTANT RULES:
         );
         allFunctionResults.push(...functionResults);
 
-        // 2. Append model function_call + user function_response to contents
+        // 2. Append model function_call + user function_response to contents.
+        //    Use ALL raw parts to preserve thought signatures (Gemini 3+).
+        //    Raw parts may include thought + functionCall parts with signatures
+        //    that were stripped by filterMixedBatch/prioritizedTruncate from
+        //    the execution list but must remain in the conversation history.
         const modelParts =
           rawFunctionCallParts.length > 0
             ? rawFunctionCallParts.slice()
             : pendingFunctionCalls.map((fc) => ({
                 functionCall: { name: fc.name, args: fc.args },
+              }));
+
+        // Build function responses for ALL function calls in raw parts.
+        // Executed calls get real results; dropped/truncated calls get rejection.
+        const executedNames = new Set(pendingFunctionCalls.map((fc) => fc.name));
+        const executedQueue = [...functionResults];
+        const allRawCalls = rawFunctionCallParts.filter(
+          (p: any) => p.functionCall,
+        );
+
+        const responseParts =
+          allRawCalls.length > 0
+            ? allRawCalls.map((p: any) => {
+                const name: string = p.functionCall.name;
+                if (executedNames.has(name)) {
+                  const idx = executedQueue.findIndex((r) => r.name === name);
+                  if (idx !== -1) {
+                    const [result] = executedQueue.splice(idx, 1);
+                    return {
+                      functionResponse: {
+                        name: result.name,
+                        response: result.response,
+                      },
+                    };
+                  }
+                }
+                return {
+                  functionResponse: {
+                    name,
+                    response: {
+                      success: false,
+                      error: 'Function skipped — query first, then modify',
+                    },
+                  },
+                };
+              })
+            : functionResults.map((fr) => ({
+                functionResponse: {
+                  name: fr.name,
+                  response: fr.response,
+                },
               }));
 
         contents.push(
@@ -494,12 +513,7 @@ You are in direct conversation mode. IMPORTANT RULES:
           },
           {
             role: 'user' as const,
-            parts: functionResults.map((fr) => ({
-              functionResponse: {
-                name: fr.name,
-                response: fr.response,
-              },
-            })),
+            parts: responseParts,
           },
         );
 
@@ -543,9 +557,7 @@ You are in direct conversation mode. IMPORTANT RULES:
             pendingFunctionCalls.push(...followChunk.functionCalls);
 
             if (followChunk.rawModelParts) {
-              rawFunctionCallParts.push(
-                ...followChunk.rawModelParts.filter((p: any) => p.functionCall),
-              );
+              rawFunctionCallParts.push(...followChunk.rawModelParts);
             }
 
             if (onProgress) {
