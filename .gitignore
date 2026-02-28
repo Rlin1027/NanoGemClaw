@@ -21,6 +21,9 @@ groups/
 .idea/
 .vscode/
 
+# Claude Code
+.claude/
+
 # Test coverage
 coverage/
 
