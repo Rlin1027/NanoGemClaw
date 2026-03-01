@@ -163,6 +163,22 @@ async function main(): Promise<void> {
   const { setDashboardEventEmitter } = await import('./container-runner.js');
   setDashboardEventEmitter(emitDashboardEvent);
 
+  // Initialize Event Bus and bridge to Dashboard Socket.IO
+  const { createEventBus } = await import('@nanogemclaw/event-bus');
+  const eventBus = createEventBus();
+
+  const dashboardEvents: Array<keyof import('@nanogemclaw/event-bus').NanoEventMap> = [
+    'message:received', 'message:sent',
+    'group:registered', 'group:unregistered', 'group:updated',
+    'task:created', 'task:completed', 'task:failed',
+    'memory:fact-stored', 'memory:summarized',
+  ];
+  for (const evt of dashboardEvents) {
+    eventBus.on(evt, (data) => {
+      emitDashboardEvent(`bus:${evt}`, data);
+    });
+  }
+
   // Inject data provider
   setGroupsProvider(() => {
     const registeredGroups = getRegisteredGroups();
