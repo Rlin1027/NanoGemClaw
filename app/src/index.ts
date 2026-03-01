@@ -44,9 +44,11 @@ async function main(): Promise<void> {
   const { createEventBus } = await import('@nanogemclaw/event-bus');
   const eventBus = createEventBus();
 
-  // Initialize database
+  // Initialize database (both package DB and legacy src/db for telegram-bot.ts)
   const { initDatabase, closeDatabase, getDatabase } = await import('@nanogemclaw/db');
   initDatabase();
+  const { initDatabase: initLegacyDb } = await import('../../src/db/connection.js');
+  initLegacyDb();
   const dbInstance = getDatabase();
 
   // Initialize search index (after database init)
@@ -112,9 +114,9 @@ async function main(): Promise<void> {
   // Register plugin IPC handlers
   const pluginIpcHandlers = getPluginIpcHandlers();
   if (pluginIpcHandlers.length > 0) {
-    const { registerHandler } = await import('../../src/ipc-handlers/index.js');
+    const { registerIpcHandler } = await import('../../src/ipc-handlers/index.js');
     for (const handler of pluginIpcHandlers) {
-      registerHandler(handler as any);
+      registerIpcHandler(handler as any);
     }
   }
 

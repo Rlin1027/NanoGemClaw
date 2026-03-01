@@ -177,6 +177,24 @@ export async function sendMessageWithButtons(
       { chatId, buttonRows: buttons.length },
       'Message with buttons sent',
     );
+
+    // Emit message:sent event (same as sendMessage)
+    try {
+      const { getEventBus } = await import('@nanogemclaw/event-bus');
+      const { getRegisteredGroups } = await import('./state.js');
+      const group = getRegisteredGroups()[chatId];
+      if (group) {
+        getEventBus().emit('message:sent', {
+          chatId,
+          content: text,
+          timestamp: new Date().toISOString(),
+          groupFolder: group.folder,
+          messageThreadId,
+        });
+      }
+    } catch {
+      /* EventBus not initialized */
+    }
   } catch (err) {
     logger.error(
       { chatId, err: formatError(err) },

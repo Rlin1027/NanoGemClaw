@@ -53,6 +53,24 @@ function isMutating(name: string): boolean {
 }
 
 /**
+ * Intent keyword patterns for tools that require explicit user intent.
+ * If the user's message doesn't match any pattern for a tool, the call is blocked.
+ * Tools not listed here but with requiresExplicitIntent=true are allowed
+ * (they're typically used in multi-round contexts like pause/resume/cancel).
+ */
+const EXPLICIT_INTENT_PATTERNS: Record<string, RegExp> = {
+  generate_image: /畫|圖片|生成.*圖|產生.*圖|image|draw|picture|photo|illustrat|pic/i,
+  schedule_task: /排程|定時|定期|提醒|每天|每週|每月|每小時|schedule|remind|recurring|timer|cron|設[定置].*任務|建立.*任務|加.*任務/i,
+};
+
+/** Check if a tool call has explicit user intent based on the user's prompt. */
+function hasExplicitIntent(toolName: string, userPrompt: string): boolean {
+  const pattern = EXPLICIT_INTENT_PATTERNS[toolName];
+  if (!pattern) return true; // No pattern defined = allow
+  return pattern.test(userPrompt);
+}
+
+/**
  * Filter a mixed batch of function calls: if both read-only and mutating tools
  * are present, drop the mutating ones (their args are hallucinated because the
  * model hasn't seen list results yet).
@@ -350,17 +368,16 @@ You are in direct conversation mode. IMPORTANT RULES:
       systemInstruction += `\n\n${input.memoryContext}`;
     }
 
-    // Build tools — functionDeclarations and googleSearch are mutually exclusive
+    // Build tools — each tool_type must be a separate entry (proto oneof constraint)
     const fnDeclarations = input.disableFunctionCalling
       ? []
       : buildFunctionDeclarations(input.isMain);
     const tools: any[] = [];
 
     if (fnDeclarations.length > 0) {
-      // Function calling takes priority (googleSearch is incompatible)
       tools.push({ functionDeclarations: fnDeclarations });
-    } else if (input.enableWebSearch !== false) {
-      // Only use googleSearch when no function declarations
+    }
+    if (input.enableWebSearch !== false) {
       tools.push({ googleSearch: {} });
     }
 
@@ -460,6 +477,7 @@ You are in direct conversation mode. IMPORTANT RULES:
           ipcContext,
           input.groupFolder,
           input.chatJid,
+          input.prompt,
         );
         allFunctionResults.push(...functionResults);
 
@@ -728,10 +746,35 @@ async function handleFunctionCalls(
   context: IpcContext,
   groupFolder: string,
   chatJid: string,
+  userPrompt?: string,
 ): Promise<FunctionCallResult[]> {
   const results: FunctionCallResult[] = [];
 
   for (const call of calls) {
+    // Block tools that require explicit intent if user didn't ask for them
+    const meta = getToolMetadata(call.name);
+    if (
+      meta?.requiresExplicitIntent &&
+      userPrompt &&
+      !hasExplicitIntent(call.name, userPrompt)
+    ) {
+      logger.warn(
+        { tool: call.name, group: groupFolder },
+        'Blocked tool call: user did not explicitly request this action',
+      );
+      results.push({
+        name: call.name,
+        response: {
+          success: false,
+          error:
+            'This tool requires explicit user request. ' +
+            'The user did not ask for this action. ' +
+            'Instead, suggest this action to the user in your text response and let them decide.',
+        },
+      });
+      continue;
+    }
+
     const result = await executeFunctionCall(
       call.name,
       call.args,
