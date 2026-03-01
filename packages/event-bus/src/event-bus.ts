@@ -76,12 +76,24 @@ export class EventBus {
   }
 
   /**
-   * Subscribe to an event, firing at most once. Returns an unsubscribe function.
+   * Subscribe to an event, firing at most once.
+   * Without handler: returns a Promise that resolves with the next payload.
+   * With handler: returns an unsubscribe function.
    */
+  once<K extends keyof NanoEventMap>(event: K): Promise<NanoEventMap[K]>;
   once<K extends keyof NanoEventMap>(
     event: K,
     handler: (payload: NanoEventMap[K]) => void | Promise<void>,
-  ): () => void {
+  ): () => void;
+  once<K extends keyof NanoEventMap>(
+    event: K,
+    handler?: (payload: NanoEventMap[K]) => void | Promise<void>,
+  ): Promise<NanoEventMap[K]> | (() => void) {
+    if (!handler) {
+      return new Promise<NanoEventMap[K]>((resolve) => {
+        this.emitter.once(event as string, resolve);
+      });
+    }
     this.emitter.once(event as string, handler);
     return () => {
       this.emitter.removeListener(event as string, handler);

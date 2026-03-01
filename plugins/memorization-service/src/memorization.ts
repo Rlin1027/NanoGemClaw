@@ -24,24 +24,41 @@ interface MemorizationTask {
   error: string | null;
 }
 
-const THRESHOLDS = {
-  /** Minimum messages before triggering summarization */
-  MESSAGE_COUNT: 20,
-  /** Hours between polling cycles */
-  CHECK_INTERVAL_HOURS: 4,
-  /** Debounce timeout for event-driven mode (ms) */
-  DEBOUNCE_MS: 60 * 60 * 1000, // 60 minutes
-};
-
 /** Function signature for the summarizer (injectable for testing). */
 export type SummarizeFunction = (
   group: { folder: string; name: string },
   chatJid: string,
 ) => Promise<{ summary: string; messagesProcessed: number; charsProcessed: number } | null>;
 
+export interface MemorizationConfig {
+  /** Messages needed to trigger summarization (default: 20) */
+  messageThreshold?: number;
+  /** Debounce timeout for event-driven mode in ms (default: 3600000) */
+  debounceMs?: number;
+  /** Hours between polling cycles (default: 4) */
+  checkIntervalHours?: number;
+  /** Minimum messages — below this count, skip processing (default: 5) */
+  minMessages?: number;
+  /** Maximum messages per summarization batch (default: 200) */
+  maxMessages?: number;
+  /** Maximum concurrent summarizations across all groups (default: 1) */
+  maxConcurrent?: number;
+}
+
+const DEFAULT_CONFIG: Required<MemorizationConfig> = {
+  messageThreshold: 20,
+  debounceMs: 60 * 60 * 1000,
+  checkIntervalHours: 4,
+  minMessages: 5,
+  maxMessages: 200,
+  maxConcurrent: 1,
+};
+
 export interface MemorizationServiceOptions {
   /** Override the summarizer (defaults to dynamic import of src/memory-summarizer.js). */
   summarize?: SummarizeFunction;
+  /** Configuration overrides. */
+  config?: MemorizationConfig;
 }
 
 export class MemorizationService {
@@ -55,9 +72,13 @@ export class MemorizationService {
     };
   };
   private injectedSummarize?: SummarizeFunction;
+  private config: Required<MemorizationConfig>;
+  private eventBus?: EventBus;
 
   // Per-group processing lock
   private isProcessing = new Map<string, boolean>();
+  // Global concurrency counter
+  private activeCount = 0;
 
   // Polling timer
   private pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -72,6 +93,7 @@ export class MemorizationService {
     this.api = api;
     this.db = api.getDatabase() as MemorizationService['db'];
     this.injectedSummarize = options?.summarize;
+    this.config = { ...DEFAULT_CONFIG, ...options?.config };
   }
 
   /** Create the memorization_tasks table (plugin-managed migration). */
@@ -127,10 +149,14 @@ export class MemorizationService {
 
   /** Subscribe to Event Bus events for real-time trigger. */
   subscribeToEvents(eventBus: EventBus): void {
-    const unsub = eventBus.on('message:received', (payload) => {
+    this.eventBus = eventBus;
+    const unsub1 = eventBus.on('message:received', (payload) => {
       this.onMessageReceived(payload.chatId, payload.groupFolder);
     });
-    this.eventUnsubscribers.push(unsub);
+    const unsub2 = eventBus.on('message:sent', (payload) => {
+      this.onMessageReceived(payload.chatId, payload.groupFolder);
+    });
+    this.eventUnsubscribers.push(unsub1, unsub2);
   }
 
   private onMessageReceived(chatId: string, groupFolder: string): void {
@@ -142,7 +168,7 @@ export class MemorizationService {
     if (existing) clearTimeout(existing);
 
     // Check threshold immediately
-    if (count >= THRESHOLDS.MESSAGE_COUNT) {
+    if (count >= this.config.messageThreshold) {
       this.pendingCounts.set(groupFolder, 0);
       this.triggerSummarization(groupFolder, chatId).catch((err) =>
         this.api.logger.error(
@@ -163,14 +189,14 @@ export class MemorizationService {
           ),
         );
       }
-    }, THRESHOLDS.DEBOUNCE_MS);
+    }, this.config.debounceMs);
     this.debounceTimers.set(groupFolder, timer);
   }
 
   // ── Phase 1: Polling ────────────────────────────────────────────
 
   private startPolling(): void {
-    const intervalMs = THRESHOLDS.CHECK_INTERVAL_HOURS * 60 * 60 * 1000;
+    const intervalMs = this.config.checkIntervalHours * 60 * 60 * 1000;
 
     // Initial check after 30s (let the system finish booting)
     this.initialTimer = setTimeout(() => {
@@ -207,7 +233,8 @@ export class MemorizationService {
     const row = this.db
       .prepare('SELECT COUNT(*) as count FROM messages WHERE chat_jid = ?')
       .get(chatJid) as { count: number } | undefined;
-    return (row?.count ?? 0) >= THRESHOLDS.MESSAGE_COUNT;
+    const count = row?.count ?? 0;
+    return count >= this.config.messageThreshold && count >= this.config.minMessages;
   }
 
   // ── Core ─────────────────────────────────────────────────────────
@@ -217,7 +244,9 @@ export class MemorizationService {
     chatJid: string,
   ): Promise<void> {
     if (this.isProcessing.get(groupFolder)) return;
+    if (this.activeCount >= this.config.maxConcurrent) return;
     this.isProcessing.set(groupFolder, true);
+    this.activeCount++;
 
     const taskId = this.createTask(groupFolder, chatJid);
     this.api.logger.info(
@@ -249,6 +278,7 @@ export class MemorizationService {
 
       if (result) {
         this.updateTaskCompleted(taskId);
+        this.eventBus?.emit('memory:summarized', { groupFolder, chunkIndex: taskId });
         this.api.logger.info(
           `Summarization completed for ${groupFolder}: ${result.messagesProcessed} messages`,
         );
@@ -266,6 +296,7 @@ export class MemorizationService {
       );
     } finally {
       this.isProcessing.set(groupFolder, false);
+      this.activeCount--;
     }
   }
 

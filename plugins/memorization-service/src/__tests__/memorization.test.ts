@@ -285,4 +285,145 @@ describe('MemorizationService', () => {
       await vi.advanceTimersByTimeAsync(5 * 60 * 60 * 1000);
     });
   });
+
+  // ── Config overrides ────────────────────────────────────────
+
+  describe('config overrides', () => {
+    it('should respect custom messageThreshold', async () => {
+      const customService = new MemorizationService(api, {
+        summarize: mockSummarize,
+        config: { messageThreshold: 5 },
+      });
+      customService.initTable();
+
+      insertMessages(db, '12345', 5);
+      mockSummarize.mockResolvedValue({
+        summary: 'Test',
+        messagesProcessed: 5,
+        charsProcessed: 50,
+      });
+
+      await customService.pollAllGroups();
+      expect(mockSummarize).toHaveBeenCalledOnce();
+      await customService.stop();
+    });
+
+    it('should enforce minMessages floor in polling', async () => {
+      const customService = new MemorizationService(api, {
+        summarize: mockSummarize,
+        config: { messageThreshold: 3, minMessages: 10 },
+      });
+      customService.initTable();
+
+      // 5 messages: above threshold (3) but below minMessages (10)
+      insertMessages(db, '12345', 5);
+      await customService.pollAllGroups();
+      expect(mockSummarize).not.toHaveBeenCalled();
+
+      // 10 messages: meets both thresholds
+      insertMessages(db, '12345', 5); // total now 10
+      mockSummarize.mockResolvedValue({
+        summary: 'ok',
+        messagesProcessed: 10,
+        charsProcessed: 100,
+      });
+      await customService.pollAllGroups();
+      expect(mockSummarize).toHaveBeenCalledOnce();
+      await customService.stop();
+    });
+
+    it('should enforce maxConcurrent limit', async () => {
+      // maxConcurrent=1 means only 1 group can be processed at a time
+      const multiGroupApi = {
+        ...api,
+        getGroups: vi.fn(() => ({
+          '111': { name: 'G1', folder: 'g1', trigger: '@bot', added_at: '2024-01-01' },
+          '222': { name: 'G2', folder: 'g2', trigger: '@bot', added_at: '2024-01-01' },
+        })),
+      };
+
+      const customService = new MemorizationService(multiGroupApi, {
+        summarize: mockSummarize,
+        config: { maxConcurrent: 1 },
+      });
+      customService.initTable();
+
+      insertMessages(db, '111', 25);
+      insertMessages(db, '222', 25);
+
+      let resolveFirst!: () => void;
+      let callCount = 0;
+      mockSummarize.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            callCount++;
+            if (callCount === 1) {
+              resolveFirst = () => resolve({ summary: 'done', messagesProcessed: 25, charsProcessed: 250 });
+            } else {
+              resolve({ summary: 'done', messagesProcessed: 25, charsProcessed: 250 });
+            }
+          }),
+      );
+
+      const poll = customService.pollAllGroups();
+      // First group starts but second should be skipped due to maxConcurrent=1
+      expect(mockSummarize).toHaveBeenCalledTimes(1);
+      resolveFirst();
+      await poll;
+      await customService.stop();
+    });
+  });
+
+  // ── Event Bus integration ───────────────────────────────────
+
+  describe('event bus integration', () => {
+    it('should subscribe to message:sent events', () => {
+      const mockEventBus = {
+        on: vi.fn(() => vi.fn()),
+        emit: vi.fn(),
+      } as unknown as import('@nanogemclaw/event-bus').EventBus;
+
+      service.subscribeToEvents(mockEventBus);
+
+      expect(mockEventBus.on).toHaveBeenCalledWith('message:received', expect.any(Function));
+      expect(mockEventBus.on).toHaveBeenCalledWith('message:sent', expect.any(Function));
+    });
+
+    it('should emit memory:summarized on successful summarization', async () => {
+      const mockEventBus = {
+        on: vi.fn(() => vi.fn()),
+        emit: vi.fn(),
+      } as unknown as import('@nanogemclaw/event-bus').EventBus;
+
+      service.subscribeToEvents(mockEventBus);
+      insertMessages(db, '12345', 25);
+      mockSummarize.mockResolvedValue({
+        summary: 'Test summary',
+        messagesProcessed: 25,
+        charsProcessed: 250,
+      });
+
+      await service.pollAllGroups();
+
+      expect(mockEventBus.emit).toHaveBeenCalledWith('memory:summarized', {
+        groupFolder: 'test-group',
+        chunkIndex: expect.any(Number),
+      });
+    });
+
+    it('should not emit memory:summarized when result is null', async () => {
+      const mockEventBus = {
+        on: vi.fn(() => vi.fn()),
+        emit: vi.fn(),
+      } as unknown as import('@nanogemclaw/event-bus').EventBus;
+
+      service.subscribeToEvents(mockEventBus);
+      insertMessages(db, '12345', 20);
+      mockSummarize.mockResolvedValue(null);
+
+      await service.pollAllGroups();
+
+      expect(mockEventBus.emit).not.toHaveBeenCalled();
+    });
+  });
 });

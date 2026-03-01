@@ -124,6 +124,27 @@ describe('EventBus', () => {
       bus.emit('system:ready', {} as Record<string, never>);
       expect(handler).not.toHaveBeenCalled();
     });
+
+    it('should return Promise that resolves with payload when no handler given', async () => {
+      const promise = bus.once('message:received');
+      const payload = {
+        chatId: '42',
+        sender: 'user',
+        senderName: 'User',
+        content: 'hello',
+        timestamp: '2024-01-01T00:00:00Z',
+        groupFolder: 'test',
+      };
+      bus.emit('message:received', payload);
+      await expect(promise).resolves.toEqual(payload);
+    });
+
+    it('should resolve Promise only once even if emitted multiple times', async () => {
+      const promise = bus.once('system:ready');
+      bus.emit('system:ready', {} as Record<string, never>);
+      bus.emit('system:ready', {} as Record<string, never>);
+      await expect(promise).resolves.toEqual({});
+    });
   });
 
   // ── off / unsubscribe ──────────────────────────────────────────────

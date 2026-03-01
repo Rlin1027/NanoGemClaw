@@ -220,6 +220,19 @@ async function main(): Promise<void> {
   const { setDashboardEventEmitter } = await import('../../src/container-runner.js');
   setDashboardEventEmitter(server.emitDashboardEvent);
 
+  // Bridge EventBus events → Dashboard Socket.IO
+  const dashboardEvents: Array<keyof import('@nanogemclaw/event-bus').NanoEventMap> = [
+    'message:received', 'message:sent',
+    'group:registered', 'group:unregistered', 'group:updated',
+    'task:created', 'task:completed', 'task:failed',
+    'memory:fact-stored', 'memory:summarized',
+  ];
+  for (const evt of dashboardEvents) {
+    eventBus.on(evt, (data) => {
+      server.emitDashboardEvent(`bus:${evt}`, data);
+    });
+  }
+
   // Start automatic database backup
   const { startBackupSchedule } = await import('../../src/backup.js');
   startBackupSchedule();
