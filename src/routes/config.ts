@@ -130,7 +130,10 @@ export function createConfigRouter(deps: ConfigRouterDeps): Router {
       const auth = await resolveAuth();
       if (auth?.type === 'oauth' && models.length > 0) {
         const { setExternalModels } = await import('@nanogemclaw/gemini');
-        const vertexModels = await discoverVertexModels(auth.token, auth.project);
+        const vertexModels = await discoverVertexModels(
+          auth.token,
+          auth.project,
+        );
         if (vertexModels.length > 0) {
           setExternalModels(vertexModels);
           models = vertexModels;

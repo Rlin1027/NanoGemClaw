@@ -102,9 +102,7 @@ let cachedProject: string | null = null;
  * Discover the Google Cloud project ID for Vertex AI.
  * Priority: GOOGLE_CLOUD_PROJECT env → GCLOUD_PROJECT env → Cloud Resource Manager API
  */
-export async function discoverProject(
-  token: string,
-): Promise<string | null> {
+export async function discoverProject(token: string): Promise<string | null> {
   if (cachedProject) return cachedProject;
 
   // 1. Environment variables
@@ -298,14 +296,22 @@ export async function discoverVertexModels(
 
     // Sort: flash first, then pro, then others; within family by name desc
     models.sort((a, b) => {
-      const order: Record<string, number> = { flash: 0, pro: 1, ultra: 2, other: 3 };
+      const order: Record<string, number> = {
+        flash: 0,
+        pro: 1,
+        ultra: 2,
+        other: 3,
+      };
       const fa = order[a.family] ?? 3;
       const fb = order[b.family] ?? 3;
       if (fa !== fb) return fa - fb;
       return b.id.localeCompare(a.id);
     });
 
-    logger.info({ count: models.length }, 'Vertex AI model discovery completed');
+    logger.info(
+      { count: models.length },
+      'Vertex AI model discovery completed',
+    );
     return models;
   } catch (err) {
     logger.warn(

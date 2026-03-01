@@ -39,6 +39,7 @@ function createPluginApi(
     getDatabase(): unknown;
     sendMessage(chatJid: string, text: string): Promise<void>;
     getGroups(): Record<string, import('@nanogemclaw/core').RegisteredGroup>;
+    eventBus?: import('@nanogemclaw/event-bus').EventBus;
   },
 ): PluginApi {
   const pluginLogger = {
@@ -62,6 +63,7 @@ function createPluginApi(
     logger: pluginLogger,
     config,
     dataDir: pluginDataDir,
+    eventBus: deps.eventBus,
   };
 }
 
@@ -75,6 +77,7 @@ export async function loadPlugins(
     getDatabase(): unknown;
     sendMessage(chatJid: string, text: string): Promise<void>;
     getGroups(): Record<string, import('@nanogemclaw/core').RegisteredGroup>;
+    eventBus?: import('@nanogemclaw/event-bus').EventBus;
     dataDir: string;
   },
 ): Promise<void> {
@@ -124,6 +127,7 @@ export async function discoverAndLoadPlugins(
     getDatabase(): unknown;
     sendMessage(chatJid: string, text: string): Promise<void>;
     getGroups(): Record<string, import('@nanogemclaw/core').RegisteredGroup>;
+    eventBus?: import('@nanogemclaw/event-bus').EventBus;
     dataDir: string;
   },
   options?: DiscoverAndLoadOptions,
@@ -190,6 +194,7 @@ async function loadPlugin(
     getDatabase(): unknown;
     sendMessage(chatJid: string, text: string): Promise<void>;
     getGroups(): Record<string, import('@nanogemclaw/core').RegisteredGroup>;
+    eventBus?: import('@nanogemclaw/event-bus').EventBus;
     dataDir: string;
   },
 ): Promise<void> {

@@ -1,5 +1,6 @@
 import { ScheduledTask, TaskRunLog } from '../types.js';
 import { getDatabase } from './connection.js';
+import { getEventBus } from '@nanogemclaw/event-bus';
 
 export function createTask(
   task: Omit<ScheduledTask, 'last_run' | 'last_result'>,
@@ -22,6 +23,13 @@ export function createTask(
     task.status,
     task.created_at,
   );
+
+  try {
+    getEventBus().emit('task:created', {
+      taskId: task.id,
+      groupFolder: task.group_folder,
+    });
+  } catch {}
 }
 
 export function getTaskById(id: string): ScheduledTask | undefined {
@@ -129,7 +137,9 @@ export function deleteTasksByGroup(groupFolder: string): number {
     if (taskIds.length > 0) {
       const placeholders = taskIds.map(() => '?').join(',');
       const ids = taskIds.map((t) => t.id);
-      db.prepare(`DELETE FROM task_run_logs WHERE task_id IN (${placeholders})`).run(...ids);
+      db.prepare(
+        `DELETE FROM task_run_logs WHERE task_id IN (${placeholders})`,
+      ).run(...ids);
     }
 
     const result = db

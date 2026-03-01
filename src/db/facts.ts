@@ -6,6 +6,7 @@
  */
 
 import { getDatabase } from './connection.js';
+import { getEventBus } from '@nanogemclaw/event-bus';
 
 export interface Fact {
   id: number;
@@ -42,6 +43,10 @@ export function upsertFact(
       updated_at = excluded.updated_at
   `,
   ).run(groupFolder, key, value, source, confidence, now, now);
+
+  try {
+    getEventBus().emit('memory:fact-stored', { groupFolder, key, value });
+  } catch {}
 }
 
 /**

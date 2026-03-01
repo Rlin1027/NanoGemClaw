@@ -51,6 +51,8 @@ export interface PluginApi {
   config: Record<string, unknown>;
   /** Data directory for this plugin */
   dataDir: string;
+  /** Event bus instance (optional, available when @nanogemclaw/event-bus is initialized) */
+  eventBus?: import('@nanogemclaw/event-bus').EventBus;
 }
 
 export interface PluginLogger {

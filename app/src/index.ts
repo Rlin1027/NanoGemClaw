@@ -40,6 +40,10 @@ async function main(): Promise<void> {
   fs.mkdirSync(STORE_DIR, { recursive: true });
   fs.mkdirSync(GROUPS_DIR, { recursive: true });
 
+  // Initialize Event Bus
+  const { createEventBus } = await import('@nanogemclaw/event-bus');
+  const eventBus = createEventBus();
+
   // Initialize database
   const { initDatabase, closeDatabase, getDatabase } = await import('@nanogemclaw/db');
   initDatabase();
@@ -96,6 +100,7 @@ async function main(): Promise<void> {
       getDatabase: () => dbInstance,
       sendMessage,
       getGroups: () => getRegisteredGroups() as any,
+      eventBus,
       dataDir: DATA_DIR,
     },
     {
@@ -225,6 +230,10 @@ async function main(): Promise<void> {
   // Connect to Telegram (starts bot + background services)
   const { connectTelegram } = await import('../../src/telegram-bot.js');
   await connectTelegram();
+
+  // Emit system ready event
+  eventBus.emit('system:ready', {} as Record<string, never>);
+  logger.info('Event bus: system:ready emitted');
 }
 
 main().catch((err) => {
@@ -239,6 +248,12 @@ main().catch((err) => {
 async function gracefulShutdown(signal: string): Promise<void> {
   console.log(`\n${signal} received, shutting down gracefully...`);
   try {
+    // Emit system shutdown event
+    try {
+      const { getEventBus } = await import('@nanogemclaw/event-bus');
+      getEventBus().emit('system:shutdown', {} as Record<string, never>);
+    } catch { /* EventBus may not be initialized */ }
+
     // Stop plugins first
     await stopPlugins();
 

@@ -26,6 +26,7 @@ import { readGroupGeminiMd } from './group-manager.js';
 import { logger } from './logger.js';
 import { isMaintenanceMode } from './maintenance.js';
 import { getEffectiveSystemPrompt } from './personas.js';
+import { getEventBus } from '@nanogemclaw/event-bus';
 import { RegisteredGroup, ScheduledTask, type IpcContext } from './types.js';
 
 export interface SchedulerDependencies {
@@ -111,7 +112,11 @@ async function runTask(
 
     // Enrich prompt with current time so Gemini doesn't need to call bash
     const now = new Date();
-    const timeStr = now.toLocaleString('zh-TW', { timeZone: TIMEZONE, dateStyle: 'full', timeStyle: 'medium' });
+    const timeStr = now.toLocaleString('zh-TW', {
+      timeZone: TIMEZONE,
+      dateStyle: 'full',
+      timeStyle: 'medium',
+    });
     const enrichedPrompt = `[Current time: ${timeStr}]\n[This is an automated scheduled task. Respond with text directly.]\n\n${task.prompt}`;
 
     // Choose execution path: fast path (preferred) or container fallback
@@ -172,7 +177,10 @@ async function runTask(
         try {
           // Embed sentinel in result so plugins (e.g. google-tasks) can still detect it
           // but users see the actual content, not a raw sentinel
-          await deps.sendMessage(chatJid, `${result}\n\n@task-complete:${task.id}`);
+          await deps.sendMessage(
+            chatJid,
+            `${result}\n\n@task-complete:${task.id}`,
+          );
         } catch (sendErr) {
           logger.warn(
             { taskId: task.id, sendErr },
@@ -204,6 +212,25 @@ async function runTask(
     result,
     error,
   });
+
+  // Emit task completion/failure event
+  try {
+    if (error) {
+      getEventBus().emit('task:failed', {
+        taskId: task.id,
+        groupFolder: task.group_folder,
+        error,
+      });
+    } else {
+      getEventBus().emit('task:completed', {
+        taskId: task.id,
+        groupFolder: task.group_folder,
+        result: result ?? '',
+      });
+    }
+  } catch {
+    /* EventBus not initialized */
+  }
 
   let nextRun: string | null = null;
   if (task.schedule_type === 'cron') {

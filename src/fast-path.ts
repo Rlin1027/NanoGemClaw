@@ -219,9 +219,10 @@ async function runFastPathInner(
   onProgress?: (info: ProgressInfo) => void,
 ): Promise<ContainerOutput> {
   const startTime = Date.now();
-  const model = (!group.geminiModel || group.geminiModel === 'auto')
-    ? getDefaultModel()
-    : group.geminiModel;
+  const model =
+    !group.geminiModel || group.geminiModel === 'auto'
+      ? getDefaultModel()
+      : group.geminiModel;
 
   logger.info(
     { group: group.name, model, isMain: input.isMain },
@@ -282,8 +283,12 @@ You are in direct conversation mode. IMPORTANT RULES:
     // Filter out model messages that are purely function-call artifacts
     // to prevent Gemini from replaying previous function call patterns
     const FUNCTION_RESULT_START_PATTERNS = [
-      /^✅\s/, /^⏸️\s/, /^▶️\s/, /^🗑️\s/, /^🎨\s/,  // summarizeFunctionResult outputs
-      /^現在的精確時間是\s/,                              // scheduled task time reports
+      /^✅\s/,
+      /^⏸️\s/,
+      /^▶️\s/,
+      /^🗑️\s/,
+      /^🎨\s/, // summarizeFunctionResult outputs
+      /^現在的精確時間是\s/, // scheduled task time reports
     ];
     // Patterns that indicate function-call artifact content anywhere in text
     const FUNCTION_RESULT_CONTAINS_PATTERNS = [
@@ -302,10 +307,15 @@ You are in direct conversation mode. IMPORTANT RULES:
       if (msg.role !== 'model') return true;
       const text = msg.text.trim();
       // Filter messages that start with function result indicators
-      if (FUNCTION_RESULT_START_PATTERNS.some((p) => p.test(text))) return false;
+      if (FUNCTION_RESULT_START_PATTERNS.some((p) => p.test(text)))
+        return false;
       // For short model messages (< 200 chars), also filter if they contain
       // function result artifacts — these are typically auto-generated confirmations
-      if (text.length < 200 && FUNCTION_RESULT_CONTAINS_PATTERNS.some((p) => p.test(text))) return false;
+      if (
+        text.length < 200 &&
+        FUNCTION_RESULT_CONTAINS_PATTERNS.some((p) => p.test(text))
+      )
+        return false;
       return true;
     });
 
@@ -467,7 +477,9 @@ You are in direct conversation mode. IMPORTANT RULES:
 
         // Build function responses for ALL function calls in raw parts.
         // Executed calls get real results; dropped/truncated calls get rejection.
-        const executedNames = new Set(pendingFunctionCalls.map((fc) => fc.name));
+        const executedNames = new Set(
+          pendingFunctionCalls.map((fc) => fc.name),
+        );
         const executedQueue = [...functionResults];
         const allRawCalls = rawFunctionCallParts.filter(
           (p: any) => p.functionCall,
@@ -578,7 +590,11 @@ You are in direct conversation mode. IMPORTANT RULES:
         }
 
         // Filter mixed batches in loop rounds too
-        filterMixedBatch(pendingFunctionCalls, rawFunctionCallParts, group.name);
+        filterMixedBatch(
+          pendingFunctionCalls,
+          rawFunctionCallParts,
+          group.name,
+        );
 
         // Limit function calls per turn — prioritize read-only tools
         if (pendingFunctionCalls.length > FAST_PATH.MAX_CALLS_PER_TURN) {
@@ -595,7 +611,11 @@ You are in direct conversation mode. IMPORTANT RULES:
         if (fullText || pendingFunctionCalls.length === 0) break;
 
         logger.info(
-          { group: group.name, round, nextCalls: pendingFunctionCalls.map(fc => fc.name) },
+          {
+            group: group.name,
+            round,
+            nextCalls: pendingFunctionCalls.map((fc) => fc.name),
+          },
           'Fast path: continuing to next tool round',
         );
       }

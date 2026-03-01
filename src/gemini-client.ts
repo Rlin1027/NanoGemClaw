@@ -330,9 +330,17 @@ async function* streamGenerateWithRest(
 
   // 404 safety net: retry with a known-good fallback model
   if (response.status === 404 && model !== VERTEX_FALLBACK_MODEL) {
-    logger.warn({ model, fallback: VERTEX_FALLBACK_MODEL }, 'Model not found on Vertex AI, retrying with fallback');
+    logger.warn(
+      { model, fallback: VERTEX_FALLBACK_MODEL },
+      'Model not found on Vertex AI, retrying with fallback',
+    );
     model = VERTEX_FALLBACK_MODEL;
-    const retryUrl = buildVertexUrl(project, model, 'streamGenerateContent', true);
+    const retryUrl = buildVertexUrl(
+      project,
+      model,
+      'streamGenerateContent',
+      true,
+    );
     response = await fetch(retryUrl, {
       method: 'POST',
       headers: {
@@ -417,7 +425,10 @@ async function generateWithRest(
 
   // 404 safety net: retry with a known-good fallback model
   if (response.status === 404 && model !== VERTEX_FALLBACK_MODEL) {
-    logger.warn({ model, fallback: VERTEX_FALLBACK_MODEL }, 'Model not found on Vertex AI, retrying with fallback');
+    logger.warn(
+      { model, fallback: VERTEX_FALLBACK_MODEL },
+      'Model not found on Vertex AI, retrying with fallback',
+    );
     model = VERTEX_FALLBACK_MODEL;
     const retryUrl = buildVertexUrl(project, model, 'generateContent');
     response = await fetch(retryUrl, {

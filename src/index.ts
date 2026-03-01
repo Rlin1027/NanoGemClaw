@@ -25,7 +25,13 @@ import {
 } from './db.js';
 import { loadMaintenanceState } from './maintenance.js';
 import { getBot, getRegisteredGroups, getTypingIntervals } from './state.js';
-import { loadState, saveState, registerGroup, unregisterGroup, ensureGroupDefaults } from './group-manager.js';
+import {
+  loadState,
+  saveState,
+  registerGroup,
+  unregisterGroup,
+  ensureGroupDefaults,
+} from './group-manager.js';
 import { connectTelegram } from './telegram-bot.js';
 import { closeAllWatchers } from './ipc-watcher.js';
 import { saveJson } from './utils.js';
@@ -60,7 +66,8 @@ async function main(): Promise<void> {
 
   // Auto-detect available Gemini models and set the default
   try {
-    const { discoverModels, resolveLatestModel, setExternalModels } = await import('@nanogemclaw/gemini');
+    const { discoverModels, resolveLatestModel, setExternalModels } =
+      await import('@nanogemclaw/gemini');
     const { setResolvedDefaultModel } = await import('./config.js');
     const { resolveAuth, discoverVertexModels } = await import('./auth.js');
     const isEnvModelSet = !!process.env.GEMINI_MODEL;
@@ -71,9 +78,13 @@ async function main(): Promise<void> {
       const vertexModels = await discoverVertexModels(auth.token, auth.project);
       if (vertexModels.length > 0) {
         setExternalModels(vertexModels);
-        console.log(`Vertex AI model discovery: found ${vertexModels.length} models`);
+        console.log(
+          `Vertex AI model discovery: found ${vertexModels.length} models`,
+        );
       } else {
-        console.warn('Vertex AI model discovery returned 0 models, using fallback list');
+        console.warn(
+          'Vertex AI model discovery returned 0 models, using fallback list',
+        );
       }
     } else {
       // API key → use SDK model discovery
@@ -85,10 +96,15 @@ async function main(): Promise<void> {
       setResolvedDefaultModel(latest);
       console.log(`Model auto-detected: ${latest} → using as default`);
     } else {
-      console.log(`Model from env: ${process.env.GEMINI_MODEL} (auto-detect skipped)`);
+      console.log(
+        `Model from env: ${process.env.GEMINI_MODEL} (auto-detect skipped)`,
+      );
     }
   } catch (err) {
-    console.warn('Model discovery failed, using hardcoded default:', err instanceof Error ? err.message : err);
+    console.warn(
+      'Model discovery failed, using hardcoded default:',
+      err instanceof Error ? err.message : err,
+    );
   }
 
   // Load custom personas
@@ -210,7 +226,8 @@ async function main(): Promise<void> {
     if (updates.requireTrigger !== undefined)
       updated.requireTrigger = updates.requireTrigger;
     if (updates.name !== undefined) updated.name = updates.name;
-    if (updates.geminiModel !== undefined) updated.geminiModel = updates.geminiModel;
+    if (updates.geminiModel !== undefined)
+      updated.geminiModel = updates.geminiModel;
     if (updates.enableFastPath !== undefined)
       updated.enableFastPath = updates.enableFastPath;
 

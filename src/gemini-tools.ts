@@ -35,7 +35,10 @@ export function getToolMetadata(name: string): ToolMetadata | undefined {
  * Register metadata for a plugin tool.
  * Called by plugin-loader during plugin initialization.
  */
-export function registerPluginToolMetadata(name: string, metadata: ToolMetadata): void {
+export function registerPluginToolMetadata(
+  name: string,
+  metadata: ToolMetadata,
+): void {
   pluginToolMetadataRegistry.set(name, metadata);
 }
 
@@ -97,7 +100,11 @@ export function buildFunctionDeclarations(isMain: boolean): any[] {
         },
         required: ['prompt', 'schedule_type', 'schedule_value'],
       },
-      _metadata: { readOnly: false, requiresExplicitIntent: true, dangerLevel: 'moderate' } as ToolMetadata,
+      _metadata: {
+        readOnly: false,
+        requiresExplicitIntent: true,
+        dangerLevel: 'moderate',
+      } as ToolMetadata,
     },
     {
       name: 'pause_task',
@@ -115,7 +122,11 @@ export function buildFunctionDeclarations(isMain: boolean): any[] {
         },
         required: ['task_id'],
       },
-      _metadata: { readOnly: false, requiresExplicitIntent: true, dangerLevel: 'moderate' } as ToolMetadata,
+      _metadata: {
+        readOnly: false,
+        requiresExplicitIntent: true,
+        dangerLevel: 'moderate',
+      } as ToolMetadata,
     },
     {
       name: 'resume_task',
@@ -133,7 +144,11 @@ export function buildFunctionDeclarations(isMain: boolean): any[] {
         },
         required: ['task_id'],
       },
-      _metadata: { readOnly: false, requiresExplicitIntent: true, dangerLevel: 'moderate' } as ToolMetadata,
+      _metadata: {
+        readOnly: false,
+        requiresExplicitIntent: true,
+        dangerLevel: 'moderate',
+      } as ToolMetadata,
     },
     {
       name: 'list_tasks',
@@ -144,7 +159,11 @@ export function buildFunctionDeclarations(isMain: boolean): any[] {
         type: 'OBJECT',
         properties: {},
       },
-      _metadata: { readOnly: true, requiresExplicitIntent: false, dangerLevel: 'safe' } as ToolMetadata,
+      _metadata: {
+        readOnly: true,
+        requiresExplicitIntent: false,
+        dangerLevel: 'safe',
+      } as ToolMetadata,
     },
     {
       name: 'cancel_task',
@@ -162,7 +181,11 @@ export function buildFunctionDeclarations(isMain: boolean): any[] {
         },
         required: ['task_id'],
       },
-      _metadata: { readOnly: false, requiresExplicitIntent: true, dangerLevel: 'destructive' } as ToolMetadata,
+      _metadata: {
+        readOnly: false,
+        requiresExplicitIntent: true,
+        dangerLevel: 'destructive',
+      } as ToolMetadata,
     },
     {
       name: 'generate_image',
@@ -180,7 +203,11 @@ export function buildFunctionDeclarations(isMain: boolean): any[] {
         },
         required: ['prompt'],
       },
-      _metadata: { readOnly: false, requiresExplicitIntent: true, dangerLevel: 'moderate' } as ToolMetadata,
+      _metadata: {
+        readOnly: false,
+        requiresExplicitIntent: true,
+        dangerLevel: 'moderate',
+      } as ToolMetadata,
     },
     {
       name: 'set_preference',
@@ -210,7 +237,11 @@ export function buildFunctionDeclarations(isMain: boolean): any[] {
         },
         required: ['key', 'value'],
       },
-      _metadata: { readOnly: false, requiresExplicitIntent: true, dangerLevel: 'moderate' } as ToolMetadata,
+      _metadata: {
+        readOnly: false,
+        requiresExplicitIntent: true,
+        dangerLevel: 'moderate',
+      } as ToolMetadata,
     },
     {
       name: 'remember_fact',
@@ -233,7 +264,11 @@ export function buildFunctionDeclarations(isMain: boolean): any[] {
         },
         required: ['key', 'value'],
       },
-      _metadata: { readOnly: true, requiresExplicitIntent: false, dangerLevel: 'safe' } as ToolMetadata,
+      _metadata: {
+        readOnly: true,
+        requiresExplicitIntent: false,
+        dangerLevel: 'safe',
+      } as ToolMetadata,
     },
   ];
 
@@ -258,7 +293,11 @@ export function buildFunctionDeclarations(isMain: boolean): any[] {
         },
         required: ['chat_id', 'name'],
       },
-      _metadata: { readOnly: false, requiresExplicitIntent: true, dangerLevel: 'moderate' } as ToolMetadata,
+      _metadata: {
+        readOnly: false,
+        requiresExplicitIntent: true,
+        dangerLevel: 'moderate',
+      } as ToolMetadata,
     });
   }
 
@@ -369,7 +408,7 @@ export async function executeFunctionCall(
           name,
           response: {
             success: true,
-            tasks: tasks.map(t => ({
+            tasks: tasks.map((t) => ({
               id: t.id,
               prompt: t.prompt.slice(0, 100),
               schedule_type: t.schedule_type,
@@ -382,18 +421,25 @@ export async function executeFunctionCall(
       }
 
       case 'pause_task': {
-        const { updateTask: pauseUpdate, getTaskById: pauseLookup } = await import('./db.js');
+        const { updateTask: pauseUpdate, getTaskById: pauseLookup } =
+          await import('./db.js');
         const pauseTarget = pauseLookup(args.task_id);
         if (!pauseTarget) {
           return {
             name,
-            response: { success: false, error: `Task not found: ${args.task_id}. Use list_tasks to get valid task IDs.` },
+            response: {
+              success: false,
+              error: `Task not found: ${args.task_id}. Use list_tasks to get valid task IDs.`,
+            },
           };
         }
         if (pauseTarget.status !== 'active') {
           return {
             name,
-            response: { success: false, error: `Task is not active (current status: ${pauseTarget.status}). Only active tasks can be paused.` },
+            response: {
+              success: false,
+              error: `Task is not active (current status: ${pauseTarget.status}). Only active tasks can be paused.`,
+            },
           };
         }
         pauseUpdate(args.task_id, { status: 'paused' });
@@ -404,18 +450,25 @@ export async function executeFunctionCall(
       }
 
       case 'resume_task': {
-        const { updateTask: resumeUpdate, getTaskById: resumeLookup } = await import('./db.js');
+        const { updateTask: resumeUpdate, getTaskById: resumeLookup } =
+          await import('./db.js');
         const resumeTarget = resumeLookup(args.task_id);
         if (!resumeTarget) {
           return {
             name,
-            response: { success: false, error: `Task not found: ${args.task_id}. Use list_tasks to get valid task IDs.` },
+            response: {
+              success: false,
+              error: `Task not found: ${args.task_id}. Use list_tasks to get valid task IDs.`,
+            },
           };
         }
         if (resumeTarget.status !== 'paused') {
           return {
             name,
-            response: { success: false, error: `Task is not paused (current status: ${resumeTarget.status}). Only paused tasks can be resumed.` },
+            response: {
+              success: false,
+              error: `Task is not paused (current status: ${resumeTarget.status}). Only paused tasks can be resumed.`,
+            },
           };
         }
         resumeUpdate(args.task_id, { status: 'active' });
@@ -431,7 +484,10 @@ export async function executeFunctionCall(
         if (!task) {
           return {
             name,
-            response: { success: false, error: `Task not found: ${args.task_id}. Use list_tasks to get valid task IDs.` },
+            response: {
+              success: false,
+              error: `Task not found: ${args.task_id}. Use list_tasks to get valid task IDs.`,
+            },
           };
         }
         deleteTask(args.task_id);
@@ -487,7 +543,9 @@ export async function executeFunctionCall(
 
       case 'remember_fact': {
         const { upsertFact } = await import('./db.js');
-        const factKey = String(args.key).slice(0, 50).replace(/[^\w_-]/g, '_');
+        const factKey = String(args.key)
+          .slice(0, 50)
+          .replace(/[^\w_-]/g, '_');
         const factValue = String(args.value).slice(0, 500);
         upsertFact(groupFolder, factKey, factValue, 'user_set', 1.0);
         return {
@@ -521,7 +579,10 @@ export async function executeFunctionCall(
       default:
         return {
           name,
-          response: { success: false, error: `Unknown function: ${name}. This function is not available. Respond with text directly.` },
+          response: {
+            success: false,
+            error: `Unknown function: ${name}. This function is not available. Respond with text directly.`,
+          },
         };
     }
   } catch (err) {

@@ -93,7 +93,10 @@ export async function connectTelegram(): Promise<void> {
     const registeredGroups = getRegisteredGroups();
 
     // Auto-sync group name from Telegram
-    if (registeredGroups[chatId] && registeredGroups[chatId].name !== chatName) {
+    if (
+      registeredGroups[chatId] &&
+      registeredGroups[chatId].name !== chatName
+    ) {
       updateGroupName(chatId, chatName);
     }
 
@@ -118,6 +121,22 @@ export async function connectTelegram(): Promise<void> {
         false,
         messageThreadId?.toString() ?? null,
       );
+
+      // Emit message:received event
+      try {
+        const { getEventBus } = await import('@nanogemclaw/event-bus');
+        getEventBus().emit('message:received', {
+          chatId,
+          sender: senderId,
+          senderName,
+          content,
+          timestamp,
+          groupFolder: registeredGroups[chatId].folder,
+          messageThreadId: messageThreadId?.toString() ?? null,
+        });
+      } catch {
+        /* EventBus not initialized */
+      }
     }
 
     // Process if registered (with message consolidation)

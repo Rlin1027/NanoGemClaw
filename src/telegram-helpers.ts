@@ -4,7 +4,12 @@
  */
 import { TELEGRAM } from './config.js';
 import { logger } from './logger.js';
-import { getBot, setTypingInterval, clearTypingInterval } from './state.js';
+import {
+  getBot,
+  setTypingInterval,
+  clearTypingInterval,
+  getRegisteredGroups,
+} from './state.js';
 import { formatError } from './utils.js';
 
 // ============================================================================
@@ -110,6 +115,23 @@ export async function sendMessage(
       { chatId, length: text.length, chunks: chunks.length },
       'Message sent',
     );
+
+    // Emit message:sent event
+    try {
+      const { getEventBus } = await import('@nanogemclaw/event-bus');
+      const group = getRegisteredGroups()[chatId];
+      if (group) {
+        getEventBus().emit('message:sent', {
+          chatId,
+          content: text,
+          timestamp: new Date().toISOString(),
+          groupFolder: group.folder,
+          messageThreadId,
+        });
+      }
+    } catch {
+      /* EventBus not initialized */
+    }
   } catch (err) {
     logger.error({ chatId, err: formatError(err) }, 'Failed to send message');
   }

@@ -17,6 +17,7 @@ import {
   getLastAgentTimestamp,
   setLastAgentTimestamp,
 } from './state.js';
+import { getEventBus } from '@nanogemclaw/event-bus';
 import { RegisteredGroup, GroupStateBag } from './types.js';
 import { loadJson, saveJson } from './utils.js';
 
@@ -85,13 +86,24 @@ export function registerGroup(chatId: string, group: RegisteredGroup): void {
   const groupPrompt = path.join(groupDir, 'GEMINI.md');
   if (fs.existsSync(globalPrompt) && !fs.existsSync(groupPrompt)) {
     fs.copyFileSync(globalPrompt, groupPrompt);
-    logger.info({ folder: group.folder }, 'Created default GEMINI.md from global template');
+    logger.info(
+      { folder: group.folder },
+      'Created default GEMINI.md from global template',
+    );
   }
 
   logger.info(
     { chatId, name: group.name, folder: group.folder },
     'Group registered',
   );
+
+  try {
+    getEventBus().emit('group:registered', {
+      chatId,
+      groupFolder: group.folder,
+      name: group.name,
+    });
+  } catch {}
 }
 
 /**
@@ -107,7 +119,10 @@ export function ensureGroupDefaults(): void {
     const groupPrompt = path.join(GROUPS_DIR, group.folder, 'GEMINI.md');
     if (!fs.existsSync(groupPrompt)) {
       fs.copyFileSync(globalPrompt, groupPrompt);
-      logger.info({ chatId, folder: group.folder }, 'Created default GEMINI.md from global template');
+      logger.info(
+        { chatId, folder: group.folder },
+        'Created default GEMINI.md from global template',
+      );
     }
   }
 }
@@ -171,7 +186,9 @@ export function getGroupState(chatId: string): GroupStateBag | null {
  */
 export function unregisterGroup(folder: string): boolean {
   const registeredGroups = getRegisteredGroups();
-  const entry = Object.entries(registeredGroups).find(([, g]) => g.folder === folder);
+  const entry = Object.entries(registeredGroups).find(
+    ([, g]) => g.folder === folder,
+  );
   if (!entry) return false;
   const [chatId] = entry;
 
@@ -179,20 +196,32 @@ export function unregisterGroup(folder: string): boolean {
   try {
     const deletedTasks = deleteTasksByGroup(folder);
     if (deletedTasks > 0) {
-      logger.info({ folder, deletedTasks }, 'Cleaned up scheduled tasks for unregistered group');
+      logger.info(
+        { folder, deletedTasks },
+        'Cleaned up scheduled tasks for unregistered group',
+      );
     }
   } catch (err) {
-    logger.warn({ folder, err }, 'Failed to clean up tasks during unregistration');
+    logger.warn(
+      { folder, err },
+      'Failed to clean up tasks during unregistration',
+    );
   }
 
   // Clean up facts
   try {
     const deletedFacts = deleteFactsByGroup(folder);
     if (deletedFacts > 0) {
-      logger.info({ folder, deletedFacts }, 'Cleaned up facts for unregistered group');
+      logger.info(
+        { folder, deletedFacts },
+        'Cleaned up facts for unregistered group',
+      );
     }
   } catch (err) {
-    logger.warn({ folder, err }, 'Failed to clean up facts during unregistration');
+    logger.warn(
+      { folder, err },
+      'Failed to clean up facts during unregistration',
+    );
   }
 
   // Invalidate context cache
@@ -210,7 +239,14 @@ export function unregisterGroup(folder: string): boolean {
   // Remove from registered groups
   delete registeredGroups[chatId];
   saveJson(path.join(DATA_DIR, 'registered_groups.json'), registeredGroups);
-  logger.info({ chatId, folder }, 'Group unregistered (tasks, cache, session cleaned)');
+  logger.info(
+    { chatId, folder },
+    'Group unregistered (tasks, cache, session cleaned)',
+  );
+
+  try {
+    getEventBus().emit('group:unregistered', { chatId, groupFolder: folder });
+  } catch {}
   return true;
 }
 
@@ -226,6 +262,13 @@ export function updateGroupName(chatId: string, newName: string): boolean {
   group.name = newName;
   saveJson(path.join(DATA_DIR, 'registered_groups.json'), registeredGroups);
   logger.info({ chatId, oldName, newName }, 'Group name synced from Telegram');
+
+  try {
+    getEventBus().emit('group:updated', {
+      groupFolder: group.folder,
+      changes: { name: newName },
+    });
+  } catch {}
   return true;
 }
 
