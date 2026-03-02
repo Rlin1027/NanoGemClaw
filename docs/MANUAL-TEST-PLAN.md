@@ -34,10 +34,12 @@ NanoGemClaw 是一個 Telegram AI 助手專案，在過去三天 (v1.1.0 → v1.
 ### A3. 建議按鈕（Follow-up Suggestions）
 - **操作**：收到 bot 回覆後，點擊其中一個建議按鈕
 - **驗證**：log 出現新的 `Processing message`，bot 對建議內容做出回覆
+- **進階（toggle action）**：建議按鈕支援 3 種 action 類型：`reply`、`command`、`toggle`。若出現 toggle 類型按鈕，點擊後應切換對應狀態（如開/關某功能）
 
 ### A4. Retry 按鈕
 - **操作**：點擊任一 bot 回覆下方的 Retry 按鈕
 - **驗證**：bot 重新處理上一則訊息並更新回覆
+- **負面測試（rate limit）**：快速連續點擊 Retry 超過 5 次（60 秒內），應觸發 rate limit 拒絕
 
 ### A5. Feedback 按鈕
 - **操作**：點擊 Feedback 按鈕，再點 thumbs-up 或 thumbs-down
@@ -62,6 +64,15 @@ NanoGemClaw 是一個 Telegram AI 助手專案，在過去三天 (v1.1.0 → v1.
 ### A10. Reply Context Enrichment
 - **操作**：在群組中「回覆」某則舊訊息，並追問相關問題
 - **驗證**：bot 的回覆有參考到被回覆的訊息內容
+
+### A11. Bot 斜線指令
+- **操作**：依序測試 5 個斜線指令：
+  1. `/start` — 啟動 bot，應顯示歡迎訊息和使用說明
+  2. `/tasks` — 列出目前群組的排程任務
+  3. `/persona` — 顯示可用人格列表或切換人格
+  4. `/report` — 取得近期活動摘要
+  5. `/help` — 顯示所有可用指令
+- **驗證**：每個指令回覆正確內容，無錯誤
 
 ---
 
@@ -97,6 +108,7 @@ NanoGemClaw 是一個 Telegram AI 助手專案，在過去三天 (v1.1.0 → v1.
 ### C1. Overview 頁面
 - **操作**：打開 Dashboard，查看群組列表
 - **驗證**：所有已註冊群組顯示正確，狀態/訊息數/任務數正確
+- **進階（隱藏群組）**：點擊群組的隱藏按鈕，重新整理頁面後群組應保持隱藏（localStorage 持久化）；取消隱藏後恢復顯示
 
 ### C2. Group Discovery
 - **操作**：點擊 Overview 上的「Discover Groups」按鈕
@@ -130,6 +142,7 @@ NanoGemClaw 是一個 Telegram AI 助手專案，在過去三天 (v1.1.0 → v1.
 ### C9. Logs 頁面
 - **操作**：打開 Logs 頁面，在 Telegram 發送訊息
 - **驗證**：即時 log 串流，可過濾 level、可搜尋文字
+- **進階（container logs）**：切換到 Container Logs tab，選擇群組 → 列出 log 檔案（`GET /api/logs/container/:group`）→ 點擊檔案查看內容（`GET /api/logs/container/:group/:file`）
 
 ### C10. Activity Logs 頁面
 - **操作**：打開 Activity Logs 頁面
@@ -138,6 +151,10 @@ NanoGemClaw 是一個 Telegram AI 助手專案，在過去三天 (v1.1.0 → v1.
 ### C11. Settings 頁面
 - **操作**：查看 Settings 各區塊
 - **驗證**：Runtime flags、secrets 狀態、連線資訊正確
+- **進階（API 驗證）**：
+  - `GET /api/config/cache-stats` — 回傳 context cache 統計（hit/miss 數、size）
+  - `GET /api/config/models` — 回傳可用模型列表
+  - `GET /api/config/scheduler` — 回傳排程器狀態（running tasks、next run）
 
 ### C12. Maintenance Mode
 - **操作**：在 Settings 開啟 Maintenance Mode，然後在 Telegram 發訊息
@@ -150,6 +167,32 @@ NanoGemClaw 是一個 Telegram AI 助手專案，在過去三天 (v1.1.0 → v1.
 ### C14. Conversation Export
 - **操作**：在 Group Detail 點 Export，選 JSON 或 Markdown
 - **驗證**：下載檔案包含正確的對話歷史
+
+### C15. Dashboard 登入流程
+- **操作**：
+  1. 清除 localStorage，重新開啟 Dashboard
+  2. 應顯示登入畫面，輸入錯誤的 access code
+  3. 輸入正確的 access code
+- **驗證**：
+  - 錯誤 code 時顯示錯誤訊息，不進入主畫面
+  - 正確 code 時 `POST /api/auth/verify`（header `x-access-code`）回傳成功，進入 Overview
+  - 重新整理頁面後保持登入狀態
+
+### C16. 全域搜尋（Cmd+K）
+- **操作**：在 Dashboard 任意頁面按 `Cmd+K`（macOS）或 `Ctrl+K`（Windows/Linux）
+- **驗證**：
+  - SearchOverlay 彈出，可輸入關鍵字
+  - 搜尋結果跨群組顯示匹配項目
+  - 點擊結果可導航到對應頁面
+  - 按 `Esc` 或點擊外部區域關閉 overlay
+
+### C17. Dashboard 即時更新（Socket.IO push）
+- **操作**：
+  1. 打開 Dashboard Overview 頁面
+  2. 在 Telegram 發送訊息或執行操作（如註冊群組、修改設定）
+- **驗證**：
+  - Dashboard 自動反映變更，不需手動重新整理
+  - Socket.IO `groups:update` 事件推送成功（可在瀏覽器 DevTools → Network → WS 觀察）
 
 ---
 
@@ -171,17 +214,24 @@ NanoGemClaw 是一個 Telegram AI 助手專案，在過去三天 (v1.1.0 → v1.
 - **操作**：觀察排程執行的回覆
 - **驗證**：回覆是有意義的文字，不含 `@task-complete` sentinel
 
-### D5. 暫停/恢復/取消任務
-- **操作**：依序測試「暫停任務 X」「恢復任務 X」「取消任務 X」
+### D5. 列出/暫停/恢復/取消任務
+- **操作**：
+  1. 發送「@bot 我有哪些任務？」→ 觸發 `list_tasks`，回覆包含目前所有排程任務
+  2. 依序測試「暫停任務 X」「恢復任務 X」「取消任務 X」
 - **驗證**：各 function call 正確觸發，任務狀態變更
 
-### D6. Dashboard 建立任務
-- **操作**：在 Tasks 頁面用表單建立新任務
-- **驗證**：任務出現在列表中，到期時執行
+### D6. Dashboard 任務 CRUD（建立/編輯/刪除）
+- **建立**：在 Tasks 頁面用表單建立新任務 → 任務出現在列表中，到期時執行
+- **編輯**：點擊已建立的任務 → 修改內容或排程（`PUT /api/tasks/:taskId`）→ 驗證變更生效
+- **刪除**：刪除一個任務（`DELETE /api/tasks/:taskId`）→ 確認任務從列表移除，不再執行
 
 ### D7. Concurrent Task Execution
 - **操作**：建立多個同時到期的任務
 - **驗證**：log 顯示 concurrency limiter 正常運作
+
+### D8. 任務強制執行（force-run）
+- **操作**：在 Dashboard Tasks 頁面選擇一個任務，點擊「Force Run」（或 `PUT /api/tasks/:taskId/status` body `{ "action": "force-run" }`）
+- **驗證**：任務立即執行，log 出現 `Running scheduled task`，Telegram 群組收到回覆，不影響原排程
 
 ---
 
@@ -207,9 +257,10 @@ GOOGLE_CLIENT_SECRET=你的_client_secret
 
 > Claude 會在測試時提醒你每個步驟，不用事先準備。
 
-### E1. Google Auth — OAuth Flow
+### E1. Google Auth — OAuth Flow（含撤銷）
 - **操作**：在 Settings 頁面點擊「Connect Google Account」，完成 Google 授權
 - **驗證**：OAuth 授權流程完成，狀態顯示 Connected
+- **撤銷（Revoke）**：點擊「Disconnect」或呼叫 `POST /api/plugins/google-auth/revoke` → 狀態回到未連線，Google 相關功能不可用
 
 ### E2. Google Calendar — 列出事件
 - **操作**：在 Telegram 問「@bot 今天有什麼行程？」
@@ -218,6 +269,18 @@ GOOGLE_CLIENT_SECRET=你的_client_secret
 ### E3. Google Calendar — 建立事件
 - **操作**：發送「@bot 幫我建立明天下午2點的會議」
 - **驗證**：觸發 `create_calendar_event`，Google Calendar 中出現新事件
+
+### E3b. Google Calendar — 更新事件
+- **操作**：發送「@bot 把明天的會議改到下午4點」或在 Dashboard 編輯事件（`PUT /api/plugins/google-calendar-rw/events/:eventId`）
+- **驗證**：觸發 `update_calendar_event`，Google Calendar 中事件時間已更新
+
+### E3c. Google Calendar — 刪除事件
+- **操作**：發送「@bot 取消明天的會議」或在 Dashboard 刪除事件（`DELETE /api/plugins/google-calendar-rw/events/:eventId`）
+- **驗證**：觸發 `delete_calendar_event`，Google Calendar 中事件已移除
+
+### E3d. Google Calendar — 可用時段查詢
+- **操作**：發送「@bot 我明天下午有空嗎？」
+- **驗證**：觸發 `check_availability`，回覆包含指定時段的空閒/忙碌狀態
 
 ### E4. Google Calendar — Dashboard 頁面
 - **操作**：打開 Calendar 頁面，查看 Google Calendar 事件
@@ -238,6 +301,7 @@ GOOGLE_CLIENT_SECRET=你的_client_secret
 ### E8. Google Drive — Dashboard 頁面
 - **操作**：打開 Drive 頁面，搜尋檔案
 - **驗證**：檔案列表正確，可預覽內容
+- **進階（資料夾配置）**：在 Drive 頁面設定監控資料夾（`POST /api/plugins/google-drive/folders/config`），驗證設定儲存成功並生效
 
 ### E9. Drive Knowledge RAG
 - **操作**：在 Drive 頁面 RAG tab 設定 folder IDs，觸發 reindex
@@ -254,11 +318,15 @@ GOOGLE_CLIENT_SECRET=你的_client_secret
   3. 在 Dashboard Settings → Discord Reporter 貼上 URL
 - **操作**：點 Test 按鈕
 - **驗證**：Discord 頻道收到測試訊息
+- **進階（手動觸發完整報告）**：呼叫 `POST /api/plugins/discord-reporter/trigger` → Discord 收到完整報告（含統計數據）
+- **進階（排程設定）**：設定 daily/weekly 排程，驗證排程時間到達時自動發送報告
 
 ### F2. Memorization Service — 自動摘要
 - **操作**：在群組累積足夠訊息（≥20 則）或等待 polling 觸發
 - **驗證**：log 出現 memorization 相關記錄
 - **備註**：可調低 threshold 加速測試
+- **進階（事件驅動觸發）**：v1.2 新增 EventBus 事件驅動 — 發送訊息後觀察 `message:received`/`message:sent` 事件是否觸發 memorization（不需等 polling 週期）
+- **進階（crash recovery）**：在 memorization 進行中重啟 server，重啟後應自動恢復 pending/processing 狀態的任務
 
 ### F3. Persona 系統
 - **操作**：建立自訂 persona（API 或 Dashboard），指派給群組
@@ -302,6 +370,7 @@ GOOGLE_CLIENT_SECRET=你的_client_secret
 ### G3. Error State 與 Recovery
 - **操作**：模擬一次 API 錯誤（如暫時移除 API key）
 - **驗證**：error state 記錄在 DB，Dashboard 顯示 error 狀態
+- **進階（error 清除）**：呼叫 `POST /api/errors/clear` → 所有 error states 被清除，Dashboard 恢復正常狀態
 
 ### G4. Rate Limiting
 - **操作**：快速連續發送超過 20 則訊息
@@ -317,6 +386,10 @@ GOOGLE_CLIENT_SECRET=你的_client_secret
 
 ### ~~G7. Socket.IO 即時通訊~~ ✅ 已測試通過
 > 測試 1 驗證：EventBus → Socket.IO bridge 正常，`bus:message:received`/`bus:message:sent`/`bus:task:completed` 皆推送成功
+
+### G8. Socket.IO 未授權連線拒絕（負面測試）
+- **操作**：使用不帶 auth header 的 Socket.IO client 嘗試連線（例：`io('http://127.0.0.1:3000', { auth: {} })`）
+- **驗證**：連線被拒絕，收到 authentication error；server log 不出現 `socket connected`
 
 ---
 
@@ -340,6 +413,19 @@ GOOGLE_CLIENT_SECRET=你的_client_secret
 | Discord Webhook URL | 未設定 — F1 前會帶著設定 |
 | ffmpeg | 待確認（A7 需要，gemini STT 可跳過） |
 | Container 環境 | 已就緒 |
+
+## 測試計畫統計
+
+| 類別 | 項目數 |
+|------|--------|
+| Section A：Core Bot 功能 | 11 項（A1–A11） |
+| Section B：Fast Path 進階功能 | 6 項（B1–B6） |
+| Section C：Dashboard 頁面功能 | 17 項（C1–C17） |
+| Section D：排程系統 | 8 項（D1–D8） |
+| Section E：Google 生態系 Plugins | 12 項（E1–E9 + E3b/E3c/E3d） |
+| Section F：其他 Plugins 與功能 | 9 項（F1–F9） |
+| Section G：系統層級測試 | 8 項（G1–G8） |
+| **總計** | **71 項** |
 
 ## 已完成的測試（標記 ✅ 的項目）
 
