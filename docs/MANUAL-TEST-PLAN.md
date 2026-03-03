@@ -109,8 +109,8 @@ NanoGemClaw 是一個 Telegram AI 助手專案，在過去三天 (v1.1.0 → v1.
 ### ~~C6. Memory 頁面 — System Prompt 編輯~~ ✅ 已測試通過
 > per-group GEMINI.md 編輯器正常載入（AAA/BBB 群組各自獨立）、有 Save 按鈕和語法高亮行號。
 
-### C7. Memory 頁面 — Memory Summary ⚠️ 缺少前端 UI
-> 後端 DB 有 memory_summaries 資料（122 則歸檔、13230 字元、完整摘要文字），但 Dashboard Memory 頁面無 Summary tab 或區塊顯示。需新增前端 UI。
+### ~~C7. Memory 頁面 — Memory Summary~~ ✅ 已測試通過
+> 前端 UI 已存在！Memory 頁面 → 「記憶體」tab → 選擇「測試環境群組」→ 顯示完整摘要：已封存訊息 277 則、43,416 字元、摘要包含行程管理、任務更新、用戶偏好等。先前誤判為「缺前端」是因為選了沒有 summary 的群組（AutoGeminiCLI），顯示「無記憶體摘要」。
 
 ### ~~C8. Analytics 頁面~~ ✅ 已測試通過
 > 統計卡片（208 請求、672K Token、139.8s 平均）、使用趨勢圖表、各群組 Token 消耗、P50/P95 回應時間、錯誤率趨勢、Token 使用量趨勢、各群組請求數、最近請求列表全部正常渲染。時間區間選擇器（今天/7天/30天）可用。
@@ -338,10 +338,10 @@ GOOGLE_CLIENT_SECRET=你的_client_secret
 
 ## 已完成的測試（標記 ✅ 的項目）
 
-共 53 項已通過，分布在：
+共 54 項已通過，分布在：
 - **Section A**：A1–A5, A8–A11（9/11）
 - **Section B**：B2–B6（4/6）
-- **Section C**：C1–C4, C6, C8–C13, C17（12/17）
+- **Section C**：C1–C4, C6–C13, C17（13/17）— C7 新增於 2026-03-04
 - **Section D**：D1–D6（6/8）— D6 新增於 2026-03-04
 - **Section E**：E1–E3, E3b–E3d, E4–E8（11/12，E9 部分通過）— 新增於 2026-03-04
 - **Section F**：F1–F3, F5, F6, F8, F9（7/9）— F1 更新於 2026-03-04
