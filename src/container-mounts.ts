@@ -72,9 +72,8 @@ export function buildVolumeMounts(
     }
   }
 
-  // Filtered Gemini settings directory — only copy settings.json, never oauth_creds.json.
-  // We create a temp directory under the group's data path and copy only safe files,
-  // so the container never has access to OAuth credentials.
+  // Mount host's .gemini directory with settings and OAuth credentials.
+  // This allows the container's Gemini CLI to reuse the host's OAuth session.
   const hostGeminiDir = path.join(homeDir, '.gemini');
   const filteredGeminiDir = path.join(
     DATA_DIR,
@@ -82,33 +81,23 @@ export function buildVolumeMounts(
     group.folder,
   );
   fs.mkdirSync(filteredGeminiDir, { recursive: true });
-  if (fs.existsSync(hostGeminiDir)) {
-    const settingsSrc = path.join(hostGeminiDir, 'settings.json');
-    const settingsDst = path.join(filteredGeminiDir, 'settings.json');
-    if (fs.existsSync(settingsSrc)) {
-      fs.copyFileSync(settingsSrc, settingsDst);
+  // Copy settings.json and oauth_creds.json from host
+  for (const file of ['settings.json', 'oauth_creds.json']) {
+    const src = path.join(hostGeminiDir, file);
+    const dst = path.join(filteredGeminiDir, file);
+    if (fs.existsSync(src)) {
+      fs.copyFileSync(src, dst);
     }
   }
   mounts.push({
     hostPath: filteredGeminiDir,
     containerPath: '/home/node/.gemini',
-    readonly: true, // Security: filtered copy — no OAuth credentials exposed
+    readonly: false, // Writable: Gemini CLI needs to write session data to .gemini/tmp/
   });
 
-  // Per-group Gemini sessions directory (isolated from other groups)
-  // This overrides the global .gemini/tmp for session isolation
-  const groupSessionsDir = path.join(
-    DATA_DIR,
-    'sessions',
-    group.folder,
-    '.gemini-tmp',
-  );
-  fs.mkdirSync(groupSessionsDir, { recursive: true });
-  mounts.push({
-    hostPath: groupSessionsDir,
-    containerPath: '/home/node/.gemini/tmp',
-    readonly: false,
-  });
+  // Note: session isolation is handled by the per-group filteredGeminiDir above.
+  // Apple Container does not support overlaying a child mount on a parent mount,
+  // so .gemini/tmp is writable via the parent .gemini mount.
 
   // Per-group IPC namespace: each group gets its own IPC directory
   // This prevents cross-group privilege escalation via IPC

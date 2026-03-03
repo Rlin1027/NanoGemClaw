@@ -80,8 +80,8 @@ NanoGemClaw 是一個 Telegram AI 助手專案，在過去三天 (v1.1.0 → v1.
 ### ~~B4. Explicit Intent 過濾 — 負面測試~~ ✅ 已測試通過
 > 測試 2b/2c 驗證：哲學問題不觸發搜尋，「提醒」關鍵字正確匹配 `schedule_task`
 
-### ~~B5. Fast Path Fallback to Container~~ ✅ 已測試通過（fallback 機制驗證）
-> 發送圖片後 log 出現 `Spawning container agent`，無 `Using fast path`，確認 fallback 機制正常。Container 超時（300s）原因：測試環境未安裝 Docker，非代碼 bug。附帶 UX 問題：圖片需加 `@bot` caption 才觸發，不夠直覺（已修復：媒體訊息 bypass trigger check）。
+### ~~B5. Fast Path Fallback to Container~~ ✅ 已測試通過
+> 圖片 fallback 到 container 路徑正常：`Spawning container agent` → `Container completed {"duration":22011,"status":"success"}`。修復 3 個問題：(1) 媒體訊息 bypass trigger check（不需加 @bot caption）(2) container system 未啟動導致超時（需先 `container system start`）(3) 容器內 Gemini CLI 認證失敗 — 改為掛載 host OAuth credentials + writable .gemini 目錄（Apple Container 不支援 readonly parent + writable child overlay）。附帶發現 IPC JSON parse error（非 blocking，待修）。
 
 ### B6. Per-group Model Selection
 - **操作**：在 Dashboard 將群組模型改為特定模型，發送訊息
