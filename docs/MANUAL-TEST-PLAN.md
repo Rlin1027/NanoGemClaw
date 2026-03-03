@@ -194,53 +194,50 @@ GOOGLE_CLIENT_SECRET=你的_client_secret
 
 > Claude 會在測試時提醒你每個步驟，不用事先準備。
 
-### E1. Google Auth — OAuth Flow（含撤銷）
-- **操作**：在 Settings 頁面點擊「Connect Google Account」，完成 Google 授權
-- **驗證**：OAuth 授權流程完成，狀態顯示 Connected
-- **撤銷（Revoke）**：點擊「Disconnect」或呼叫 `POST /api/plugins/google-auth/revoke` → 狀態回到未連線，Google 相關功能不可用
+### ~~E1. Google Auth — OAuth Flow~~ ✅ 已測試通過
+> Dashboard Settings → Connect Google → Desktop App OAuth 流程完成。狀態顯示 Connected，Scopes: drive.readonly, calendar, tasks。
+> **修復紀錄**：(1) 初始 credential 為 Web Application 類型導致 `redirect_uri_mismatch`，改為 Desktop App 修復 (2) OAuth consent screen 處於 Testing 模式，需加入 test user (3) Google Tasks API 未啟用，手動在 GCP Console 啟用。
+> **撤銷（Revoke）**：未測試。
 
-### E2. Google Calendar — 列出事件
-- **操作**：在 Telegram 問「@bot 今天有什麼行程？」
-- **驗證**：觸發 `list_calendar_events`，回覆包含 Google Calendar 事件
+### ~~E2. Google Calendar — 列出事件~~ ✅ 已測試通過
+> 發送「我今天有什麼行程？」→ `list_calendar_events` 成功觸發（plugin tool dispatch 正常）。回覆包含 Google Calendar 事件（今天無行程）+ 本地排程任務（明天 15:00 開會提醒）。multi-round tool call: `list_calendar_events` → `list_google_tasks` → `list_tasks`。
 
-### E3. Google Calendar — 建立事件
-- **操作**：發送「@bot 幫我建立明天下午2點的會議」
-- **驗證**：觸發 `create_calendar_event`，Google Calendar 中出現新事件
+### ~~E3. Google Calendar — 建立事件~~ ✅ 已測試通過
+> 發送「在Google日曆建立明天下午3點的團隊會議」→ `create_calendar_event` 觸發，Google Calendar 成功建立事件「團隊會議 2026-03-04T15:00:00+08:00」。Bot 回覆「📅 團隊會議 🕒 時間：2026 年 3 月 4 日 下午 3:00 – 4:00」。
+> **修復紀錄**：(1) 初期 Google Calendar API 報 `Invalid time zone definition for start time`，因 `Intl.DateTimeFormat().resolvedOptions().timeZone` 在 dotenv 設定 `TZ=`（空）時異常。修改 `calendar-api.ts` 移除 `timeZone` 欄位，改用 dateTime 自帶 offset (2) Gemini 建立後自動呼叫 `delete_calendar_event` 刪除事件（hallucination），加上 `metadata.requiresExplicitIntent: true` 到 create/update/delete tools 修復 (3) Gemini 曾在 create-list 迴圈中耗盡 fast path MAX_TOOL_ROUNDS，修復 `summarizeFunctionResult` 為 plugin tools 生成 fallback 摘要。
 
-### E3b. Google Calendar — 更新事件
-- **操作**：發送「@bot 把明天的會議改到下午4點」或在 Dashboard 編輯事件（`PUT /api/plugins/google-calendar-rw/events/:eventId`）
-- **驗證**：觸發 `update_calendar_event`，Google Calendar 中事件時間已更新
+### ~~E3b. Google Calendar — 更新事件~~ ✅ 已測試通過
+> 發送「把明天的團隊會議改到下午4點」→ `list_calendar_events` → `update_calendar_event` multi-round 正常。Bot 回覆「📅 團隊會議 🕒 時間：2026 年 3 月 4 日 下午 4:00 – 5:00」。Google Calendar 事件時間已更新。
+> **修復紀錄**：`updateEvent` 也有相同的 timezone 問題，修復方式同 create（移除 timeZone 欄位）。
 
-### E3c. Google Calendar — 刪除事件
-- **操作**：發送「@bot 取消明天的會議」或在 Dashboard 刪除事件（`DELETE /api/plugins/google-calendar-rw/events/:eventId`）
-- **驗證**：觸發 `delete_calendar_event`，Google Calendar 中事件已移除
+### ~~E3c. Google Calendar — 刪除事件~~ ✅ 已測試通過
+> 發送「取消明天的團隊會議」→ `list_calendar_events` → `delete_calendar_event` 正常。Bot 回覆「OK！我已經幫你取消明天（3 月 4 日）下午 4 點的 *團隊會議* 了。」Google Calendar 事件已移除。
 
-### E3d. Google Calendar — 可用時段查詢
+### E3d. Google Calendar — 可用時段查詢 ⏭️ 待測
 - **操作**：發送「@bot 我明天下午有空嗎？」
 - **驗證**：觸發 `check_availability`，回覆包含指定時段的空閒/忙碌狀態
 
-### E4. Google Calendar — Dashboard 頁面
+### E4. Google Calendar — Dashboard 頁面 ⏭️ 待測
 - **操作**：打開 Calendar 頁面，查看 Google Calendar 事件
 - **驗證**：事件正確顯示，可建立新事件
 
-### E5. Google Tasks — 建立/完成任務
-- **操作**：發送「@bot 建立一個 Google 任務：買牛奶」，然後「@bot 把買牛奶標記完成」
-- **驗證**：觸發 `create_google_task` 和 `complete_google_task`
+### ~~E5. Google Tasks — 建立任務~~ ✅ 已測試通過
+> 發送「在Google Tasks建立一個任務『準備週五簡報資料』」→ `create_google_task` 觸發，Google Tasks 成功建立任務。Bot 回覆「📝 *準備週五簡報資料*」+ follow-up 建議（設定截止日期、查看未完成任務等）。
+> **完成任務**：未測試。
 
-### E6. Google Tasks — Dashboard 同步
+### E6. Google Tasks — Dashboard 同步 ⏭️ 待測
 - **操作**：在 Tasks 頁面查看 Google Tasks tab，點擊 Sync Now
 - **驗證**：同步完成，顯示最新的 Google Tasks 列表
 
-### E7. Google Drive — 搜尋檔案
-- **操作**：發送「@bot 搜尋我 Drive 裡關於 X 的文件」
-- **驗證**：觸發 `search_drive`，回覆包含 Drive 搜尋結果
+### ~~E7. Google Drive — 搜尋檔案~~ ✅ 已測試通過
+> 發送「搜尋Google Drive裡檔名有簡報的文件」→ `search_drive` 觸發，回覆包含 4 個真實 Drive 文件（marketing-assets-brief.md、MeetingSummary_20251113.md、main、HEAD），含修改日期。
 
-### E8. Google Drive — Dashboard 頁面
+### E8. Google Drive — Dashboard 頁面 ⏭️ 待測
 - **操作**：打開 Drive 頁面，搜尋檔案
 - **驗證**：檔案列表正確，可預覽內容
 - **進階（資料夾配置）**：在 Drive 頁面設定監控資料夾（`POST /api/plugins/google-drive/folders/config`），驗證設定儲存成功並生效
 
-### E9. Drive Knowledge RAG
+### E9. Drive Knowledge RAG ⏭️ 待測
 - **操作**：在 Drive 頁面 RAG tab 設定 folder IDs，觸發 reindex
 - **驗證**：indexing 完成後，在 Telegram 問相關問題可搜尋到 Drive 內容
 
@@ -248,8 +245,11 @@ GOOGLE_CLIENT_SECRET=你的_client_secret
 
 ## Section F：其他 Plugins 與功能
 
-### F1. Discord Reporter ⏭️ 待測
-> 需設定 Discord Webhook URL。Dashboard Settings 有 Webhook URL 輸入框和 Test 按鈕，UI 存在但未測試功能。
+### ~~F1. Discord Reporter~~ ✅ 已測試通過（部分）
+> Dashboard Settings → Discord Reporter → 輸入 Webhook URL → Save → Enable → Send Test → Discord channel 收到「✅ Discord Reporter — Test」embed。
+> **修復紀錄**：Plugin route prefix 為 `'config'`，導致實際路徑為 `/api/plugins/discord-reporter/config/config`（重複），Dashboard 呼叫 `/api/plugins/discord-reporter/config` 返回 404。修復：prefix 改為 `''`，router 內部保持 `/config`、`/test`、`/trigger`、`/heartbeat`。
+> **即時通知（afterMessage hook）**：未獨立測試。P2 message hooks 已接入，理論上主群組訊息會即時轉發到 Discord（需在主群組觸發並觀察 Discord channel）。
+> **週報（P3 WeeklyData）**：未測試。需手動 trigger weekly report 並確認 Discord 收到有真實數據的週報。
 
 ### ~~F2. Memorization Service — 自動摘要~~ ✅ 已測試通過
 > DB 有 2 個 completed + 1 個 failed memorization_tasks。memory_summaries 有 122 則歸檔、13230 字元、完整摘要文字。事件驅動觸發和 crash recovery 待進階測試。
@@ -321,8 +321,8 @@ GOOGLE_CLIENT_SECRET=你的_client_secret
 | `TELEGRAM_BOT_TOKEN` | 已設定 |
 | `GEMINI_API_KEY` | 已設定 |
 | `DASHBOARD_API_KEY` | 已設定 |
-| `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` | 未設定 — Section E 前會帶著設定 |
-| Discord Webhook URL | 未設定 — F1 前會帶著設定 |
+| `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` | 已設定（Desktop App credential） |
+| Discord Webhook URL | 已設定（透過 Dashboard Settings） |
 | ffmpeg | 待確認（A7 需要，gemini STT 可跳過） |
 | Container 環境 | 已就緒 |
 
@@ -341,7 +341,23 @@ GOOGLE_CLIENT_SECRET=你的_client_secret
 
 ## 已完成的測試（標記 ✅ 的項目）
 
-共 8 項已通過，分布在：
-- **A1** 訊息基本流程、**A8** 圖片生成、**B2** 多輪 tool call、**B4** explicit intent
-- **G2** 重啟持久性、**G7** Socket.IO 即時通訊
-- 以及高優先測試中獨立驗證的：EventBus bridge、Google Search grounding（3 子項）、fast-path read-only 安全性、dashboard group unregister、structured memory facts 持久性
+共 48 項已通過（含 Section E 新增 7 項、F1 更新），分布在：
+- **Section A**：A1–A5, A8–A11（9/11）
+- **Section B**：B2–B6（4/6）
+- **Section C**：C1–C4, C6, C8–C13, C17（12/17）
+- **Section D**：D1–D5（5/8）
+- **Section E**：E1–E3, E3b, E3c, E5, E7（7/12）— 新增於 2026-03-04
+- **Section F**：F1–F3, F5, F6, F8, F9（7/9）— F1 更新於 2026-03-04
+- **Section G**：G2, G5–G7（4/8）
+
+### 2026-03-04 新增測試結果（Plugin 功能上線驗證）
+
+**背景**：完成 P1（Gemini Tools Integration）、P2（Message Hooks）、P3（Discord Reporter Weekly Data）程式碼實作後，透過 Playwright + Telegram 進行端對端驗證。
+
+**修復的 Bug**：
+1. Discord Reporter 路由 404（prefix `'config'` → `''`）
+2. Fast path `summarizeFunctionResult` 不支援 plugin tools（default case 回傳空字串）
+3. Calendar API `Invalid time zone definition`（移除 `timeZone` 欄位，用 dateTime offset）
+4. Calendar `updateEvent` 同樣的 timezone 問題
+5. Gemini hallucinated `delete_calendar_event`（加 `requiresExplicitIntent: true` metadata）
+6. Calendar catch block 吞掉錯誤（加 console.error logging）
