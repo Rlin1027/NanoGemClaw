@@ -91,27 +91,20 @@ NanoGemClaw 是一個 Telegram AI 助手專案，在過去三天 (v1.1.0 → v1.
 
 ## Section C：Dashboard 頁面功能
 
-### C1. Overview 頁面
-- **操作**：打開 Dashboard，查看群組列表
-- **驗證**：所有已註冊群組顯示正確，狀態/訊息數/任務數正確
-- **進階（隱藏群組）**：點擊群組的隱藏按鈕，重新整理頁面後群組應保持隱藏（localStorage 持久化）；取消隱藏後恢復顯示
+### ~~C1. Overview 頁面~~ ✅ 已測試通過
+> 2 個群組正確顯示（名稱、狀態、訊息數、任務數）。修復隱藏群組功能（App.tsx 缺少 hideGroup 邏輯），新增 unhide UI（toggle + show button + localStorage 持久化）。
 
-### C2. Group Discovery
-- **操作**：點擊 Overview 上的「Discover Groups」按鈕
-- **驗證**：顯示所有已知聊天記錄，可從中註冊新群組
+### ~~C2. Group Discovery~~ ✅ 已測試通過
+> sidebar「新增群組」按鈕成功彈出 Add Group modal，顯示 4 個可發現群組及 Register 按鈕。附註：overview 的 "+ Discover Group" 卡片按鈕是 placeholder 無 onClick（待修）。
 
-### C3. Group Detail 頁面
-- **操作**：點入某群組詳情
-- **驗證**：統計卡片（請求數、token 用量）、persona 選擇器、設定 toggle 都正常
+### ~~C3. Group Detail 頁面~~ ✅ 已測試通過
+> 統計卡片（請求 106、平均 35.3s、Token 561K、訊息 107）、persona 選擇器（4 個）、觸發/搜尋 toggle、AI 模型選擇器（11 個模型）、技能、偏好設定、排程任務（3 個 + 編輯/刪除）、危險區域全部正常。
 
-### C4. Persona 切換
-- **操作**：在 Group Detail 切換 persona（如 default → coder）
-- **驗證**：API 回傳成功，在 Telegram 發訊息確認風格改變
+### ~~C4. Persona 切換~~ ✅ 已測試通過
+> 切換 default → Software Engineer（coder），toast 顯示「設定已更新」。Telegram 問 fibonacci 函數，bot 回覆含迭代法/遞迴法程式碼 + O(n) 複雜度分析，符合 coder 風格。切回 default 亦成功。
 
-### C5. Knowledge 頁面
-- **操作**：為群組新增一份 knowledge 文件，搜尋其內容
-- **驗證**：文件建立成功，FTS5 搜尋回傳匹配結果
-- **進階**：在 Telegram 問相關問題，確認 RAG 注入生效
+### C5. Knowledge 頁面 ⚠️ 部分通過
+> Dashboard 建立文件成功（顯示「共 1 份文件，67 字元」）、FTS5 單字搜尋正常。但 RAG 注入失敗：`getRelevantKnowledge` 將完整使用者訊息包在雙引號做 exact phrase match，導致無法匹配。需改為 term-based 搜尋策略（將 query 拆成個別 token 用 OR 連接）。
 
 ### C6. Memory 頁面 — System Prompt 編輯
 - **操作**：編輯群組的 GEMINI.md，Cmd+S 儲存
