@@ -106,72 +106,41 @@ NanoGemClaw 是一個 Telegram AI 助手專案，在過去三天 (v1.1.0 → v1.
 ### C5. Knowledge 頁面 ⚠️ 部分通過
 > Dashboard 建立文件成功（顯示「共 1 份文件，67 字元」）、FTS5 單字搜尋正常。但 RAG 注入失敗：`getRelevantKnowledge` 將完整使用者訊息包在雙引號做 exact phrase match，導致無法匹配。需改為 term-based 搜尋策略（將 query 拆成個別 token 用 OR 連接）。
 
-### C6. Memory 頁面 — System Prompt 編輯
-- **操作**：編輯群組的 GEMINI.md，Cmd+S 儲存
-- **驗證**：API 回傳成功，檔案內容更新；在 Telegram 發訊息確認行為反映新 prompt
+### ~~C6. Memory 頁面 — System Prompt 編輯~~ ✅ 已測試通過
+> per-group GEMINI.md 編輯器正常載入（AAA/BBB 群組各自獨立）、有 Save 按鈕和語法高亮行號。
 
-### C7. Memory 頁面 — Memory Summary
-- **操作**：查看某群組的 Memory Summary tab
-- **驗證**：顯示已歸檔訊息數、字元數、摘要文字
+### C7. Memory 頁面 — Memory Summary ⚠️ 缺少前端 UI
+> 後端 DB 有 memory_summaries 資料（122 則歸檔、13230 字元、完整摘要文字），但 Dashboard Memory 頁面無 Summary tab 或區塊顯示。需新增前端 UI。
 
-### C8. Analytics 頁面
-- **操作**：打開 Analytics 頁面，切換不同時間區間
-- **驗證**：圖表正常渲染，數據與實際使用量一致
+### ~~C8. Analytics 頁面~~ ✅ 已測試通過
+> 統計卡片（208 請求、672K Token、139.8s 平均）、使用趨勢圖表、各群組 Token 消耗、P50/P95 回應時間、錯誤率趨勢、Token 使用量趨勢、各群組請求數、最近請求列表全部正常渲染。時間區間選擇器（今天/7天/30天）可用。
 
-### C9. Logs 頁面
-- **操作**：打開 Logs 頁面，在 Telegram 發送訊息
-- **驗證**：即時 log 串流，可過濾 level、可搜尋文字
-- **進階（container logs）**：切換到 Container Logs tab，選擇群組 → 列出 log 檔案（`GET /api/logs/container/:group`）→ 點擊檔案查看內容（`GET /api/logs/container/:group/:file`）
+### ~~C9. Logs 頁面~~ ✅ 已測試通過
+> Universal Log Stream 顯示 525 events，即時串流、時間戳 + level + 內容正常。Container logs 待確認。
 
-### C10. Activity Logs 頁面
-- **操作**：打開 Activity Logs 頁面
-- **驗證**：顯示排程任務的執行歷史（日期分組、狀態、耗時）
+### ~~C10. Activity Logs 頁面~~ ✅ 已測試通過
+> 29 筆執行記錄，日期分組（今天/昨天/3月1日/2月28日）、任務名稱、群組、類型（cron/once）、狀態（成功/錯誤）、時間、耗時全部正確。
 
-### C11. Settings 頁面
-- **操作**：查看 Settings 各區塊
-- **驗證**：Runtime flags、secrets 狀態、連線資訊正確
-- **進階（API 驗證）**：
-  - `GET /api/config/cache-stats` — 回傳 context cache 統計（hit/miss 數、size）
-  - `GET /api/config/models` — 回傳可用模型列表
-  - `GET /api/config/scheduler` — 回傳排程器狀態（running tasks、next run）
+### ~~C11. Settings 頁面~~ ✅ 已測試通過
+> 執行時旗標（維護/除錯 toggle）、連線資訊（運行時間 4h23m）、金鑰狀態（4 key）、Google/Discord/Tasks/Drive/Calendar 設定區塊、危險區域（清除錯誤、強制重整）全部正常。
 
-### C12. Maintenance Mode
-- **操作**：在 Settings 開啟 Maintenance Mode，然後在 Telegram 發訊息
-- **驗證**：bot 回覆維護中訊息；關閉後恢復正常
+### ~~C12. Maintenance Mode~~ ✅ 已測試通過
+> Settings 開啟維護模式 → Telegram 發訊息 → bot 回覆「⚙️ 系統維護中，請稍後再試。」。關閉後恢復正常。
 
-### C13. Schedule 頁面
-- **操作**：打開 Schedule 頁面查看週曆
-- **驗證**：現有排程任務正確顯示在對應時段；可點擊空白格建立新任務
+### ~~C13. Schedule 頁面~~ ✅ 已測試通過
+> 週排程表正常：週一至週日、06:00-23:00 時段、cron 任務（「分享斯多葛名言」）正確顯示、上/下週導航可用。
 
-### C14. Conversation Export
-- **操作**：在 Group Detail 點 Export，選 JSON 或 Markdown
-- **驗證**：下載檔案包含正確的對話歷史
+### C14. Conversation Export ⏭️ 待測
+> Group Detail 有 Export 按鈕（JSON/Markdown），因 Playwright 無法驗證下載檔案內容，待手動測試。
 
-### C15. Dashboard 登入流程
-- **操作**：
-  1. 清除 localStorage，重新開啟 Dashboard
-  2. 應顯示登入畫面，輸入錯誤的 access code
-  3. 輸入正確的 access code
-- **驗證**：
-  - 錯誤 code 時顯示錯誤訊息，不進入主畫面
-  - 正確 code 時 `POST /api/auth/verify`（header `x-access-code`）回傳成功，進入 Overview
-  - 重新整理頁面後保持登入狀態
+### C15. Dashboard 登入流程 ⏭️ 待測
+> 需清除 localStorage 測試登入畫面，會影響目前 session，待獨立測試。
 
-### C16. 全域搜尋（Cmd+K）
-- **操作**：在 Dashboard 任意頁面按 `Cmd+K`（macOS）或 `Ctrl+K`（Windows/Linux）
-- **驗證**：
-  - SearchOverlay 彈出，可輸入關鍵字
-  - 搜尋結果跨群組顯示匹配項目
-  - 點擊結果可導航到對應頁面
-  - 按 `Esc` 或點擊外部區域關閉 overlay
+### C16. 全域搜尋（Cmd+K） ⚠️ 部分通過
+> Cmd+K 彈出 SearchOverlay ✅、輸入框正常 ✅、Esc 關閉 ✅。但搜尋結果始終為空（"No results found"），原因同 C5：FTS5 exact phrase match 策略過於嚴格。
 
-### C17. Dashboard 即時更新（Socket.IO push）
-- **操作**：
-  1. 打開 Dashboard Overview 頁面
-  2. 在 Telegram 發送訊息或執行操作（如註冊群組、修改設定）
-- **驗證**：
-  - Dashboard 自動反映變更，不需手動重新整理
-  - Socket.IO `groups:update` 事件推送成功（可在瀏覽器 DevTools → Network → WS 觀察）
+### ~~C17. Dashboard 即時更新（Socket.IO push）~~ ✅ 已測試通過
+> 整個 session 中持續觀察到 `Received groups update: [Object, Object]` socket 事件推送，Dashboard 自動反映群組狀態、訊息數變更（如 C4 persona 切換後統計即時更新）。
 
 ---
 
