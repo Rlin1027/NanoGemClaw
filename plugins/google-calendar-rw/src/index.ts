@@ -218,8 +218,10 @@ const updateCalendarEventTool: GeminiToolContribution = {
 
       return JSON.stringify({ success: true, event });
     } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error(`[google-calendar-rw] update_calendar_event error: ${errMsg}`);
       return JSON.stringify({
-        error: 'Failed to update event. Please try again.',
+        error: `Failed to update event: ${errMsg}`,
       });
     }
   },

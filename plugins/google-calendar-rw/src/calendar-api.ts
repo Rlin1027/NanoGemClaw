@@ -197,8 +197,8 @@ export async function updateEvent(
     summary?: string;
     location?: string;
     description?: string;
-    start?: { dateTime: string; timeZone: string };
-    end?: { dateTime: string; timeZone: string };
+    start?: { dateTime: string; timeZone?: string };
+    end?: { dateTime: string; timeZone?: string };
   } = {};
 
   if (updates.summary !== undefined) requestBody.summary = updates.summary;
@@ -206,12 +206,21 @@ export async function updateEvent(
   if (updates.description !== undefined)
     requestBody.description = updates.description;
 
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  // Ensure dateTime has timezone offset
+  const ensureOffset = (dt: string): string => {
+    if (/[+-]\d{2}:\d{2}$/.test(dt) || dt.endsWith('Z')) return dt;
+    const offsetMin = new Date().getTimezoneOffset();
+    const sign = offsetMin <= 0 ? '+' : '-';
+    const absMin = Math.abs(offsetMin);
+    const hh = String(Math.floor(absMin / 60)).padStart(2, '0');
+    const mm = String(absMin % 60).padStart(2, '0');
+    return `${dt}${sign}${hh}:${mm}`;
+  };
   if (updates.startTime !== undefined) {
-    requestBody.start = { dateTime: updates.startTime, timeZone: tz };
+    requestBody.start = { dateTime: ensureOffset(updates.startTime) };
   }
   if (updates.endTime !== undefined) {
-    requestBody.end = { dateTime: updates.endTime, timeZone: tz };
+    requestBody.end = { dateTime: ensureOffset(updates.endTime) };
   }
 
   const response = await calendar.events.patch({
