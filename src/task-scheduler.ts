@@ -35,6 +35,24 @@ export interface SchedulerDependencies {
   getSessions: () => Record<string, string>;
 }
 
+/** Module-level deps reference for force-run API */
+let savedDeps: SchedulerDependencies | null = null;
+
+/**
+ * Force-run a task by ID (called from API route).
+ * Returns the task result or throws on error.
+ */
+export async function forceRunTask(taskId: string): Promise<string> {
+  if (!savedDeps) throw new Error('Scheduler not initialized');
+  const task = getTaskById(taskId);
+  if (!task) throw new Error(`Task not found: ${taskId}`);
+  if (task.status !== 'active' && task.status !== 'paused') {
+    throw new Error(`Task status is ${task.status}, cannot run`);
+  }
+  await runTask(task, savedDeps);
+  return 'Task executed';
+}
+
 async function runTask(
   task: ScheduledTask,
   deps: SchedulerDependencies,
@@ -251,6 +269,7 @@ async function runTask(
 export function startSchedulerLoop(deps: SchedulerDependencies): {
   stop: () => void;
 } {
+  savedDeps = deps;
   const limiter = new ConcurrencyLimiter(SCHEDULER.CONCURRENCY);
 
   logger.info(

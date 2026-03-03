@@ -408,6 +408,25 @@ export function createTasksRouter(_deps: TasksRouterDeps = {}): Router {
     },
   );
 
+  // POST /api/tasks/:taskId/run — force-run a task immediately
+  router.post(
+    '/tasks/:taskId/run',
+    validate({ params: taskIdParams }),
+    async (req, res) => {
+      try {
+        const { forceRunTask } = await import('../task-scheduler.js');
+        const { taskId } = req.params as unknown as z.infer<
+          typeof taskIdParams
+        >;
+        const result = await forceRunTask(taskId);
+        res.json({ data: { success: true, result } });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        res.status(400).json({ error: msg });
+      }
+    },
+  );
+
   // GET /api/tasks/:taskId/runs
   router.get(
     '/tasks/:taskId/runs',
