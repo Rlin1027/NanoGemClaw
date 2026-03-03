@@ -263,12 +263,20 @@ export async function discoverVertexModels(
         inputTokenLimit?: number;
         outputTokenLimit?: number;
       }>;
+      publisherModels?: Array<{
+        name?: string;
+        displayName?: string;
+        supportedActions?: string[];
+        inputTokenLimit?: number;
+        outputTokenLimit?: number;
+      }>;
     };
 
-    if (!data.models) return [];
+    const modelList = data.models || data.publisherModels;
+    if (!modelList) return [];
 
     const models: VertexModel[] = [];
-    for (const m of data.models) {
+    for (const m of modelList) {
       if (!m.name) continue;
       // Extract model ID from full resource name
       // e.g. "publishers/google/models/gemini-2.5-flash" → "gemini-2.5-flash"
