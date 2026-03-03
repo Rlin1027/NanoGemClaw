@@ -341,7 +341,7 @@ describe('google-calendar-rw/calendar-api', () => {
             expect(call.requestBody.end).toEqual({ date: '2026-12-26' });
         });
 
-        it('uses dateTime + timeZone format for timed events', async () => {
+        it('uses dateTime with offset for timed events (no timeZone field)', async () => {
             await createEvent({
                 summary: 'Meeting',
                 startTime: '2026-01-01T10:00:00Z',
@@ -349,10 +349,10 @@ describe('google-calendar-rw/calendar-api', () => {
                 allDay: false,
             });
             const call = mockCalendarClient.events.insert.mock.calls[0][0] as {
-                requestBody: { start: { dateTime: string; timeZone: string } };
+                requestBody: { start: { dateTime: string; timeZone?: string } };
             };
             expect(call.requestBody.start.dateTime).toBe('2026-01-01T10:00:00Z');
-            expect(call.requestBody.start.timeZone).toBeDefined();
+            expect(call.requestBody.start.timeZone).toBeUndefined();
         });
 
         it('throws when allDay=true but startTime has no valid date part', async () => {
@@ -435,10 +435,10 @@ describe('google-calendar-rw/calendar-api', () => {
         it('includes start when startTime is provided', async () => {
             await updateEvent('event-1', { startTime: '2026-06-01T09:00:00Z' });
             const call = mockCalendarClient.events.patch.mock.calls[0][0] as {
-                requestBody: { start: { dateTime: string; timeZone: string } };
+                requestBody: { start: { dateTime: string; timeZone?: string } };
             };
             expect(call.requestBody.start.dateTime).toBe('2026-06-01T09:00:00Z');
-            expect(call.requestBody.start.timeZone).toBeDefined();
+            expect(call.requestBody.start.timeZone).toBeUndefined();
         });
 
         it('passes correct eventId and calendarId', async () => {

@@ -51,7 +51,7 @@ async function embedText(text: string): Promise<number[]> {
   }
   const genai = new GoogleGenAI({ apiKey });
   const response = await genai.models.embedContent({
-    model: 'text-embedding-004',
+    model: 'gemini-embedding-001',
     contents: [{ parts: [{ text }] }],
   });
   const values = response.embeddings?.[0]?.values;

@@ -138,7 +138,7 @@ async function embedWithRetry(
   for (let attempt = 1; attempt <= EMBED_MAX_RETRIES; attempt++) {
     try {
       const response = await genai.models.embedContent({
-        model: 'text-embedding-004',
+        model: 'gemini-embedding-001',
         contents: [{ parts: [{ text }] }],
       });
       const values = response.embeddings?.[0]?.values;
