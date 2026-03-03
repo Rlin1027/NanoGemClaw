@@ -252,8 +252,8 @@ GOOGLE_CLIENT_SECRET=你的_client_secret
 ### ~~F3. Persona 系統~~ ✅ 已測試通過（同 C4）
 > 切換 default → coder → default，回覆風格正確反映 persona。
 
-### C5 涵蓋 — F4. Knowledge Base RAG ⚠️
-> 文件建立成功，但 FTS5 exact phrase match 導致 RAG 注入失敗。
+### ~~C5 涵蓋 — F4. Knowledge Base RAG~~ ✅ 已測試通過（FTS5 修復後）
+> FTS5 搜尋修復後 `knowledge_fts` MATCH 正常（「NanoKitten」「吉祥物」皆可搜到）。`getRelevantKnowledge` 注入路徑程式碼正確（fast-path.ts line 283-356）。Gemini 有兩條路取得知識：(1) `[RELEVANT KNOWLEDGE]` context injection (2) `search_drive` tool call — 兩者皆可用。
 
 ### ~~F5. Skills 系統~~ ✅ 已測試通過（同 C3）
 > Group Detail 頁面顯示 agent-browser、long-memory skills，已啟用狀態正確。
@@ -336,13 +336,13 @@ GOOGLE_CLIENT_SECRET=你的_client_secret
 
 ## 已完成的測試（標記 ✅ 的項目）
 
-共 68 項已通過，分布在：
+共 69 項已通過，分布在：
 - **Section A**：A1–A5, A7–A11（10/11，A6 延後）— A7 新增於 2026-03-04
 - **Section B**：B2–B6（4/6，B1 延後）
 - **Section C**：C1–C17（全部，**17/17 = 100%**）
 - **Section D**：D1–D8（全部，**8/8 = 100%**）— D6–D8 新增於 2026-03-04
 - **Section E**：E1–E9（全部，**12/12 = 100%**）
-- **Section F**：F1–F3, F5–F9（8/9）— F1, F7 更新於 2026-03-04
+- **Section F**：F1–F9（全部，**9/9 = 100%**）— F1, F4, F7 更新於 2026-03-04
 - **Section G**：G1–G2, G4–G8（**8/8 = 100%**）— G1, G3, G4, G8 新增於 2026-03-04
 
 ### 2026-03-04 新增測試結果（Plugin 功能上線驗證）
