@@ -58,6 +58,11 @@ const createCalendarEventTool: GeminiToolContribution = {
     required: ['summary', 'start_time', 'end_time'],
   },
   permission: 'any',
+  metadata: {
+    readOnly: false,
+    requiresExplicitIntent: true,
+    dangerLevel: 'moderate' as const,
+  },
 
   async execute(
     args: Record<string, unknown>,
@@ -89,8 +94,10 @@ const createCalendarEventTool: GeminiToolContribution = {
 
       return JSON.stringify({ success: true, event });
     } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error(`[google-calendar-rw] create_calendar_event error: ${errMsg}`);
       return JSON.stringify({
-        error: 'Failed to create event. Please try again.',
+        error: `Failed to create event: ${errMsg}`,
       });
     }
   },
@@ -120,6 +127,11 @@ const listCalendarEventsTool: GeminiToolContribution = {
     required: [],
   },
   permission: 'any',
+  metadata: {
+    readOnly: true,
+    requiresExplicitIntent: false,
+    dangerLevel: 'safe' as const,
+  },
 
   async execute(args: Record<string, unknown>): Promise<string> {
     if (!isAuthenticated()) {
@@ -177,6 +189,11 @@ const updateCalendarEventTool: GeminiToolContribution = {
     required: ['event_id'],
   },
   permission: 'any',
+  metadata: {
+    readOnly: false,
+    requiresExplicitIntent: true,
+    dangerLevel: 'moderate' as const,
+  },
 
   async execute(args: Record<string, unknown>): Promise<string> {
     if (!isAuthenticated()) {
@@ -220,6 +237,11 @@ const deleteCalendarEventTool: GeminiToolContribution = {
     required: ['event_id'],
   },
   permission: 'any',
+  metadata: {
+    readOnly: false,
+    requiresExplicitIntent: true,
+    dangerLevel: 'destructive' as const,
+  },
 
   async execute(args: Record<string, unknown>): Promise<string> {
     if (!isAuthenticated()) {
@@ -256,6 +278,11 @@ const checkAvailabilityTool: GeminiToolContribution = {
     required: ['start_time', 'end_time'],
   },
   permission: 'any',
+  metadata: {
+    readOnly: true,
+    requiresExplicitIntent: false,
+    dangerLevel: 'safe' as const,
+  },
 
   async execute(args: Record<string, unknown>): Promise<string> {
     if (!isAuthenticated()) {

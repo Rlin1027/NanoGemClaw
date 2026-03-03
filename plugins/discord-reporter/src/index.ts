@@ -25,8 +25,9 @@ import {
   triggerReport,
   debounced,
   type DiscordConfig,
+  type WeeklyDataGenerator,
 } from './scheduler.js';
-import { formatTestEmbed } from './embed-formatter.js';
+import { formatTestEmbed, type WeeklyData } from './embed-formatter.js';
 
 // ============================================================================
 // Plugin-level state
@@ -191,7 +192,88 @@ const schedulerService: ServiceContribution = {
         '[discord-reporter] Could not load generateDailyReport — daily reports will be unavailable',
       );
     }
-    startScheduler(api, api.dataDir, dailyReportGenerator);
+
+    // Build weekly data generator from host app's DB stats
+    let generateWeeklyData: WeeklyDataGenerator | undefined;
+    try {
+      const { join } = await import('path');
+      const dbPath = join(process.cwd(), 'src', 'db.js');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const dbMod = (await import(dbPath)) as any;
+
+      generateWeeklyData = (): WeeklyData => {
+        const now = new Date();
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const since = weekAgo.toISOString();
+
+        // Overall stats for the last 7 days
+        const stats = dbMod.getUsageStats(undefined, since);
+        const totalTokens =
+          (stats.total_prompt_tokens || 0) +
+          (stats.total_response_tokens || 0);
+
+        // Per-day breakdown for peak day and avg daily requests
+        const timeseries = (dbMod.getUsageTimeseriesDaily?.(7) ?? []) as Array<{
+          date: string;
+          request_count: number;
+          total_tokens: number;
+        }>;
+
+        let peakDay = 'N/A';
+        let peakDayRequests = 0;
+        for (const day of timeseries) {
+          if (day.request_count > peakDayRequests) {
+            peakDay = day.date;
+            peakDayRequests = day.request_count;
+          }
+        }
+        const avgDailyRequests =
+          timeseries.length > 0
+            ? stats.total_requests / timeseries.length
+            : 0;
+
+        // Top groups by request count
+        const groupStats = (dbMod.getUsageByGroup?.(since) ?? []) as Array<{
+          group_folder: string;
+          requests: number;
+        }>;
+        const topGroups = groupStats.slice(0, 5).map((g) => ({
+          name: g.group_folder,
+          requests: g.requests,
+        }));
+
+        // Error rate from in-memory error states
+        const errorStates = (dbMod.getAllErrorStates?.() ?? []) as Array<{
+          group: string;
+          state: { consecutiveFailures: number };
+        }>;
+        const totalErrors = errorStates.reduce(
+          (sum, e) => sum + e.state.consecutiveFailures,
+          0,
+        );
+        const errorRate =
+          stats.total_requests > 0
+            ? totalErrors / stats.total_requests
+            : 0;
+
+        return {
+          period: { start: since, end: now.toISOString() },
+          totalRequests: stats.total_requests,
+          totalTokens,
+          avgDailyRequests,
+          peakDay,
+          peakDayRequests,
+          errorRate,
+          topGroups,
+        };
+      };
+    } catch {
+      api.logger.warn(
+        '[discord-reporter] Could not load DB stats — weekly reports will use default data',
+      );
+    }
+
+    startScheduler(api, api.dataDir, dailyReportGenerator, generateWeeklyData);
   },
 
   stop(): Promise<void> {
@@ -303,7 +385,7 @@ const discordReporterPlugin: NanoPlugin = {
 
   routes: [
     {
-      prefix: 'config',
+      prefix: '',
       createRouter: createConfigRouter,
     } satisfies RouteContribution,
   ],

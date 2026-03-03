@@ -159,14 +159,20 @@ export async function createEvent(
     requestBody.start = { date: startDate };
     requestBody.end = { date: endDate };
   } else {
-    requestBody.start = {
-      dateTime: event.startTime,
-      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    // Ensure dateTime has timezone offset for Calendar API compatibility
+    const ensureOffset = (dt: string): string => {
+      if (/[+-]\d{2}:\d{2}$/.test(dt) || dt.endsWith('Z')) return dt;
+      // Append local timezone offset if missing
+      const offsetMin = new Date().getTimezoneOffset();
+      const sign = offsetMin <= 0 ? '+' : '-';
+      const absMin = Math.abs(offsetMin);
+      const hh = String(Math.floor(absMin / 60)).padStart(2, '0');
+      const mm = String(absMin % 60).padStart(2, '0');
+      return `${dt}${sign}${hh}:${mm}`;
     };
-    requestBody.end = {
-      dateTime: event.endTime,
-      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    };
+    // Use offset in dateTime directly — no timeZone field needed
+    requestBody.start = { dateTime: ensureOffset(event.startTime) };
+    requestBody.end = { dateTime: ensureOffset(event.endTime) };
   }
 
   const response = await calendar.events.insert({

@@ -34,6 +34,7 @@ import {
 } from './group-manager.js';
 import { connectTelegram } from './telegram-bot.js';
 import { closeAllWatchers } from './ipc-watcher.js';
+import { sendMessage } from './telegram-helpers.js';
 import { saveJson } from './utils.js';
 
 // ============================================================================
@@ -115,6 +116,59 @@ async function main(): Promise<void> {
   const { loadBuiltinHandlers } = await import('./ipc-handlers/index.js');
   await loadBuiltinHandlers();
 
+  // Initialize Event Bus (before plugins — they need it)
+  const { createEventBus } = await import('@nanogemclaw/event-bus');
+  const eventBus = createEventBus();
+
+  // Load plugins (use variable path to avoid rootDir resolution)
+  const pluginLoaderPath = '../app/src/plugin-loader.js';
+  const {
+    discoverAndLoadPlugins,
+    initPlugins,
+    startPlugins,
+    getPluginIpcHandlers,
+    getPluginRoutes,
+    getPluginGeminiTools,
+    getPluginToolMetadataEntries,
+  } = await import(pluginLoaderPath);
+
+  const manifestPath = path.join(DATA_DIR, 'plugins.json');
+  const projectRoot = path.resolve(DATA_DIR, '..');
+  await discoverAndLoadPlugins(manifestPath, {
+    getDatabase: () => getDatabase(),
+    sendMessage,
+    getGroups: () => getRegisteredGroups() as any,
+    eventBus,
+    dataDir: DATA_DIR,
+  }, {
+    pluginsDir: path.join(projectRoot, 'plugins'),
+    nodeModulesDir: path.join(projectRoot, 'node_modules'),
+  });
+
+  // Register plugin IPC handlers
+  const pluginIpcHandlers = getPluginIpcHandlers();
+  if (pluginIpcHandlers.length > 0) {
+    const { registerIpcHandler } = await import('./ipc-handlers/index.js');
+    for (const handler of pluginIpcHandlers) {
+      registerIpcHandler(handler as any);
+    }
+  }
+
+  await initPlugins();
+
+  // Register plugin Gemini tools into declaration pipeline
+  const { registerPluginTools, registerPluginToolMetadata } =
+    await import('./gemini-tools.js');
+  const pluginGeminiTools = getPluginGeminiTools();
+  if (pluginGeminiTools.length > 0) {
+    registerPluginTools(pluginGeminiTools);
+    const pluginToolEntries = getPluginToolMetadataEntries();
+    for (const { name, metadata } of pluginToolEntries) {
+      registerPluginToolMetadata(name, metadata as any);
+    }
+    console.log(`Plugin Gemini tools registered: ${pluginGeminiTools.length}`);
+  }
+
   // Start health check server
   const { setHealthCheckDependencies, startHealthCheckServer } =
     await import('./health-check.js');
@@ -157,16 +211,13 @@ async function main(): Promise<void> {
     emitDashboardEvent,
   } = await import('./server.js');
 
-  startDashboardServer();
+  const { app: dashboardApp } = startDashboardServer();
 
   // Wire up container-runner → server dashboard event bridge
   const { setDashboardEventEmitter } = await import('./container-runner.js');
   setDashboardEventEmitter(emitDashboardEvent);
 
-  // Initialize Event Bus and bridge to Dashboard Socket.IO
-  const { createEventBus } = await import('@nanogemclaw/event-bus');
-  const eventBus = createEventBus();
-
+  // Bridge Event Bus to Dashboard Socket.IO
   const dashboardEvents: Array<keyof import('@nanogemclaw/event-bus').NanoEventMap> = [
     'message:received', 'message:sent',
     'group:registered', 'group:unregistered', 'group:updated',
@@ -276,9 +327,20 @@ async function main(): Promise<void> {
     return entry ? entry[0] : null;
   });
 
+  // Mount plugin routes on dashboard
+  const pluginRoutes = getPluginRoutes();
+  for (const { pluginId, contribution } of pluginRoutes) {
+    const prefix = `/api/plugins/${pluginId}/${contribution.prefix}`;
+    dashboardApp.use(prefix, contribution.createRouter());
+    console.log(`Plugin route mounted: ${pluginId} → ${prefix}`);
+  }
+
   // Start automatic database backup
   const { startBackupSchedule } = await import('./backup.js');
   startBackupSchedule();
+
+  // Start plugin services
+  await startPlugins();
 
   // Connect to Telegram (starts bot + background services)
   await connectTelegram();
@@ -297,6 +359,13 @@ async function gracefulShutdown(signal: string): Promise<void> {
   console.log(`\n${signal} received, shutting down gracefully...`);
   let shutdownError = false;
   try {
+    // Stop plugins first (reverse lifecycle order)
+    try {
+      const pluginLoaderPath = '../app/src/plugin-loader.js';
+      const { stopPlugins } = await import(pluginLoaderPath);
+      await stopPlugins();
+    } catch { /* plugins may not be loaded */ }
+
     // Import shutdown dependencies in parallel
     const [
       { stopHealthCheckServer },

@@ -50,6 +50,15 @@ export function clearDeclarationCache(): void {
   cachedNonMainDeclarations = null;
 }
 
+/** Plugin tool declarations injected after plugin init */
+let pluginToolDeclarations: any[] = [];
+
+/** Inject plugin Gemini tool declarations (called from index.ts after initPlugins) */
+export function registerPluginTools(tools: any[]): void {
+  pluginToolDeclarations = tools;
+  clearDeclarationCache();
+}
+
 // ============================================================================
 // Function Declarations for Gemini
 // ============================================================================
@@ -298,6 +307,21 @@ export function buildFunctionDeclarations(isMain: boolean): any[] {
         requiresExplicitIntent: true,
         dangerLevel: 'moderate',
       } as ToolMetadata,
+    });
+  }
+
+  // Append plugin tool declarations
+  for (const tool of pluginToolDeclarations) {
+    if (tool.permission === 'main' && !isMain) continue;
+    declarations.push({
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parameters,
+      _metadata: tool.metadata ?? {
+        readOnly: false,
+        requiresExplicitIntent: false,
+        dangerLevel: 'moderate',
+      },
     });
   }
 
@@ -576,7 +600,24 @@ export async function executeFunctionCall(
         };
       }
 
-      default:
+      default: {
+        const pluginLoaderPath = '../app/src/plugin-loader.js';
+        const { dispatchPluginToolCall } = await import(pluginLoaderPath);
+        const pluginResult = await dispatchPluginToolCall(name, args, {
+          groupFolder,
+          chatJid,
+          isMain: context.isMain,
+          sendMessage: async (id: string, text: string) => {
+            if (context.bot) await context.bot.sendMessage(parseInt(id), text);
+          },
+        });
+        if (pluginResult !== null) {
+          try {
+            return { name, response: JSON.parse(pluginResult) };
+          } catch {
+            return { name, response: { success: true, result: pluginResult } };
+          }
+        }
         return {
           name,
           response: {
@@ -584,6 +625,7 @@ export async function executeFunctionCall(
             error: `Unknown function: ${name}. This function is not available. Respond with text directly.`,
           },
         };
+      }
     }
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);

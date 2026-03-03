@@ -736,8 +736,32 @@ function summarizeFunctionResult(result: FunctionCallResult): string {
       return `✅ 群組已註冊 (ID: ${response.chat_id})`;
     case 'remember_fact':
       return `✅ 已記住: ${response.key}`;
-    default:
+    default: {
+      // Plugin tools: generate a generic summary from the response
+      if (response.success === true) {
+        // Calendar event created/updated
+        if (response.event) {
+          const event = response.event;
+          const start = event.start?.dateTime || event.start?.date || event.start || '';
+          return `✅ ${event.summary || name} (${typeof start === 'string' ? start : ''})`;
+        }
+        // Calendar/Tasks list results
+        if (response.events) {
+          return `📋 ${response.count ?? response.events.length} 筆行程`;
+        }
+        if (response.tasks) {
+          return `📋 ${response.tasks.length} 筆任務`;
+        }
+        if (response.result) {
+          return `✅ ${String(response.result).slice(0, 200)}`;
+        }
+        if (response.message) {
+          return `✅ ${response.message}`;
+        }
+        return `✅ ${name} 執行完成`;
+      }
       return '';
+    }
   }
 }
 

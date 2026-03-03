@@ -296,6 +296,32 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
   const ipcMessageSentChats = getIpcMessageSentChats();
   await setTyping(chatId, true, threadIdNum);
   ipcMessageSentChats.delete(chatId); // Reset before agent run
+
+  // Build plugin hook context (shared across before/after/onError hooks)
+  const senderName = msg.from?.first_name || msg.from?.username || 'Unknown';
+  const hookContext = {
+    chatJid: chatId,
+    sender: msg.from?.id?.toString() || '',
+    senderName,
+    content,
+    groupFolder: group.folder,
+    isMain: isMainGroup,
+    timestamp: new Date(msg.date * 1000).toISOString(),
+  };
+
+  // Run plugin beforeMessage hooks
+  try {
+    const pluginLoaderPath = '../app/src/plugin-loader.js';
+    const { runBeforeMessageHooks } = await import(pluginLoaderPath);
+    const beforeResult = await runBeforeMessageHooks(hookContext);
+    if (beforeResult && typeof beforeResult === 'object' && 'skip' in beforeResult) {
+      return;
+    }
+    if (typeof beforeResult === 'string') {
+      content = beforeResult;
+    }
+  } catch { /* plugin hooks should not break message processing */ }
+
   try {
     const response = await runAgent(
       group,
@@ -372,12 +398,31 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
           threadIdStr ?? null,
         );
       }
+
+      // Run plugin afterMessage hooks (fire-and-forget)
+      try {
+        const pluginLoaderPath = '../app/src/plugin-loader.js';
+        import(pluginLoaderPath).then(({ runAfterMessageHooks }) =>
+          runAfterMessageHooks({ ...hookContext, reply: cleanText }).catch(() => {}),
+        );
+      } catch {}
     } else if (ipcAlreadySent && statusMsg) {
       // IPC handled the response; just clean up status message
       await bot
         .deleteMessage(parseInt(chatId), statusMsg.message_id)
         .catch(() => {});
     } else if (statusMsg) {
+      // Run plugin onMessageError hooks
+      try {
+        const pluginLoaderPath = '../app/src/plugin-loader.js';
+        import(pluginLoaderPath).then(({ runOnMessageErrorHooks }) =>
+          runOnMessageErrorHooks({
+            ...hookContext,
+            error: new Error('No response from agent'),
+          }).catch(() => {}),
+        );
+      } catch {}
+
       // If no response, update status message to error with retry button
       await bot
         .editMessageText(`❌ ${tf('errorOccurred', undefined, groupLang)}`, {
