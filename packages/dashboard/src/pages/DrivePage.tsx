@@ -132,12 +132,10 @@ function FilePreviewModal({ file, onClose }: { file: DriveFile; onClose: () => v
 function DriveFileBrowser({ isAuthenticated }: { isAuthenticated: boolean }) {
     const [searchQuery, setSearchQuery] = useState('');
     const [debouncedQuery, setDebouncedQuery] = useState('');
-    const [page, setPage] = useState(0);
     const [previewFile, setPreviewFile] = useState<DriveFile | null>(null);
     const [folderStack, setFolderStack] = useState<{ id: string; name: string }[]>([]);
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const PAGE_SIZE = 20;
     const currentFolder = folderStack.length > 0 ? folderStack[folderStack.length - 1] : null;
 
     // Debounce search input
@@ -146,20 +144,18 @@ function DriveFileBrowser({ isAuthenticated }: { isAuthenticated: boolean }) {
         if (debounceRef.current) clearTimeout(debounceRef.current);
         debounceRef.current = setTimeout(() => {
             setDebouncedQuery(val);
-            setPage(0);
         }, 400);
     }, []);
 
     const isSearching = debouncedQuery.trim().length >= 2;
 
     // Folder contents URL (stable via useMemo)
+    // Default to root folder view for cleaner navigation
     const folderUrl = useMemo(() => {
         if (!isAuthenticated || isSearching) return null;
-        if (currentFolder) {
-            return `/api/plugins/google-drive/files/${currentFolder.id}/children?limit=100`;
-        }
-        return `/api/plugins/google-drive/files/recent?limit=${PAGE_SIZE + page * PAGE_SIZE}`;
-    }, [isAuthenticated, isSearching, currentFolder, page]);
+        const folderId = currentFolder?.id ?? 'root';
+        return `/api/plugins/google-drive/files/${folderId}/children?limit=100`;
+    }, [isAuthenticated, isSearching, currentFolder]);
 
     const { data: browseData, isLoading: loadingBrowse, refetch: refetchBrowse } =
         useApiQuery<DriveFile[]>(folderUrl);
@@ -195,7 +191,6 @@ function DriveFileBrowser({ isAuthenticated }: { isAuthenticated: boolean }) {
 
     const navigateToFolder = (file: DriveFile) => {
         setFolderStack(prev => [...prev, { id: file.id, name: file.name }]);
-        setPage(0);
         setSearchQuery('');
         setDebouncedQuery('');
     };
@@ -207,7 +202,6 @@ function DriveFileBrowser({ isAuthenticated }: { isAuthenticated: boolean }) {
         } else {
             setFolderStack(prev => prev.slice(0, index + 1));
         }
-        setPage(0);
     };
 
     const handleFileClick = (file: DriveFile) => {
@@ -347,17 +341,7 @@ function DriveFileBrowser({ isAuthenticated }: { isAuthenticated: boolean }) {
                 )}
             </div>
 
-            {/* Pagination — only in recent mode (no folder, no search) */}
-            {!isSearching && !currentFolder && (browseData?.length ?? 0) >= PAGE_SIZE + page * PAGE_SIZE && (
-                <div className="flex justify-center">
-                    <button
-                        onClick={() => setPage(p => p + 1)}
-                        className="flex items-center gap-1 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm transition-colors"
-                    >
-                        <ChevronRight size={14} /> Load more
-                    </button>
-                </div>
-            )}
+            {/* Pagination removed — folder-based browsing shows all children */}
 
             {previewFile && (
                 <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
