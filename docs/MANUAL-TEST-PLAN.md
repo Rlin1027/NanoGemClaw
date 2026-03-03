@@ -44,11 +44,9 @@ NanoGemClaw 是一個 Telegram AI 助手專案，在過去三天 (v1.1.0 → v1.
 - **驗證**：log 顯示 `chunks` > 1，Telegram 收到多則拆分訊息
 - **跳過原因**：Gemini 回覆 1904 字元（1495 tokens），未達 Telegram 4096 字元分割門檻。`splitMessageIntelligently`（`telegram-helpers.ts:214`）邏輯存在且有單元測試，但手動觸發需極長回覆。待討論：可嘗試多輪追問累積長文、或暫時降低 `MAX_TELEGRAM_LENGTH` 閾值來驗證
 
-### A7. 語音訊息（STT） ⏭️ 跳過
-- **操作**：在群組發送一則語音訊息
-- **驗證**：log 出現轉錄相關記錄，bot 回覆中包含 `🎤 Transcribed: "..."`
-- **前置**：需 ffmpeg 安裝（或使用 gemini STT provider）
-- **跳過原因**：尚未確認測試環境是否安裝 ffmpeg 或已設定 Gemini STT provider。待確認環境後重新測試
+### ~~A7. 語音訊息（STT）~~ ✅ 已測試通過
+> 在測試環境群組發送語音訊息 → Gemini multimodal 直接轉錄 `.oga` 音檔（不需 ffmpeg）→ 轉錄結果「這是測試計畫。」→ 耗時 3620ms。
+> **修復紀錄**：原 `transcribeWithGemini` 是 stub（回傳 placeholder），改為用 `@google/genai` SDK 的 `generateContent` 將音檔 base64 inline 傳送給 Gemini，支援 ogg/wav/mp3/aac/flac。
 
 ### ~~A8. 圖片生成~~ ✅ 已測試通過
 > `generate_image` function call 正常觸發，Telegram 收到照片
@@ -167,8 +165,8 @@ NanoGemClaw 是一個 Telegram AI 助手專案，在過去三天 (v1.1.0 → v1.
 ### D7. Concurrent Task Execution ⏭️ 待測
 > 需建立多個同時到期的任務，測試條件較複雜，待獨立測試。
 
-### D8. 任務強制執行（force-run） ⏭️ 功能不存在
-> Tasks API 沒有 force-run endpoint（只有 CRUD + status）。需新增 `POST /api/tasks/:id/run` 才能測試。
+### ~~D8. 任務強制執行（force-run）~~ ✅ 已實作
+> 新增 `POST /api/tasks/:taskId/run` endpoint + `forceRunTask()` export。驗證任務存在且狀態為 active/paused 後立即執行。
 
 ---
 
@@ -234,9 +232,9 @@ GOOGLE_CLIENT_SECRET=你的_client_secret
 > File Browser 預設顯示 root 資料夾結構（AI Prompt指南、Gemini Deep Research、n8n_Database 等），folders first 排序。點擊資料夾進入子目錄（breadcrumb 導航「My Drive > .git」），點擊檔案開啟預覽 modal（顯示文字內容）。搜尋功能正常。
 > **修復紀錄**：(1) 檔案預覽「Objects are not valid as a React child」— `apiFetch<string>` 改為正確 unwrap `{ content, truncated }` (2) Knowledge RAG tab「indexedFiles.map is not a function」— 正確 unwrap `{ files, totalDocuments, lastScanAt }` 信封 + 修正欄位名 (3) 新增資料夾導航功能（folder stack + breadcrumb + `GET /:id/children` API route）(4) 預設從 root 資料夾開始（不再顯示扁平 recent files）。
 
-### E9. Drive Knowledge RAG ⚠️ 部分通過
-> Config 保存成功（folder ID `1mZOfKYF46uoPjRsIrI9vjgc2wFwnBRvv`）、Reindex 觸發成功、Drive 文件掃描到 8 個文件（Codex CLI 教學、Gemini CLI 教學手冊、LLM 發展 MCP 與 RAG 應用 等）。
-> **❌ Embedding 失敗**：`text-embedding-004 is not found for API version v1beta`。原因：OAuth（Vertex AI）模式下 embedding API endpoint 不同於 API Key 模式。需修改 RAG plugin 的 embedding 呼叫以相容 Vertex AI。
+### ~~E9. Drive Knowledge RAG~~ ✅ 已測試通過
+> Config 保存成功、Reindex 觸發成功、10 個文件成功 indexed（含 chunks 分割）。
+> **修復紀錄**：原 `text-embedding-004` 在 Vertex AI v1beta 不可用。改用 `gemini-embedding-001`（同 `@google/genai` SDK，支援多語言，3072 維向量），embedding 完全正常。
 
 ---
 
@@ -338,12 +336,12 @@ GOOGLE_CLIENT_SECRET=你的_client_secret
 
 ## 已完成的測試（標記 ✅ 的項目）
 
-共 62 項已通過，分布在：
-- **Section A**：A1–A5, A8–A11（9/11）
+共 65 項已通過，分布在：
+- **Section A**：A1–A5, A7–A11（10/11）— A7 新增於 2026-03-04
 - **Section B**：B2–B6（4/6）
-- **Section C**：C1–C17（除 C15 外全部，16/17）— C5, C7, C14, C15, C16 新增於 2026-03-04
-- **Section D**：D1–D6（6/8）— D6 新增於 2026-03-04，D8 功能不存在
-- **Section E**：E1–E3, E3b–E3d, E4–E8（11/12，E9 部分通過）— 新增於 2026-03-04
+- **Section C**：C1–C17（全部，17/17）— C5, C7, C14, C15, C16 新增於 2026-03-04
+- **Section D**：D1–D6, D8（7/8）— D6, D8 新增於 2026-03-04
+- **Section E**：E1–E3, E3b–E3d, E4–E9（12/12，全部通過）— 新增於 2026-03-04
 - **Section F**：F1–F3, F5–F9（8/9）— F1, F7 更新於 2026-03-04
 - **Section G**：G2, G4–G8（6/8）— G4, G8 新增於 2026-03-04
 
