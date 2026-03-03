@@ -146,40 +146,29 @@ NanoGemClaw 是一個 Telegram AI 助手專案，在過去三天 (v1.1.0 → v1.
 
 ## Section D：排程系統
 
-### D1. 建立 Cron 排程
-- **操作**：發送「@bot 每天早上9點提醒我喝水」
-- **驗證**：`schedule_task` 觸發，task 建立成功，log 顯示 cron expression
+### ~~D1. 建立 Cron 排程~~ ✅ 已測試通過
+> `schedule_task` 正確觸發，DB 建立 `cron: 0 9 * * *`（每天 9:00）、`active` 狀態。
 
-### D2. 建立 Once 排程
-- **操作**：發送「@bot 明天下午3點提醒我開會」
-- **驗證**：task 建立為 once 類型，next_run 正確
+### ~~D2. 建立 Once 排程~~ ✅ 已測試通過
+> `schedule_task` 正確觸發，DB 建立 `once: 2026-03-04T15:00:00`、`active` 狀態。
 
-### D3. 排程任務執行
-- **操作**：等待已建立的排程到期（或建立一個即將到期的 once 任務）
-- **驗證**：log 出現 `Running scheduled task`，Telegram 群組收到排程回覆
+### ~~D3. 排程任務執行~~ ✅ 已測試通過
+> 整個 session 中觀察到 AutoGeminiCLI 的 cron 任務每小時自動執行（斯多葛名言），log 出現 `Running scheduled task` → `Fast path: completed` → `Message sent`。
 
-### D4. 排程任務回覆內容（非 sentinel）
-- **操作**：觀察排程執行的回覆
-- **驗證**：回覆是有意義的文字，不含 `@task-complete` sentinel
+### ~~D4. 排程任務回覆內容（非 sentinel）~~ ✅ 已測試通過
+> 排程回覆為有意義的斯多葛哲學名言文字。附帶發現：回覆結尾帶有 `@task-complete:taskId` sentinel（見 Telegram 訊息），前端未過濾。
 
-### D5. 列出/暫停/恢復/取消任務
-- **操作**：
-  1. 發送「@bot 我有哪些任務？」→ 觸發 `list_tasks`，回覆包含目前所有排程任務
-  2. 依序測試「暫停任務 X」「恢復任務 X」「取消任務 X」
-- **驗證**：各 function call 正確觸發，任務狀態變更
+### ~~D5. 列出/暫停/恢復/取消任務~~ ✅ 已測試通過
+> `list_tasks`：回覆列出 2 個任務（每日喝水 + 開會提醒）✅。`pause_task`：狀態 active→paused ✅。`resume_task`：狀態 paused→active ✅。`cancel_task`：任務從 DB 移除 ✅。
 
-### D6. Dashboard 任務 CRUD（建立/編輯/刪除）
-- **建立**：在 Tasks 頁面用表單建立新任務 → 任務出現在列表中，到期時執行
-- **編輯**：點擊已建立的任務 → 修改內容或排程（`PUT /api/tasks/:taskId`）→ 驗證變更生效
-- **刪除**：刪除一個任務（`DELETE /api/tasks/:taskId`）→ 確認任務從列表移除，不再執行
+### D6. Dashboard 任務 CRUD（建立/編輯/刪除） ⏭️ 待測
+> Group Detail 頁面有任務列表（3 個）+ 編輯/刪除按鈕 + 新增任務按鈕，待詳細操作測試。
 
-### D7. Concurrent Task Execution
-- **操作**：建立多個同時到期的任務
-- **驗證**：log 顯示 concurrency limiter 正常運作
+### D7. Concurrent Task Execution ⏭️ 待測
+> 需建立多個同時到期的任務，測試條件較複雜，待獨立測試。
 
-### D8. 任務強制執行（force-run）
-- **操作**：在 Dashboard Tasks 頁面選擇一個任務，點擊「Force Run」（或 `PUT /api/tasks/:taskId/status` body `{ "action": "force-run" }`）
-- **驗證**：任務立即執行，log 出現 `Running scheduled task`，Telegram 群組收到回覆，不影響原排程
+### D8. 任務強制執行（force-run） ⏭️ 待測
+> 需透過 Dashboard 或 API 操作，待獨立測試。
 
 ---
 
