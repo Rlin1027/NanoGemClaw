@@ -10,6 +10,7 @@ interface PendingMessage {
   timestamp: number;
   messageId?: number;
   messageThreadId?: number;
+  replyToMessage?: unknown;
 }
 
 interface ConsolidatedResult {
@@ -40,6 +41,7 @@ export class MessageConsolidator extends EventEmitter {
       isMedia?: boolean;
       debounceMs?: number;
       messageThreadId?: number;
+      replyToMessage?: unknown;
     },
   ): boolean {
     const key = `${chatId}:${options?.messageThreadId ?? 'null'}`;
@@ -57,6 +59,7 @@ export class MessageConsolidator extends EventEmitter {
       timestamp: Date.now(),
       messageId: options?.messageId,
       messageThreadId: options?.messageThreadId,
+      replyToMessage: options?.replyToMessage,
     };
 
     const existing = this.buffers.get(key) || [];

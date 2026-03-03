@@ -27,52 +27,40 @@ NanoGemClaw 是一個 Telegram AI 助手專案，在過去三天 (v1.1.0 → v1.
 ### ~~A1. 訊息處理基本流程~~ ✅ 已測試通過
 > 在高優先測試中多次驗證：`Processing message` → `Using fast path` → `Fast path: completed` → 回覆 + 建議按鈕
 
-### A2. Trigger 模式（requireTrigger）
-- **操作**：在 Dashboard 開啟 requireTrigger，然後分別發送「不帶 @bot」和「帶 @bot」的訊息
-- **驗證**：不帶 trigger 的訊息不應觸發處理；帶 trigger 的應正常回覆
+### ~~A2. Trigger 模式（requireTrigger）~~ ✅ 已測試通過
+> 帶 trigger 訊息正常處理（`Processing message` + 回覆）；不帶 trigger 訊息靜默忽略（無 `Processing message`）。預設 `requireTrigger !== false` 對非 main group 生效。
 
-### A3. 建議按鈕（Follow-up Suggestions）
-- **操作**：收到 bot 回覆後，點擊其中一個建議按鈕
-- **驗證**：log 出現新的 `Processing message`，bot 對建議內容做出回覆
-- **進階（toggle action）**：建議按鈕支援 3 種 action 類型：`reply`、`command`、`toggle`。若出現 toggle 類型按鈕，點擊後應切換對應狀態（如開/關某功能）
+### ~~A3. 建議按鈕（Follow-up Suggestions）~~ ✅ 已測試通過
+> `Callback query received {"action":"suggest:4"}` → 新 `Processing message` → `Fast path: completed`（1380 chars）+ 新建議按鈕。toggle action 類型待後續觸發時觀察。
 
-### A4. Retry 按鈕
-- **操作**：點擊任一 bot 回覆下方的 Retry 按鈕
-- **驗證**：bot 重新處理上一則訊息並更新回覆
-- **負面測試（rate limit）**：快速連續點擊 Retry 超過 5 次（60 秒內），應觸發 rate limit 拒絕
+### ~~A4. Retry 按鈕~~ ✅ 已測試通過
+> `Callback query received {"action":"retry:350"}` → `Processing message {"messageCount":1}` → `Fast path: completed`（1782 chars）。修復了建議按鈕產生的合成訊息 retry 失敗的 bug（移除 `suggest-` prefix）。Rate limit 負面測試待 G4 一併驗證。
 
-### A5. Feedback 按鈕
-- **操作**：點擊 Feedback 按鈕，再點 thumbs-up 或 thumbs-down
-- **驗證**：callback query 回應正常，無錯誤
+### ~~A5. Feedback 按鈕~~ ✅ 已測試通過
+> `feedback_menu:350` → 顯示評分按鈕 → `feedback:up:350` → `User feedback received {"rating":"up"}`，無錯誤。
 
-### A6. 長訊息分割
+### A6. 長訊息分割 ⏭️ 跳過
 - **操作**：發送一個會產生長回覆的提問（如「詳細列出台灣所有縣市及其特色」）
 - **驗證**：log 顯示 `chunks` > 1，Telegram 收到多則拆分訊息
+- **跳過原因**：Gemini 回覆 1904 字元（1495 tokens），未達 Telegram 4096 字元分割門檻。`splitMessageIntelligently`（`telegram-helpers.ts:214`）邏輯存在且有單元測試，但手動觸發需極長回覆。待討論：可嘗試多輪追問累積長文、或暫時降低 `MAX_TELEGRAM_LENGTH` 閾值來驗證
 
-### A7. 語音訊息（STT）
+### A7. 語音訊息（STT） ⏭️ 跳過
 - **操作**：在群組發送一則語音訊息
 - **驗證**：log 出現轉錄相關記錄，bot 回覆中包含 `🎤 Transcribed: "..."`
 - **前置**：需 ffmpeg 安裝（或使用 gemini STT provider）
+- **跳過原因**：尚未確認測試環境是否安裝 ffmpeg 或已設定 Gemini STT provider。待確認環境後重新測試
 
 ### ~~A8. 圖片生成~~ ✅ 已測試通過
 > `generate_image` function call 正常觸發，Telegram 收到照片
 
-### A9. 訊息合併（Consolidation）
-- **操作**：快速連續發送 2-3 則短訊息（間隔 < 500ms）
-- **驗證**：log 顯示 `messageCount` > 1，多則訊息被合併處理
+### ~~A9. 訊息合併（Consolidation）~~ ✅ 已測試通過
+> 快速連續發送 4 則訊息，log 顯示 `messageCount` 遞增（3→4→5），訊息合併機制正常運作。
 
-### A10. Reply Context Enrichment
-- **操作**：在群組中「回覆」某則舊訊息，並追問相關問題
-- **驗證**：bot 的回覆有參考到被回覆的訊息內容
+### ~~A10. Reply Context Enrichment~~ ✅ 已測試通過
+> 修復了 3 個 bug：(1) consolidation 遺失 `reply_to_message`（message-consolidator.ts）(2) reply context 未注入到 Gemini prompt（message-handler.ts 中 `content` 與 `prompt` 變數流斷裂）(3) 截斷長度 200→500 字元 + 指令格式強化。修復後回覆書單訊息時正確引用被回覆內容（promptTokens 3198 vs 原 2541）。
 
-### A11. Bot 斜線指令
-- **操作**：依序測試 5 個斜線指令：
-  1. `/start` — 啟動 bot，應顯示歡迎訊息和使用說明
-  2. `/tasks` — 列出目前群組的排程任務
-  3. `/persona` — 顯示可用人格列表或切換人格
-  4. `/report` — 取得近期活動摘要
-  5. `/help` — 顯示所有可用指令
-- **驗證**：每個指令回覆正確內容，無錯誤
+### ~~A11. Bot 斜線指令~~ ✅ 已測試通過
+> 5 個指令全部從 Telegram 自動補全選單成功觸發：`/start`（406 chars）、`/tasks`（觸發 `list_tasks` function call）、`/persona`（434 chars）、`/report`（610 chars）、`/help`（517 chars）。修復了 `/command@BotName` 格式在群組中被 trigger check 攔截的 bug。
 
 ---
 

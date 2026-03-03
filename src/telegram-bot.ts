@@ -59,6 +59,8 @@ export async function connectTelegram(): Promise<void> {
     try {
       // Create a synthetic message with combined text
       const lastMsg = result.messages[result.messages.length - 1];
+      // Preserve reply_to_message from the first message that has one
+      const replyToMsg = result.messages.find((m: any) => m.replyToMessage)?.replyToMessage;
       const syntheticMsg = {
         chat: { id: parseInt(chatId), type: 'group' as const },
         text: result.combinedText,
@@ -68,6 +70,7 @@ export async function connectTelegram(): Promise<void> {
         ...(result.messageThreadId
           ? { message_thread_id: result.messageThreadId }
           : {}),
+        ...(replyToMsg ? { reply_to_message: replyToMsg } : {}),
       } as TelegramBot.Message;
 
       await processMessage(syntheticMsg);
@@ -165,6 +168,7 @@ export async function connectTelegram(): Promise<void> {
           isMedia,
           debounceMs,
           messageThreadId: msg.message_thread_id,
+          replyToMessage: msg.reply_to_message,
         });
 
         // If buffered, wait for consolidation event; otherwise process immediately
@@ -297,7 +301,7 @@ export async function connectTelegram(): Promise<void> {
             const senderName = query.from.first_name;
             const senderId = query.from.id.toString();
             const timestamp = new Date().toISOString();
-            const msgId = `suggest-${Date.now()}`;
+            const msgId = Date.now().toString();
             const fullText = `@${ASSISTANT_NAME} ${suggestionText}`;
             const threadId = query.message?.message_thread_id;
 
@@ -313,7 +317,7 @@ export async function connectTelegram(): Promise<void> {
             );
 
             const fakeMsg: TelegramBot.Message = {
-              message_id: parseInt(msgId.replace('suggest-', '')),
+              message_id: parseInt(msgId),
               chat: { id: parseInt(chatId), type: 'group' },
               date: Math.floor(Date.now() / 1000),
               text: fullText,

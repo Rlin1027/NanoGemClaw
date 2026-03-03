@@ -90,8 +90,15 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
   }
 
   // Check if trigger prefix is required (main group always responds; others check requireTrigger setting)
+  // Slash commands directed at this bot (e.g. /start@BotName) bypass trigger check
+  const botCommandPattern = new RegExp(`^/\\w+@${ASSISTANT_NAME}\\b`, 'i');
+  const isBotCommand = botCommandPattern.test(content);
+  if (isBotCommand) {
+    // Strip @BotName suffix so commands work uniformly (e.g. /start@Bot → /start)
+    content = content.replace(new RegExp(`@${ASSISTANT_NAME}\\b`, 'i'), '').trim();
+  }
   const needsTrigger = !isMainGroup && group.requireTrigger !== false;
-  if (needsTrigger && !TRIGGER_PATTERN.test(content)) return;
+  if (needsTrigger && !isBotCommand && !TRIGGER_PATTERN.test(content)) return;
 
   // Onboarding check for new groups (before processing first message)
   const isCommand = content.startsWith('/');
@@ -142,7 +149,8 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
     const replyMsg = msg.reply_to_message;
     const replySender = replyMsg.from?.first_name || 'Unknown';
     const replyContent = replyMsg.text || replyMsg.caption || '[非文字內容]';
-    replyContext = `[回復 ${replySender} 的訊息: "${replyContent.slice(0, 200)}${replyContent.length > 200 ? '...' : ''}"]\n`;
+    const truncatedReply = replyContent.slice(0, 500) + (replyContent.length > 500 ? '...' : '');
+    replyContext = `[使用者正在回覆 ${replySender} 的以下訊息，請根據此訊息內容回答]\n---\n${truncatedReply}\n---\n`;
     content = replyContext + content;
     logger.info(
       { chatId, replyToId: replyMsg.message_id },
@@ -264,7 +272,12 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
         .replace(/"/g, '&quot;');
     return `<message sender="${escapeXml(m.sender_name)}" time="${m.timestamp}">${escapeXml(m.content)}</message>`;
   });
-  const prompt = `<messages>\n${lines.join('\n')}\n</messages>`;
+  let prompt = `<messages>\n${lines.join('\n')}\n</messages>`;
+
+  // Inject reply context into prompt so Gemini can see the referenced message
+  if (replyContext) {
+    prompt = `${replyContext}\n${prompt}`;
+  }
 
   logger.info(
     { group: group.name, messageCount: missedMessages.length },
