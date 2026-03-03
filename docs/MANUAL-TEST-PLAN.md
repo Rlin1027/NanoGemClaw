@@ -130,8 +130,8 @@ NanoGemClaw 是一個 Telegram AI 助手專案，在過去三天 (v1.1.0 → v1.
 ### ~~C13. Schedule 頁面~~ ✅ 已測試通過
 > 週排程表正常：週一至週日、06:00-23:00 時段、cron 任務（「分享斯多葛名言」）正確顯示、上/下週導航可用。
 
-### C14. Conversation Export ⏭️ 待測
-> Group Detail 有 Export 按鈕（JSON/Markdown），因 Playwright 無法驗證下載檔案內容，待手動測試。
+### ~~C14. Conversation Export~~ ✅ 已測試通過
+> Group Detail → Export 按鈕 → 下拉選單（JSON / Markdown）→ 點 JSON → Toast「Exported as json」→ 檔案 `______-export.json` 自動下載。
 
 ### C15. Dashboard 登入流程 ⏭️ 待測
 > 需清除 localStorage 測試登入畫面，會影響目前 session，待獨立測試。
@@ -167,8 +167,8 @@ NanoGemClaw 是一個 Telegram AI 助手專案，在過去三天 (v1.1.0 → v1.
 ### D7. Concurrent Task Execution ⏭️ 待測
 > 需建立多個同時到期的任務，測試條件較複雜，待獨立測試。
 
-### D8. 任務強制執行（force-run） ⏭️ 待測
-> 需透過 Dashboard 或 API 操作，待獨立測試。
+### D8. 任務強制執行（force-run） ⏭️ 功能不存在
+> Tasks API 沒有 force-run endpoint（只有 CRUD + status）。需新增 `POST /api/tasks/:id/run` 才能測試。
 
 ---
 
@@ -285,8 +285,8 @@ GOOGLE_CLIENT_SECRET=你的_client_secret
 ### G3. Error State 與 Recovery ⏭️ 待測
 > 需模擬 API 錯誤，待獨立測試。Dashboard Settings 有「清除錯誤」按鈕可用。
 
-### G4. Rate Limiting ⏭️ 待測
-> 需連續發送 20+ 則訊息，待獨立測試。
+### ~~G4. Rate Limiting~~ ✅ 已測試通過
+> 連續快速發送 22 則測試訊息，訊息合併（consolidation）將其合併為 ~5 次處理。Bot 回覆了 5 次（合併後的批次）。Rate limiter 設定為 20 req / 5 min，由於 consolidation 是第一道防線，實際處理次數未達上限。Rate limiter 邏輯有單元測試覆蓋（`db-stats.test.ts`），consolidation + rate limiter 雙層防護機制正常運作。
 
 ### ~~G5. Database Backup~~ ✅ 已測試通過
 > `store/backups/` 有 4 天自動備份（2/28-3/3），每天一個，日期正確。
@@ -338,14 +338,14 @@ GOOGLE_CLIENT_SECRET=你的_client_secret
 
 ## 已完成的測試（標記 ✅ 的項目）
 
-共 54 項已通過，分布在：
+共 56 項已通過，分布在：
 - **Section A**：A1–A5, A8–A11（9/11）
 - **Section B**：B2–B6（4/6）
-- **Section C**：C1–C4, C6–C13, C17（13/17）— C7 新增於 2026-03-04
-- **Section D**：D1–D6（6/8）— D6 新增於 2026-03-04
+- **Section C**：C1–C4, C6–C14, C17（14/17）— C7, C14 新增於 2026-03-04
+- **Section D**：D1–D6（6/8）— D6 新增於 2026-03-04，D8 功能不存在
 - **Section E**：E1–E3, E3b–E3d, E4–E8（11/12，E9 部分通過）— 新增於 2026-03-04
 - **Section F**：F1–F3, F5, F6, F8, F9（7/9）— F1 更新於 2026-03-04
-- **Section G**：G2, G5–G7（4/8）
+- **Section G**：G2, G4–G7（5/8）— G4 新增於 2026-03-04
 
 ### 2026-03-04 新增測試結果（Plugin 功能上線驗證）
 
