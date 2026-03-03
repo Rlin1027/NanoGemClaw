@@ -161,8 +161,8 @@ NanoGemClaw 是一個 Telegram AI 助手專案，在過去三天 (v1.1.0 → v1.
 ### ~~D5. 列出/暫停/恢復/取消任務~~ ✅ 已測試通過
 > `list_tasks`：回覆列出 2 個任務（每日喝水 + 開會提醒）✅。`pause_task`：狀態 active→paused ✅。`resume_task`：狀態 paused→active ✅。`cancel_task`：任務從 DB 移除 ✅。
 
-### D6. Dashboard 任務 CRUD（建立/編輯/刪除） ⏭️ 待測
-> Group Detail 頁面有任務列表（3 個）+ 編輯/刪除按鈕 + 新增任務按鈕，待詳細操作測試。
+### ~~D6. Dashboard 任務 CRUD（建立/暫停/刪除）~~ ✅ 已測試通過
+> Group Detail → 排程任務 → 「+ 新增任務」→ modal（群組選擇、提示詞、排程類型 cron/interval/once、cron preset 按鈕、context mode）→ 建立成功。暫停：active → paused，按鈕變「繼續」。刪除：confirm dialog → 任務移除。
 
 ### D7. Concurrent Task Execution ⏭️ 待測
 > 需建立多個同時到期的任務，測試條件較複雜，待獨立測試。
@@ -213,33 +213,30 @@ GOOGLE_CLIENT_SECRET=你的_client_secret
 ### ~~E3c. Google Calendar — 刪除事件~~ ✅ 已測試通過
 > 發送「取消明天的團隊會議」→ `list_calendar_events` → `delete_calendar_event` 正常。Bot 回覆「OK！我已經幫你取消明天（3 月 4 日）下午 4 點的 *團隊會議* 了。」Google Calendar 事件已移除。
 
-### E3d. Google Calendar — 可用時段查詢 ⏭️ 待測
-- **操作**：發送「@bot 我明天下午有空嗎？」
-- **驗證**：觸發 `check_availability`，回覆包含指定時段的空閒/忙碌狀態
+### ~~E3d. Google Calendar — 可用時段查詢~~ ✅ 已測試通過
+> 發送「我明天下午有空嗎？」→ `check_availability` 觸發。Bot 回覆「你明天（3 月 4 日）下午目前是全空的喔！原本排定的團隊會議已經取消了。」正確引用先前刪除的事件。
 
-### E4. Google Calendar — Dashboard 頁面 ⏭️ 待測
-- **操作**：打開 Calendar 頁面，查看 Google Calendar 事件
-- **驗證**：事件正確顯示，可建立新事件
+### ~~E4. Google Calendar — Dashboard 頁面~~ ✅ 已測試通過
+> Calendar 頁面正常載入：「Google Calendar 已連接」、「未來 7 天無即將到來的事件」、7d/14d/30d 選擇器、新增事件/行事曆按鈕。
+> **修復紀錄**：頁面原有嚴重 bug — `new Date().toISOString()` 在每次 render 產生新 URL，導致 `useApiQuery` 的 `useEffect` 無限重觸發（100+ requests/second）。修復：`useMemo([isGoogleAuthenticated, days])` 穩定 URL + `useApiQuery` 支援 `null` endpoint 跳過 fetch。
 
 ### ~~E5. Google Tasks — 建立任務~~ ✅ 已測試通過
 > 發送「在Google Tasks建立一個任務『準備週五簡報資料』」→ `create_google_task` 觸發，Google Tasks 成功建立任務。Bot 回覆「📝 *準備週五簡報資料*」+ follow-up 建議（設定截止日期、查看未完成任務等）。
 > **完成任務**：未測試。
 
-### E6. Google Tasks — Dashboard 同步 ⏭️ 待測
-- **操作**：在 Tasks 頁面查看 Google Tasks tab，點擊 Sync Now
-- **驗證**：同步完成，顯示最新的 Google Tasks 列表
+### ~~E6. Google Tasks — Dashboard 同步~~ ✅ 已測試通過
+> Settings → Google Tasks → Sync Now → Toast「Sync started」→ Last Sync 更新為當前時間。
 
 ### ~~E7. Google Drive — 搜尋檔案~~ ✅ 已測試通過
 > 發送「搜尋Google Drive裡檔名有簡報的文件」→ `search_drive` 觸發，回覆包含 4 個真實 Drive 文件（marketing-assets-brief.md、MeetingSummary_20251113.md、main、HEAD），含修改日期。
 
-### E8. Google Drive — Dashboard 頁面 ⏭️ 待測
-- **操作**：打開 Drive 頁面，搜尋檔案
-- **驗證**：檔案列表正確，可預覽內容
-- **進階（資料夾配置）**：在 Drive 頁面設定監控資料夾（`POST /api/plugins/google-drive/folders/config`），驗證設定儲存成功並生效
+### ~~E8. Google Drive — Dashboard 頁面~~ ✅ 已測試通過
+> File Browser 預設顯示 root 資料夾結構（AI Prompt指南、Gemini Deep Research、n8n_Database 等），folders first 排序。點擊資料夾進入子目錄（breadcrumb 導航「My Drive > .git」），點擊檔案開啟預覽 modal（顯示文字內容）。搜尋功能正常。
+> **修復紀錄**：(1) 檔案預覽「Objects are not valid as a React child」— `apiFetch<string>` 改為正確 unwrap `{ content, truncated }` (2) Knowledge RAG tab「indexedFiles.map is not a function」— 正確 unwrap `{ files, totalDocuments, lastScanAt }` 信封 + 修正欄位名 (3) 新增資料夾導航功能（folder stack + breadcrumb + `GET /:id/children` API route）(4) 預設從 root 資料夾開始（不再顯示扁平 recent files）。
 
-### E9. Drive Knowledge RAG ⏭️ 待測
-- **操作**：在 Drive 頁面 RAG tab 設定 folder IDs，觸發 reindex
-- **驗證**：indexing 完成後，在 Telegram 問相關問題可搜尋到 Drive 內容
+### E9. Drive Knowledge RAG ⚠️ 部分通過
+> Config 保存成功（folder ID `1mZOfKYF46uoPjRsIrI9vjgc2wFwnBRvv`）、Reindex 觸發成功、Drive 文件掃描到 8 個文件（Codex CLI 教學、Gemini CLI 教學手冊、LLM 發展 MCP 與 RAG 應用 等）。
+> **❌ Embedding 失敗**：`text-embedding-004 is not found for API version v1beta`。原因：OAuth（Vertex AI）模式下 embedding API endpoint 不同於 API Key 模式。需修改 RAG plugin 的 embedding 呼叫以相容 Vertex AI。
 
 ---
 
@@ -341,12 +338,12 @@ GOOGLE_CLIENT_SECRET=你的_client_secret
 
 ## 已完成的測試（標記 ✅ 的項目）
 
-共 48 項已通過（含 Section E 新增 7 項、F1 更新），分布在：
+共 53 項已通過，分布在：
 - **Section A**：A1–A5, A8–A11（9/11）
 - **Section B**：B2–B6（4/6）
 - **Section C**：C1–C4, C6, C8–C13, C17（12/17）
-- **Section D**：D1–D5（5/8）
-- **Section E**：E1–E3, E3b, E3c, E5, E7（7/12）— 新增於 2026-03-04
+- **Section D**：D1–D6（6/8）— D6 新增於 2026-03-04
+- **Section E**：E1–E3, E3b–E3d, E4–E8（11/12，E9 部分通過）— 新增於 2026-03-04
 - **Section F**：F1–F3, F5, F6, F8, F9（7/9）— F1 更新於 2026-03-04
 - **Section G**：G2, G5–G7（4/8）
 
