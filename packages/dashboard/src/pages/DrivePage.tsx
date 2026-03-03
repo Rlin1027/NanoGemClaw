@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
     HardDrive, Search, ExternalLink, FileText, FileImage, FileVideo, FileAudio,
     File, RefreshCw, Trash2, Database, FolderSearch, Plus, X, Loader2,
-    ChevronRight, AlertCircle, CheckCircle2,
+    ChevronRight, AlertCircle, CheckCircle2, Folder, Home,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useApiQuery, useApiMutation, apiFetch } from '../hooks/useApi';
@@ -28,15 +28,17 @@ interface RAGConfig {
 }
 
 interface IndexedFile {
-    id: string;
+    fileId: string;
     name: string;
+    mimeType?: string;
     chunkCount: number;
-    lastIndexed: string;
+    modifiedTime: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getMimeIcon(mimeType: string) {
+    if (mimeType === 'application/vnd.google-apps.folder') return <Folder size={16} className="text-amber-400" />;
     if (mimeType.startsWith('image/')) return <FileImage size={16} className="text-purple-400" />;
     if (mimeType.startsWith('video/')) return <FileVideo size={16} className="text-pink-400" />;
     if (mimeType.startsWith('audio/')) return <FileAudio size={16} className="text-yellow-400" />;
@@ -70,8 +72,8 @@ function FilePreviewModal({ file, onClose }: { file: DriveFile; onClose: () => v
         let cancelled = false;
         setLoading(true);
         setError(false);
-        apiFetch<string>(`/api/plugins/google-drive/files/${file.id}/content`)
-            .then(data => { if (!cancelled) setContent(data); })
+        apiFetch<{ content: string; truncated: boolean }>(`/api/plugins/google-drive/files/${file.id}/content`)
+            .then(data => { if (!cancelled) setContent(data.content); })
             .catch(() => { if (!cancelled) setError(true); })
             .finally(() => { if (!cancelled) setLoading(false); });
         return () => { cancelled = true; };
@@ -132,9 +134,11 @@ function DriveFileBrowser({ isAuthenticated }: { isAuthenticated: boolean }) {
     const [debouncedQuery, setDebouncedQuery] = useState('');
     const [page, setPage] = useState(0);
     const [previewFile, setPreviewFile] = useState<DriveFile | null>(null);
+    const [folderStack, setFolderStack] = useState<{ id: string; name: string }[]>([]);
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const PAGE_SIZE = 20;
+    const currentFolder = folderStack.length > 0 ? folderStack[folderStack.length - 1] : null;
 
     // Debounce search input
     const handleSearchChange = useCallback((val: string) => {
@@ -148,8 +152,17 @@ function DriveFileBrowser({ isAuthenticated }: { isAuthenticated: boolean }) {
 
     const isSearching = debouncedQuery.trim().length >= 2;
 
-    const { data: recentData, isLoading: loadingRecent, refetch: refetchRecent } =
-        useApiQuery<DriveFile[]>(`/api/plugins/google-drive/files/recent?maxResults=${PAGE_SIZE + page * PAGE_SIZE}`);
+    // Folder contents URL (stable via useMemo)
+    const folderUrl = useMemo(() => {
+        if (!isAuthenticated || isSearching) return null;
+        if (currentFolder) {
+            return `/api/plugins/google-drive/files/${currentFolder.id}/children?limit=100`;
+        }
+        return `/api/plugins/google-drive/files/recent?limit=${PAGE_SIZE + page * PAGE_SIZE}`;
+    }, [isAuthenticated, isSearching, currentFolder, page]);
+
+    const { data: browseData, isLoading: loadingBrowse, refetch: refetchBrowse } =
+        useApiQuery<DriveFile[]>(folderUrl);
 
     const [searchResults, setSearchResults] = useState<DriveFile[]>([]);
     const [searchLoading, setSearchLoading] = useState(false);
@@ -167,8 +180,43 @@ function DriveFileBrowser({ isAuthenticated }: { isAuthenticated: boolean }) {
         return () => { cancelled = true; };
     }, [debouncedQuery, isSearching]);
 
-    const files = isSearching ? searchResults : (recentData ?? []);
-    const loading = isSearching ? searchLoading : loadingRecent;
+    // Sort: folders first, then files
+    const sortedFiles = useMemo(() => {
+        const raw = isSearching ? searchResults : (browseData ?? []);
+        return [...raw].sort((a, b) => {
+            const aIsFolder = a.mimeType === 'application/vnd.google-apps.folder' ? 0 : 1;
+            const bIsFolder = b.mimeType === 'application/vnd.google-apps.folder' ? 0 : 1;
+            if (aIsFolder !== bIsFolder) return aIsFolder - bIsFolder;
+            return a.name.localeCompare(b.name);
+        });
+    }, [isSearching, searchResults, browseData]);
+
+    const loading = isSearching ? searchLoading : loadingBrowse;
+
+    const navigateToFolder = (file: DriveFile) => {
+        setFolderStack(prev => [...prev, { id: file.id, name: file.name }]);
+        setPage(0);
+        setSearchQuery('');
+        setDebouncedQuery('');
+    };
+
+    const navigateToBreadcrumb = (index: number) => {
+        // -1 = root (My Drive)
+        if (index < 0) {
+            setFolderStack([]);
+        } else {
+            setFolderStack(prev => prev.slice(0, index + 1));
+        }
+        setPage(0);
+    };
+
+    const handleFileClick = (file: DriveFile) => {
+        if (file.mimeType === 'application/vnd.google-apps.folder') {
+            navigateToFolder(file);
+        } else {
+            setPreviewFile(file);
+        }
+    };
 
     if (!isAuthenticated) {
         return (
@@ -198,15 +246,41 @@ function DriveFileBrowser({ isAuthenticated }: { isAuthenticated: boolean }) {
                         className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-10 pr-4 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                     />
                 </div>
-                {!isSearching && (
-                    <button
-                        onClick={() => refetchRecent()}
-                        className="flex items-center gap-1 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs transition-colors"
-                    >
-                        <RefreshCw size={14} /> Refresh
-                    </button>
-                )}
+                <button
+                    onClick={() => refetchBrowse()}
+                    className="flex items-center gap-1 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs transition-colors"
+                >
+                    <RefreshCw size={14} /> Refresh
+                </button>
             </div>
+
+            {/* Breadcrumb (shown when in a folder or when not searching) */}
+            {!isSearching && folderStack.length > 0 && (
+                <nav className="flex items-center gap-1 text-sm text-slate-400 flex-wrap">
+                    <button
+                        onClick={() => navigateToBreadcrumb(-1)}
+                        className="flex items-center gap-1 hover:text-blue-400 transition-colors px-1.5 py-0.5 rounded hover:bg-slate-800"
+                    >
+                        <Home size={14} /> My Drive
+                    </button>
+                    {folderStack.map((folder, idx) => (
+                        <span key={folder.id} className="flex items-center gap-1">
+                            <ChevronRight size={12} className="text-slate-600" />
+                            <button
+                                onClick={() => navigateToBreadcrumb(idx)}
+                                className={cn(
+                                    'px-1.5 py-0.5 rounded transition-colors',
+                                    idx === folderStack.length - 1
+                                        ? 'text-slate-200 font-medium'
+                                        : 'hover:text-blue-400 hover:bg-slate-800'
+                                )}
+                            >
+                                {folder.name}
+                            </button>
+                        </span>
+                    ))}
+                </nav>
+            )}
 
             {/* File List */}
             <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
@@ -218,55 +292,63 @@ function DriveFileBrowser({ isAuthenticated }: { isAuthenticated: boolean }) {
                     <span />
                 </div>
 
-                {loading && files.length === 0 ? (
+                {loading && sortedFiles.length === 0 ? (
                     <div className="flex items-center justify-center py-12 text-slate-500 gap-2">
                         <Loader2 size={18} className="animate-spin" /> Loading files...
                     </div>
-                ) : files.length === 0 ? (
+                ) : sortedFiles.length === 0 ? (
                     <div className="flex items-center justify-center py-12 text-slate-500 text-sm">
-                        {isSearching ? 'No files match your search.' : 'No recent files.'}
+                        {isSearching ? 'No files match your search.' : currentFolder ? 'This folder is empty.' : 'No recent files.'}
                     </div>
                 ) : (
                     <div className="divide-y divide-slate-800/60">
-                        {files.map(file => (
-                            <div
-                                key={file.id}
-                                className="grid grid-cols-[auto_1fr_auto_auto_auto] items-center gap-x-4 px-4 py-2.5 hover:bg-slate-800/40 transition-colors group"
-                            >
-                                <span className="flex-shrink-0">{getMimeIcon(file.mimeType)}</span>
-                                <button
-                                    onClick={() => setPreviewFile(file)}
-                                    className="text-sm text-slate-200 hover:text-blue-400 truncate text-left transition-colors"
+                        {sortedFiles.map(file => {
+                            const isFolder = file.mimeType === 'application/vnd.google-apps.folder';
+                            return (
+                                <div
+                                    key={file.id}
+                                    className="grid grid-cols-[auto_1fr_auto_auto_auto] items-center gap-x-4 px-4 py-2.5 hover:bg-slate-800/40 transition-colors group"
                                 >
-                                    {file.name}
-                                </button>
-                                <span className="text-xs text-slate-500 text-right whitespace-nowrap">
-                                    {formatDate(file.modifiedTime)}
-                                </span>
-                                <span className="text-xs text-slate-500 text-right whitespace-nowrap">
-                                    {formatSize(file.size)}
-                                </span>
-                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    {file.webViewLink && (
-                                        <a
-                                            href={file.webViewLink}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="p-1 text-slate-500 hover:text-blue-400 transition-colors"
-                                            title="Open in Drive"
-                                        >
-                                            <ExternalLink size={13} />
-                                        </a>
-                                    )}
+                                    <span className="flex-shrink-0">{getMimeIcon(file.mimeType)}</span>
+                                    <button
+                                        onClick={() => handleFileClick(file)}
+                                        className={cn(
+                                            'text-sm truncate text-left transition-colors',
+                                            isFolder
+                                                ? 'text-amber-200 hover:text-amber-400 font-medium'
+                                                : 'text-slate-200 hover:text-blue-400'
+                                        )}
+                                    >
+                                        {file.name}
+                                    </button>
+                                    <span className="text-xs text-slate-500 text-right whitespace-nowrap">
+                                        {formatDate(file.modifiedTime)}
+                                    </span>
+                                    <span className="text-xs text-slate-500 text-right whitespace-nowrap">
+                                        {isFolder ? '—' : formatSize(file.size)}
+                                    </span>
+                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        {file.webViewLink && (
+                                            <a
+                                                href={file.webViewLink}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="p-1 text-slate-500 hover:text-blue-400 transition-colors"
+                                                title="Open in Drive"
+                                            >
+                                                <ExternalLink size={13} />
+                                            </a>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>
 
-            {/* Pagination — only in recent mode */}
-            {!isSearching && (recentData?.length ?? 0) >= PAGE_SIZE + page * PAGE_SIZE && (
+            {/* Pagination — only in recent mode (no folder, no search) */}
+            {!isSearching && !currentFolder && (browseData?.length ?? 0) >= PAGE_SIZE + page * PAGE_SIZE && (
                 <div className="flex justify-center">
                     <button
                         onClick={() => setPage(p => p + 1)}
@@ -288,8 +370,11 @@ function DriveFileBrowser({ isAuthenticated }: { isAuthenticated: boolean }) {
 
 function KnowledgeRAGPanel({ isAuthenticated }: { isAuthenticated: boolean }) {
     const { data: config, refetch: refetchConfig } = useApiQuery<RAGConfig>('/api/plugins/drive-knowledge-rag/config');
-    const { data: indexedFiles, isLoading: loadingFiles, refetch: refetchFiles } =
-        useApiQuery<IndexedFile[]>('/api/plugins/drive-knowledge-rag/indexed-files');
+    const { data: indexedFilesData, isLoading: loadingFiles, refetch: refetchFiles } =
+        useApiQuery<{ files: IndexedFile[]; totalDocuments: number; lastScanAt: string }>(
+            '/api/plugins/drive-knowledge-rag/indexed-files'
+        );
+    const indexedFiles = indexedFilesData?.files ?? [];
     const { mutate: updateConfig, isLoading: savingConfig } =
         useApiMutation<any, Partial<RAGConfig>>('/api/plugins/drive-knowledge-rag/config', 'PUT');
 
@@ -463,7 +548,7 @@ function KnowledgeRAGPanel({ isAuthenticated }: { isAuthenticated: boolean }) {
                     <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
                         <Database size={14} className="text-purple-400" />
                         Indexed Files
-                        {indexedFiles && (
+                        {indexedFiles.length > 0 && (
                             <span className="text-xs font-normal text-slate-500 normal-case tracking-normal ml-1">
                                 ({indexedFiles.length})
                             </span>
@@ -478,7 +563,7 @@ function KnowledgeRAGPanel({ isAuthenticated }: { isAuthenticated: boolean }) {
                     <div className="flex items-center justify-center py-10 text-slate-500 gap-2">
                         <Loader2 size={16} className="animate-spin" /> Loading...
                     </div>
-                ) : !indexedFiles || indexedFiles.length === 0 ? (
+                ) : indexedFiles.length === 0 ? (
                     <div className="text-center py-10 text-slate-500 text-sm">
                         No files indexed yet. Add folders and click "Reindex Now".
                     </div>
@@ -490,7 +575,7 @@ function KnowledgeRAGPanel({ isAuthenticated }: { isAuthenticated: boolean }) {
                             <span className="text-right">Last Indexed</span>
                         </div>
                         {indexedFiles.map(file => (
-                            <div key={file.id} className="grid grid-cols-[1fr_auto_auto] gap-x-4 px-4 py-2.5 items-center hover:bg-slate-800/30 transition-colors">
+                            <div key={file.fileId} className="grid grid-cols-[1fr_auto_auto] gap-x-4 px-4 py-2.5 items-center hover:bg-slate-800/30 transition-colors">
                                 <span className="text-sm text-slate-200 truncate flex items-center gap-2">
                                     <FileText size={14} className="text-slate-500 flex-shrink-0" />
                                     {file.name}
@@ -499,7 +584,7 @@ function KnowledgeRAGPanel({ isAuthenticated }: { isAuthenticated: boolean }) {
                                     {file.chunkCount}
                                 </span>
                                 <span className="text-xs text-slate-500 text-right whitespace-nowrap">
-                                    {formatDate(file.lastIndexed)}
+                                    {formatDate(file.modifiedTime)}
                                 </span>
                             </div>
                         ))}

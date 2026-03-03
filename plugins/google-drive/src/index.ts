@@ -30,6 +30,7 @@ import {
   listRecentFiles,
   getFileMetadata,
   getFileContent,
+  listFolderContents,
 } from './drive-api.js';
 import { extractContent } from './content-extractor.js';
 
@@ -314,6 +315,31 @@ function createFilesRouter(): Router {
       res.json({ data: result });
     } catch {
       res.status(500).json({ error: 'Failed to search files' });
+    }
+  });
+
+  // GET /:id/children — list folder contents
+  router.get('/:id/children', async (req, res) => {
+    try {
+      if (!isAuthenticated()) {
+        res.status(401).json({ error: 'Google Drive not authenticated' });
+        return;
+      }
+
+      const folderId = req.params['id'];
+      if (!folderId || !/^[a-zA-Z0-9_-]+$/.test(folderId)) {
+        res.status(400).json({ error: 'Invalid folder ID' });
+        return;
+      }
+
+      const rawMax = Number(req.query['limit'] ?? 100);
+      const maxResults = Number.isFinite(rawMax)
+        ? Math.min(Math.max(1, rawMax), 1000)
+        : 100;
+      const files = await listFolderContents(folderId, { maxResults });
+      res.json({ data: files });
+    } catch {
+      res.status(500).json({ error: 'Failed to list folder contents' });
     }
   });
 
