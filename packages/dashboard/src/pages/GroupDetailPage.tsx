@@ -228,7 +228,7 @@ export function GroupDetailPage({ groupFolder, onBack }: GroupDetailPageProps) {
                     />
                     {/* Model Selector */}
                     <ModelSelector
-                        value={(group as any).geminiModel || 'auto'}
+                        value={group.geminiModel || 'auto'}
                         onChange={model => handleSettingChange({ geminiModel: model })}
                         disabled={saving}
                     />

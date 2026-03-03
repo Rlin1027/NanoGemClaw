@@ -10,6 +10,7 @@ interface GroupDetail {
     persona?: string;
     requireTrigger?: boolean;
     enableWebSearch?: boolean;
+    geminiModel?: string;
     folder: string;
     tasks: any[];
     usage: {
@@ -53,6 +54,7 @@ export function useGroupDetail(folder: string | undefined) {
         enableWebSearch?: boolean;
         requireTrigger?: boolean;
         name?: string;
+        geminiModel?: string;
     }) => {
         if (!folder) return;
         try {

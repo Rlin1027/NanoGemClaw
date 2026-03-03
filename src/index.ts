@@ -203,6 +203,7 @@ async function main(): Promise<void> {
         requireTrigger: group.requireTrigger,
         enableWebSearch: group.enableWebSearch,
         enableFastPath: group.enableFastPath,
+        geminiModel: group.geminiModel,
         folder: group.folder,
       };
     });

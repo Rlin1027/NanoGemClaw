@@ -83,9 +83,8 @@ NanoGemClaw 是一個 Telegram AI 助手專案，在過去三天 (v1.1.0 → v1.
 ### ~~B5. Fast Path Fallback to Container~~ ✅ 已測試通過
 > 圖片 fallback 到 container 路徑正常：`Spawning container agent` → `Container completed {"duration":22011,"status":"success"}`。修復 3 個問題：(1) 媒體訊息 bypass trigger check（不需加 @bot caption）(2) container system 未啟動導致超時（需先 `container system start`）(3) 容器內 Gemini CLI 認證失敗 — 改為掛載 host OAuth credentials + writable .gemini 目錄（Apple Container 不支援 readonly parent + writable child overlay）。附帶發現 IPC JSON parse error（非 blocking，待修）。
 
-### B6. Per-group Model Selection
-- **操作**：在 Dashboard 將群組模型改為特定模型，發送訊息
-- **驗證**：log 中 `model` 欄位反映所選模型
+### ~~B6. Per-group Model Selection~~ ✅ 已測試通過
+> 切換模型為 `gemini-2.5-pro`，log 顯示 `Fast path: starting {"model":"gemini-2.5-pro"}`。修復了 Dashboard model selector 跳回 auto 的 bug（`groupsProvider` 和 `GroupDetail` 缺少 `geminiModel` 欄位）。附註：`gemini-2.5-pro` fast path 報 400（不支援多 tools），自動 fallback container 成功。
 
 ---
 
