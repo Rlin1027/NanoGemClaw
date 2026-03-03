@@ -97,8 +97,10 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
     // Strip @BotName suffix so commands work uniformly (e.g. /start@Bot → /start)
     content = content.replace(new RegExp(`@${ASSISTANT_NAME}\\b`, 'i'), '').trim();
   }
+  // Media messages (photo, voice, video, document) bypass trigger check — high-intent interaction
+  const isMedia = !!(msg.photo || msg.voice || msg.audio || msg.video || msg.document);
   const needsTrigger = !isMainGroup && group.requireTrigger !== false;
-  if (needsTrigger && !isBotCommand && !TRIGGER_PATTERN.test(content)) return;
+  if (needsTrigger && !isBotCommand && !isMedia && !TRIGGER_PATTERN.test(content)) return;
 
   // Onboarding check for new groups (before processing first message)
   const isCommand = content.startsWith('/');

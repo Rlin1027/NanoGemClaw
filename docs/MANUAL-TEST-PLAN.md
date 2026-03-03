@@ -66,24 +66,22 @@ NanoGemClaw 是一個 Telegram AI 助手專案，在過去三天 (v1.1.0 → v1.
 
 ## Section B：Fast Path 進階功能
 
-### B1. Context Caching
+### B1. Context Caching ⏭️ 條件不足
 - **操作**：對同一群組連續發送 2 則訊息
 - **驗證**：第二則的 log 中 `cached:true` 或 `promptTokens` 明顯降低
+- **跳過原因**：`MIN_CACHE_CHARS` 預設 100,000 字元，測試群組的 system prompt + memory context 遠低於此門檻。需有大量 knowledge base 的群組才能觸發。可暫時調低 `MIN_CACHE_CHARS` 環境變數來驗證
 
 ### ~~B2. Multi-round Tool Use~~ ✅ 已測試通過
 > 測試 3b 驗證：「記住我的生日」觸發 `list_tasks` → round 1 `remember_fact`，多輪正常
 
-### B3. Mixed Batch Filtering
-- **操作**：發送可能同時觸發 read-only 和 mutating 的指令
-- **驗證**：log 出現 `dropping mutating tools from mixed batch` 時代表防護生效
+### ~~B3. Mixed Batch Filtering~~ ✅ 已測試通過
+> `dropping mutating tools from mixed batch (hallucinated args) {"dropped":["schedule_task"]}`，read-only `list_tasks` 正常執行，mutating tool 被丟棄。第二輪 `schedule_task` 再被 explicit intent 攔截（雙層防護）。
 
 ### ~~B4. Explicit Intent 過濾 — 負面測試~~ ✅ 已測試通過
 > 測試 2b/2c 驗證：哲學問題不觸發搜尋，「提醒」關鍵字正確匹配 `schedule_task`
 
-### B5. Fast Path Fallback to Container
-- **操作**：發送一張圖片給 bot
-- **驗證**：log 不出現 `Using fast path`，改為使用 container 路徑處理
-- **前置**：需要 container 環境設定
+### ~~B5. Fast Path Fallback to Container~~ ✅ 已測試通過（fallback 機制驗證）
+> 發送圖片後 log 出現 `Spawning container agent`，無 `Using fast path`，確認 fallback 機制正常。Container 超時（300s）原因：測試環境未安裝 Docker，非代碼 bug。附帶 UX 問題：圖片需加 `@bot` caption 才觸發，不夠直覺（已修復：媒體訊息 bypass trigger check）。
 
 ### B6. Per-group Model Selection
 - **操作**：在 Dashboard 將群組模型改為特定模型，發送訊息
