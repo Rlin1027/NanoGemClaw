@@ -26,23 +26,29 @@ export function initSearchIndex(db: Database.Database): void {
     cnt: number;
   };
 
-  if (ftsCount.cnt === 0 && msgCount.cnt > 0) {
-    // Initial population from existing messages
+  if (ftsCount.cnt < msgCount.cnt) {
+    // Sync FTS index with messages table (handles initial + gap population)
     const insertFts = db.prepare(
-      'INSERT INTO messages_fts(rowid, content) VALUES (?, ?)',
+      'INSERT OR IGNORE INTO messages_fts(rowid, content) VALUES (?, ?)',
     );
-    const allMessages = db
-      .prepare('SELECT rowid, content FROM messages WHERE content IS NOT NULL')
+    const missingMessages = db
+      .prepare(
+        `SELECT m.rowid, m.content FROM messages m
+         WHERE m.content IS NOT NULL
+         AND m.rowid NOT IN (SELECT rowid FROM messages_fts)`,
+      )
       .all() as Array<{ rowid: number; content: string }>;
 
-    const insertMany = db.transaction(
-      (messages: Array<{ rowid: number; content: string }>) => {
-        for (const msg of messages) {
-          insertFts.run(msg.rowid, msg.content);
-        }
-      },
-    );
-    insertMany(allMessages);
+    if (missingMessages.length > 0) {
+      const insertMany = db.transaction(
+        (messages: Array<{ rowid: number; content: string }>) => {
+          for (const msg of messages) {
+            insertFts.run(msg.rowid, msg.content);
+          }
+        },
+      );
+      insertMany(missingMessages);
+    }
   }
 }
 
@@ -109,6 +115,15 @@ export function searchMessages(
     return { results: [], total: 0 };
   }
 
+  // Trigram tokenizer requires >= 3 characters per token.
+  // For short queries, fall back to LIKE search.
+  const tokens = query.trim().split(/\s+/).filter(t => t.length > 0);
+  const needsLikeFallback = tokens.some(t => t.length < 3);
+
+  if (needsLikeFallback) {
+    return searchMessagesLike(db, query, options);
+  }
+
   // Strip FTS5 special characters to prevent query injection, then wrap as literal phrase
   const escapedQuery = sanitizeFTS5Query(query);
 
@@ -152,6 +167,48 @@ export function searchMessages(
   const results = db
     .prepare(searchSql)
     .all(...params, limit, offset) as SearchResult[];
+
+  return { results, total };
+}
+
+/**
+ * Fallback search using LIKE for short queries (< 3 chars per token).
+ * Trigram FTS5 requires >= 3 characters; this handles shorter CJK queries like "行程".
+ */
+function searchMessagesLike(
+  db: Database.Database,
+  query: string,
+  options?: { group?: string; limit?: number; offset?: number },
+): { results: SearchResult[]; total: number } {
+  const limit = options?.limit ?? 20;
+  const offset = options?.offset ?? 0;
+  const likePattern = `%${query.replace(/%/g, '\\%').replace(/_/g, '\\_')}%`;
+
+  let groupFilter = '';
+  const params: any[] = [likePattern];
+  if (options?.group) {
+    groupFilter = 'AND chat_jid = ?';
+    params.push(options.group);
+  }
+
+  const countSql = `
+    SELECT COUNT(*) as total FROM messages
+    WHERE content LIKE ? ESCAPE '\\'
+    ${groupFilter}
+  `;
+  const { total } = db.prepare(countSql).get(...params) as { total: number };
+
+  const searchSql = `
+    SELECT
+      id, chat_jid as chatJid, sender, content, timestamp,
+      is_from_me as isFromMe, content as snippet, 0 as rank
+    FROM messages
+    WHERE content LIKE ? ESCAPE '\\'
+    ${groupFilter}
+    ORDER BY timestamp DESC
+    LIMIT ? OFFSET ?
+  `;
+  const results = db.prepare(searchSql).all(...params, limit, offset) as SearchResult[];
 
   return { results, total };
 }

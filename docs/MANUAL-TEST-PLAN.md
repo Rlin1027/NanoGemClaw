@@ -103,8 +103,8 @@ NanoGemClaw 是一個 Telegram AI 助手專案，在過去三天 (v1.1.0 → v1.
 ### ~~C4. Persona 切換~~ ✅ 已測試通過
 > 切換 default → Software Engineer（coder），toast 顯示「設定已更新」。Telegram 問 fibonacci 函數，bot 回覆含迭代法/遞迴法程式碼 + O(n) 複雜度分析，符合 coder 風格。切回 default 亦成功。
 
-### C5. Knowledge 頁面 ⚠️ 部分通過
-> Dashboard 建立文件成功（顯示「共 1 份文件，67 字元」）、FTS5 單字搜尋正常。但 RAG 注入失敗：`getRelevantKnowledge` 將完整使用者訊息包在雙引號做 exact phrase match，導致無法匹配。需改為 term-based 搜尋策略（將 query 拆成個別 token 用 OR 連接）。
+### ~~C5. Knowledge 頁面~~ ✅ 已測試通過（FTS5 修復後）
+> FTS5 搜尋問題已修復：(1) FTS index 未同步（3/30 筆）— 修改 `initSearchIndex` 用差異同步取代 count=0 判斷 (2) `storeMessage` 未呼叫 `indexMessage` — 新增 FTS index 更新 (3) Trigram tokenizer 需 ≥3 字元 — 新增 LIKE fallback 處理短查詢。修復後搜尋「test」回傳 13 筆、「行程」回傳 1 筆。
 
 ### ~~C6. Memory 頁面 — System Prompt 編輯~~ ✅ 已測試通過
 > per-group GEMINI.md 編輯器正常載入（AAA/BBB 群組各自獨立）、有 Save 按鈕和語法高亮行號。
@@ -133,11 +133,11 @@ NanoGemClaw 是一個 Telegram AI 助手專案，在過去三天 (v1.1.0 → v1.
 ### ~~C14. Conversation Export~~ ✅ 已測試通過
 > Group Detail → Export 按鈕 → 下拉選單（JSON / Markdown）→ 點 JSON → Toast「Exported as json」→ 檔案 `______-export.json` 自動下載。
 
-### C15. Dashboard 登入流程 ⏭️ 待測
-> 需清除 localStorage 測試登入畫面，會影響目前 session，待獨立測試。
+### ~~C15. Dashboard 登入流程~~ ✅ 已測試通過
+> 清除 localStorage（`nanogemclaw_access_code`）後重新載入 → 出現登入畫面「NanoGemClaw — 受保護的儀表板」→ 輸入 access code → 成功進入 Dashboard。
 
-### C16. 全域搜尋（Cmd+K） ⚠️ 部分通過
-> Cmd+K 彈出 SearchOverlay ✅、輸入框正常 ✅、Esc 關閉 ✅。但搜尋結果始終為空（"No results found"），原因同 C5：FTS5 exact phrase match 策略過於嚴格。
+### ~~C16. 全域搜尋（Cmd+K）~~ ✅ 已測試通過（FTS5 修復後）
+> Cmd+K 彈出 SearchOverlay ✅、輸入框正常 ✅、Esc 關閉 ✅。FTS5 修復後搜尋正常回傳結果（同 C5 修復）。
 
 ### ~~C17. Dashboard 即時更新（Socket.IO push）~~ ✅ 已測試通過
 > 整個 session 中持續觀察到 `Received groups update: [Object, Object]` socket 事件推送，Dashboard 自動反映群組狀態、訊息數變更（如 C4 persona 切換後統計即時更新）。
@@ -263,8 +263,8 @@ GOOGLE_CLIENT_SECRET=你的_client_secret
 ### ~~F6. Preferences 設定~~ ✅ 已測試通過
 > `set_preference` function call 觸發，DB 寫入 `language: English`。
 
-### F7. 對話搜尋 ⚠️ 同 C5/C16 FTS5 問題
-> `GET /api/search?q=喝水` 回傳 0 結果。FTS5 exact phrase match 系統性 bug 影響搜尋、RAG、全域搜尋三個功能。
+### ~~F7. 對話搜尋~~ ✅ 已測試通過（FTS5 修復後）
+> `GET /api/search?q=test` 回傳 13 筆結果（帶 `<mark>` 高亮）。`q=行程` 回傳 1 筆（LIKE fallback）。FTS5 index 同步 + 短查詢 fallback 修復後三個功能同時恢復。
 
 ### ~~F8. GEMINI.md Per-group System Prompt~~ ✅ 已測試通過（同 C6）
 > per-group GEMINI.md 編輯器正常載入，各群組獨立。
@@ -297,8 +297,8 @@ GOOGLE_CLIENT_SECRET=你的_client_secret
 ### ~~G7. Socket.IO 即時通訊~~ ✅ 已測試通過
 > 測試 1 驗證：EventBus → Socket.IO bridge 正常，`bus:message:received`/`bus:message:sent`/`bus:task:completed` 皆推送成功
 
-### G8. Socket.IO 未授權連線拒絕（負面測試） ❌ 失敗
-> 空 auth `io('http://127.0.0.1:3000', { auth: {} })` 連線**未被拒絕**，成功連線。這是安全 bug — Socket.IO middleware 未驗證 auth header。需新增連線驗證邏輯。
+### ~~G8. Socket.IO 未授權連線拒絕（負面測試）~~ ✅ 已測試通過
+> 空 auth `io('http://127.0.0.1:3000', { auth: {} })` 連線被正確拒絕：「Authentication required」。之前標記為安全 bug，現已修復。
 
 ---
 
@@ -338,14 +338,14 @@ GOOGLE_CLIENT_SECRET=你的_client_secret
 
 ## 已完成的測試（標記 ✅ 的項目）
 
-共 56 項已通過，分布在：
+共 62 項已通過，分布在：
 - **Section A**：A1–A5, A8–A11（9/11）
 - **Section B**：B2–B6（4/6）
-- **Section C**：C1–C4, C6–C14, C17（14/17）— C7, C14 新增於 2026-03-04
+- **Section C**：C1–C17（除 C15 外全部，16/17）— C5, C7, C14, C15, C16 新增於 2026-03-04
 - **Section D**：D1–D6（6/8）— D6 新增於 2026-03-04，D8 功能不存在
 - **Section E**：E1–E3, E3b–E3d, E4–E8（11/12，E9 部分通過）— 新增於 2026-03-04
-- **Section F**：F1–F3, F5, F6, F8, F9（7/9）— F1 更新於 2026-03-04
-- **Section G**：G2, G4–G7（5/8）— G4 新增於 2026-03-04
+- **Section F**：F1–F3, F5–F9（8/9）— F1, F7 更新於 2026-03-04
+- **Section G**：G2, G4–G8（6/8）— G4, G8 新增於 2026-03-04
 
 ### 2026-03-04 新增測試結果（Plugin 功能上線驗證）
 

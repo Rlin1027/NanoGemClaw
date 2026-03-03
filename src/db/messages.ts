@@ -145,6 +145,23 @@ export function storeMessage(
     isFromMe ? 1 : 0,
     messageThreadId ?? null,
   );
+
+  // Update FTS search index
+  try {
+    const rowid = db
+      .prepare('SELECT rowid FROM messages WHERE id = ?')
+      .get(msgId) as { rowid: number } | undefined;
+    if (rowid) {
+      // Remove old entry if exists (INSERT OR REPLACE may change rowid)
+      db.prepare('DELETE FROM messages_fts WHERE rowid = ?').run(rowid.rowid);
+      db.prepare('INSERT INTO messages_fts(rowid, content) VALUES (?, ?)').run(
+        rowid.rowid,
+        content,
+      );
+    }
+  } catch {
+    // FTS index may not be initialized yet — non-critical
+  }
 }
 
 // Note: No thread filtering — this function aggregates across all threads.
