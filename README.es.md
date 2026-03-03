@@ -32,13 +32,13 @@
 | **Runtime del Agente**     | Claude Agent SDK      | Gemini CLI + Direct API                                                   |
 | **Mensajería**             | WhatsApp (Baileys)    | Telegram Bot API                                                          |
 | **Costo**                  | Claude Max ($100/mes) | Nivel gratuito (60 req/min)                                               |
-| **Arquitectura**           | Monolito              | Monorepo modular (7 paquetes + 6 plugins)                                 |
+| **Arquitectura**           | Monolito              | Monorepo modular (8 paquetes + 7 plugins)                                 |
 | **Extensibilidad**         | Hardcodeada           | Sistema de plugins con lifecycle hooks                                    |
 | **Soporte Multimedia**     | Solo texto            | Foto, Voz, Audio, Video, Documento                                        |
 | **Navegación Web**         | Solo búsqueda         | `agent-browser` completo (Playwright)                                     |
 | **Base de Conocimiento**   | -                     | Búsqueda de texto completo FTS5 por grupo                                 |
 | **Programación de Tareas** | -                     | Lenguaje natural + cron, calendario iCal                                  |
-| **Panel de Control**       | -                     | SPA de gestión en tiempo real con 9 módulos                               |
+| **Panel de Control**       | -                     | SPA de gestión en tiempo real con 12 módulos                              |
 | **Herramientas Avanzadas** | -                     | STT, Generación de Imágenes, Personas, Skills, Multi-modelo               |
 | **Ruta Rápida**            | -                     | Streaming directo de Gemini API, context caching, function calling nativo |
 | **Ecosistema Google**      | -                     | Drive, Calendar, Tasks — lectura/escritura completa vía OAuth2            |
@@ -48,7 +48,7 @@
 
 ## Características Principales
 
-- **Monorepo Modular** - 7 paquetes npm workspace. Usa paquetes individuales en tus propios proyectos o despliega el stack completo.
+- **Monorepo Modular** - 8 paquetes npm workspace. Usa paquetes individuales en tus propios proyectos o despliega el stack completo.
 - **Sistema de Plugins** - Extiende con herramientas Gemini personalizadas, message hooks, rutas de API y servicios en segundo plano sin modificar el código central.
 - **E/S Multimodal** - Envía fotos, mensajes de voz, videos o documentos. Gemini los procesa de forma nativa.
 - **Ruta Rápida (Direct API)** - Las consultas de texto simples evitan el inicio del contenedor, transmitiendo respuestas en tiempo real mediante el SDK `@google/genai`. Vuelve a los contenedores para la ejecución de código.
@@ -68,7 +68,7 @@
 - **Personas** - Personalidades predefinidas o crea personas personalizadas por grupo.
 - **Soporte Multi-modelo** - Elige el modelo Gemini por grupo (`gemini-3-flash-preview`, `gemini-3-pro-preview`, etc.).
 - **Aislamiento en Contenedores** - Cada grupo se ejecuta en su propio sandbox (Apple Container o Docker).
-- **Panel Web** - Centro de control en tiempo real con 9 módulos incluyendo gestión de cuenta Google y configuración de Discord.
+- **Panel Web** - Centro de control en tiempo real con 12 módulos incluyendo gestión de cuenta Google, navegador de Drive y configuración de Discord.
 - **i18n** - Soporte completo de interfaz para inglés, chino, japonés y español.
 
 ---
@@ -84,6 +84,7 @@ nanogemclaw/
 │   ├── telegram/      # @nanogemclaw/telegram  — helpers del bot, rate limiter, consolidator
 │   ├── server/        # @nanogemclaw/server    — Express + Socket.IO dashboard API
 │   ├── plugin-api/    # @nanogemclaw/plugin-api — interfaz de plugins y tipos de lifecycle
+│   ├── event-bus/     # @nanogemclaw/event-bus  — Sistema de eventos pub/sub tipado
 │   └── dashboard/     # SPA frontend React + Vite (privado)
 ├── app/               # Punto de entrada de la aplicación — conecta todos los paquetes
 ├── src/               # Módulos de la aplicación (manejador de mensajes, bot, scheduler, etc.)
@@ -95,7 +96,8 @@ nanogemclaw/
 │   ├── google-tasks/       # CRUD de Google Tasks con sincronización bidireccional
 │   ├── google-calendar-rw/ # Lectura/escritura de Google Calendar (reemplaza iCal de solo lectura)
 │   ├── drive-knowledge-rag/# Sistema RAG con índice de Drive + embeddings de Gemini
-│   └── discord-reporter/   # Reportes diarios/semanales vía webhook de Discord
+│   ├── discord-reporter/   # Reportes diarios/semanales vía webhook de Discord
+│   └── memorization-service/ # Resumen automático de conversaciones
 ├── container/         # Contenedor del agente (Gemini CLI + herramientas)
 └── docs/              # Documentación y guías
 ```
@@ -110,6 +112,7 @@ nanogemclaw/
 | `@nanogemclaw/telegram`   | Helpers del bot de Telegram, rate limiter, consolidador de mensajes | Medio                  |
 | `@nanogemclaw/server`     | Servidor Express del panel + eventos en tiempo real Socket.IO       | Medio                  |
 | `@nanogemclaw/plugin-api` | Definiciones de interfaz de plugins y tipos de lifecycle            | **Alto**               |
+| `@nanogemclaw/event-bus`  | Sistema de eventos pub/sub tipado para comunicación entre plugins   | Medio                  |
 
 ---
 
@@ -194,6 +197,7 @@ NanoGemClaw admite plugins que extienden la funcionalidad sin modificar el códi
 - **Rutas de API** — Endpoints personalizados para el dashboard
 - **Servicios en Segundo Plano** — Tareas de larga duración en segundo plano
 - **Manejadores IPC** — Manejadores de comunicación entre procesos personalizados
+- **Extensiones del Dashboard** — Componentes UI personalizados para el dashboard web
 
 ### Escribir un Plugin
 
@@ -262,7 +266,7 @@ Consulta `examples/plugin-skeleton/src/index.ts` para un ejemplo completamente d
 
 ### Plugins Integrados
 
-NanoGemClaw incluye 6 plugins integrados en el directorio `plugins/`:
+NanoGemClaw incluye 7 plugins integrados en el directorio `plugins/`:
 
 | Plugin                  | Descripción                                             | Herramientas Gemini |   Servicio en Segundo Plano   |
 | ----------------------- | ------------------------------------------------------- | :-----------------: | :---------------------------: |
@@ -272,6 +276,7 @@ NanoGemClaw incluye 6 plugins integrados en el directorio `plugins/`:
 | **google-calendar-rw**  | CRUD de Calendar con detección de conflictos            |          5          |               -               |
 | **drive-knowledge-rag** | RAG de dos capas (índice local + búsqueda en Drive)     |          1          | Escaneo de índice cada 30 min |
 | **discord-reporter**    | Reportes diarios/semanales vía Discord webhook          |          -          | Reportes programados por cron |
+| **memorization-service**    | Resumen automático de conversaciones vía Event Bus          |          -          |         Basado en eventos         |
 
 ---
 
@@ -399,6 +404,8 @@ graph LR
     GAuth --> GTasks[Google Tasks]
     GDrive --> RAG[Drive Knowledge RAG]
     Plugins --> Discord[Discord Reporter]
+    Plugins --> Memo[Memorization Service]
+    Bot --> EB[Event Bus]
 ```
 
 ### Paquetes del Backend
@@ -411,6 +418,7 @@ graph LR
 | `@nanogemclaw/telegram`   | `telegram-helpers.ts`, `telegram-rate-limiter.ts`, `message-consolidator.ts`                 |
 | `@nanogemclaw/server`     | `server.ts`, `routes/` (auth, groups, tasks, knowledge, calendar, skills, config, analytics) |
 | `@nanogemclaw/plugin-api` | `NanoPlugin`, `PluginApi`, `GeminiToolContribution`, `HookContributions`                     |
+| `@nanogemclaw/event-bus`  | `EventBus`, `NanoEventMap`, singleton pub/sub tipado                                          |
 
 ### Capa de Aplicación (`src/`)
 
@@ -427,17 +435,20 @@ graph LR
 
 ### Frontend (`packages/dashboard/`)
 
-SPA React + Vite + TailwindCSS con 9 módulos:
+SPA React + Vite + TailwindCSS con 12 módulos:
 
 | Página            | Descripción                                                                  |
 | ----------------- | ---------------------------------------------------------------------------- |
 | **Overview**      | Tarjetas de estado de grupo con actividad del agente en tiempo real          |
 | **Logs**          | Stream de logs universal con filtrado por nivel                              |
+| **Activity Logs** | Historial de actividad por grupo y línea de tiempo de eventos          |
 | **Memory Studio** | Editor Monaco para prompts del sistema y resúmenes de conversación           |
 | **Group Detail**  | Configuración por grupo: persona, modelo, trigger, toggle de búsqueda web    |
 | **Tasks**         | CRUD de tareas programadas con historial de ejecución                        |
+| **Schedule**      | Vista general visual de horarios y línea de tiempo de tareas           |
 | **Analytics**     | Gráficas de uso, logs de contenedor, estadísticas de mensajes                |
 | **Knowledge**     | Carga de documentos, búsqueda FTS5, gestión de documentos por grupo          |
+| **Drive**         | Explorador de archivos de Google Drive y visor de documentos           |
 | **Calendar**      | Suscripción a feeds iCal y visualizador de eventos próximos                  |
 | **Settings**      | Modo de mantenimiento, cuenta Google, configuración de Discord, preferencias |
 
@@ -484,7 +495,7 @@ Soporta la superposición de búsqueda global `Cmd+K` / `Ctrl+K`.
 ```bash
 npm run dev               # Iniciar con tsx (hot reload)
 npm run typecheck         # Verificación de tipos TypeScript (backend)
-npm test                  # Ejecutar todas las pruebas (Vitest, 28 archivos, ~600 pruebas)
+npm test                  # Ejecutar todas las pruebas (Vitest, 41 archivos, ~950 pruebas)
 npm run test:watch        # Modo watch
 npm run test:coverage     # Informe de cobertura
 npm run format:check      # Verificación de Prettier

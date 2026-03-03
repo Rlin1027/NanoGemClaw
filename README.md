@@ -32,7 +32,7 @@
 | **Agent Runtime**    | Claude Agent SDK     | Gemini CLI + Direct API                                               |
 | **Messaging**        | WhatsApp (Baileys)   | Telegram Bot API                                                      |
 | **Cost**             | Claude Max ($100/mo) | Free tier (60 req/min)                                                |
-| **Architecture**     | Monolith             | Modular monorepo (7 packages + 6 plugins)                             |
+| **Architecture**     | Monolith             | Modular monorepo (8 packages + 7 plugins)                             |
 | **Extensibility**    | Hardcoded            | Plugin system with lifecycle hooks                                    |
 | **Google Ecosystem** | -                    | Drive, Calendar, Tasks, Knowledge RAG                                 |
 | **Notifications**    | -                    | Discord daily/weekly reports                                          |
@@ -40,7 +40,7 @@
 | **Web Browsing**     | Search only          | Full `agent-browser` (Playwright)                                     |
 | **Knowledge Base**   | -                    | FTS5 full-text search per group                                       |
 | **Scheduling**       | -                    | Natural language + cron, iCal calendar                                |
-| **Dashboard**        | -                    | 9-module real-time management SPA                                     |
+| **Dashboard**        | -                    | 12-module real-time management SPA                                    |
 | **Advanced Tools**   | -                    | STT, Image Gen, Personas, Skills, Multi-model                         |
 | **Fast Path**        | -                    | Direct Gemini API streaming, context caching, native function calling |
 
@@ -48,7 +48,7 @@
 
 ## Key Features
 
-- **Modular Monorepo** - 7 npm workspace packages. Use individual packages in your own projects or deploy the full stack.
+- **Modular Monorepo** - 8 npm workspace packages. Use individual packages in your own projects or deploy the full stack.
 - **Plugin System** - Extend with custom Gemini tools, message hooks, API routes, and background services without modifying core code.
 - **Multi-modal I/O** - Send photos, voice messages, videos, or documents. Gemini processes them natively.
 - **Fast Path (Direct API)** - Simple text queries bypass container startup, streaming responses in real-time via the `@google/genai` SDK. Falls back to containers for code execution.
@@ -68,7 +68,7 @@
 - **Personas** - Pre-defined personalities or create custom personas per group.
 - **Multi-model Support** - Choose Gemini model per group (`gemini-3-flash-preview`, `gemini-3-pro-preview`, etc.).
 - **Container Isolation** - Every group runs in its own sandbox (Apple Container or Docker).
-- **Web Dashboard** - 9-module real-time command center with log streaming, memory editor, analytics, Google account management, and Discord settings.
+- **Web Dashboard** - 12-module real-time command center with log streaming, memory editor, analytics, Google account management, Drive browser, and Discord settings.
 - **i18n** - Full interface support for English, Chinese, Japanese, and Spanish.
 
 ---
@@ -84,6 +84,7 @@ nanogemclaw/
 │   ├── telegram/      # @nanogemclaw/telegram  — Bot helpers, rate limiter, consolidator
 │   ├── server/        # @nanogemclaw/server    — Express + Socket.IO dashboard API
 │   ├── plugin-api/    # @nanogemclaw/plugin-api — Plugin interface & lifecycle types
+│   ├── event-bus/     # @nanogemclaw/event-bus  — Typed pub/sub event system
 │   └── dashboard/     # React + Vite frontend SPA (private)
 ├── plugins/
 │   ├── google-auth/          # OAuth2 token management & auto-refresh
@@ -91,7 +92,8 @@ nanogemclaw/
 │   ├── google-tasks/         # Tasks CRUD with bidirectional sync
 │   ├── google-calendar-rw/   # Calendar read/write (upgrade from iCal)
 │   ├── drive-knowledge-rag/  # Two-layer RAG (embeddings + live search)
-│   └── discord-reporter/     # Daily & weekly Discord embed reports
+│   ├── discord-reporter/    # Daily & weekly Discord embed reports
+│   └── memorization-service/ # Automatic conversation summarization
 ├── app/               # Application entry point — wires all packages together
 ├── src/               # Application modules (message handler, bot, scheduler, etc.)
 ├── examples/
@@ -110,6 +112,7 @@ nanogemclaw/
 | `@nanogemclaw/telegram`   | Telegram bot helpers, rate limiter, message consolidator | Medium      |
 | `@nanogemclaw/server`     | Express dashboard server + Socket.IO real-time events    | Medium      |
 | `@nanogemclaw/plugin-api` | Plugin interface definitions and lifecycle types         | **High**    |
+| `@nanogemclaw/event-bus`  | Typed pub/sub event system for inter-plugin communication | Medium      |
 
 ---
 
@@ -194,6 +197,7 @@ NanoGemClaw supports plugins that extend functionality without modifying core co
 - **API Routes** — Custom dashboard API endpoints
 - **Background Services** — Long-running background tasks
 - **IPC Handlers** — Custom inter-process communication handlers
+- **Dashboard Extensions** — Custom UI components for the web dashboard
 
 ### Writing a Plugin
 
@@ -262,16 +266,17 @@ See `examples/plugin-skeleton/src/index.ts` for a fully documented example, and 
 
 ### Built-in Plugins
 
-NanoGemClaw ships with 6 built-in plugins in the `plugins/` directory:
+NanoGemClaw ships with 7 built-in plugins in the `plugins/` directory:
 
-| Plugin                  | Description                                                 | Gemini Tools | Background Service |
-| ----------------------- | ----------------------------------------------------------- | :----------: | :----------------: |
-| **google-auth**         | OAuth2 core — token management, auto-refresh, CLI auth flow |              |                    |
-| **google-drive**        | Search, read, and summarize Drive files (Docs, Sheets, PDF) |      3       |                    |
-| **google-tasks**        | Google Tasks CRUD with bidirectional sync                   |      3       |    15-min sync     |
-| **google-calendar-rw**  | Full Calendar API — create, update, delete events           |      5       |                    |
-| **drive-knowledge-rag** | Two-layer RAG: pre-indexed embeddings + live Drive search   |      1       |   30-min indexer   |
-| **discord-reporter**    | Daily and weekly progress reports via Discord webhooks      |              |   Cron scheduler   |
+| Plugin                      | Description                                                 | Gemini Tools | Background Service |
+| --------------------------- | ----------------------------------------------------------- | :----------: | :----------------: |
+| **google-auth**             | OAuth2 core — token management, auto-refresh, CLI auth flow |              |                    |
+| **google-drive**            | Search, read, and summarize Drive files (Docs, Sheets, PDF) |      3       |                    |
+| **google-tasks**            | Google Tasks CRUD with bidirectional sync                   |      3       |    15-min sync     |
+| **google-calendar-rw**      | Full Calendar API — create, update, delete events           |      5       |                    |
+| **drive-knowledge-rag**     | Two-layer RAG: pre-indexed embeddings + live Drive search   |      1       |   30-min indexer   |
+| **discord-reporter**        | Daily and weekly progress reports via Discord webhooks      |              |   Cron scheduler   |
+| **memorization-service**    | Automatic conversation summarization via Event Bus          |              |  Event-driven      |
 
 All Google plugins depend on **google-auth** for OAuth2 tokens. Run the authorization flow once from the Dashboard Settings page.
 
@@ -401,6 +406,8 @@ graph LR
     GAuth --> GTasks[Google Tasks]
     GDrive --> RAG[Drive Knowledge RAG]
     Plugins --> Discord[Discord Reporter]
+    Plugins --> Memo[Memorization Service]
+    Bot --> EB[Event Bus]
 ```
 
 ### Backend Packages
@@ -413,6 +420,7 @@ graph LR
 | `@nanogemclaw/telegram`   | `telegram-helpers.ts`, `telegram-rate-limiter.ts`, `message-consolidator.ts`                 |
 | `@nanogemclaw/server`     | `server.ts`, `routes/` (auth, groups, tasks, knowledge, calendar, skills, config, analytics) |
 | `@nanogemclaw/plugin-api` | `NanoPlugin`, `PluginApi`, `GeminiToolContribution`, `HookContributions`                     |
+| `@nanogemclaw/event-bus`  | `EventBus`, `NanoEventMap`, typed pub/sub singleton                                          |
 
 ### Application Layer (`src/`)
 
@@ -429,19 +437,22 @@ graph LR
 
 ### Frontend (`packages/dashboard/`)
 
-React + Vite + TailwindCSS SPA with 9 modules:
+React + Vite + TailwindCSS SPA with 12 modules:
 
-| Page              | Description                                                                     |
-| ----------------- | ------------------------------------------------------------------------------- |
-| **Overview**      | Group status cards with real-time agent activity                                |
-| **Logs**          | Universal log stream with level filtering                                       |
-| **Memory Studio** | Monaco editor for system prompts and conversation summaries                     |
-| **Group Detail**  | Per-group settings: persona, model, trigger, web search toggle                  |
-| **Tasks**         | Scheduled task CRUD with execution history                                      |
-| **Analytics**     | Usage charts, container logs, message statistics                                |
-| **Knowledge**     | Document upload, FTS5 search, per-group document management                     |
-| **Calendar**      | iCal feed subscription and upcoming event viewer                                |
-| **Settings**      | Maintenance mode, debug logging, secrets status, Google account, Discord config |
+| Page                | Description                                                                     |
+| ------------------- | ------------------------------------------------------------------------------- |
+| **Overview**        | Group status cards with real-time agent activity                                |
+| **Logs**            | Universal log stream with level filtering                                       |
+| **Activity Logs**   | Per-group activity history and event timeline                                   |
+| **Memory Studio**   | Monaco editor for system prompts and conversation summaries                     |
+| **Group Detail**    | Per-group settings: persona, model, trigger, web search toggle                  |
+| **Tasks**           | Scheduled task CRUD with execution history                                      |
+| **Schedule**        | Visual schedule overview and task timeline                                      |
+| **Analytics**       | Usage charts, container logs, message statistics                                |
+| **Knowledge**       | Document upload, FTS5 search, per-group document management                     |
+| **Drive**           | Google Drive file browser and document viewer                                   |
+| **Calendar**        | iCal feed subscription and upcoming event viewer                                |
+| **Settings**        | Maintenance mode, debug logging, secrets status, Google account, Discord config |
 
 ### Persistence
 
@@ -486,7 +497,7 @@ Supports `Cmd+K` / `Ctrl+K` global search overlay.
 ```bash
 npm run dev               # Start with tsx (hot reload)
 npm run typecheck         # TypeScript type check (backend)
-npm test                  # Run all tests (Vitest, 28 files, ~600 tests)
+npm test                  # Run all tests (Vitest, 41 files, ~950 tests)
 npm run test:watch        # Watch mode
 npm run test:coverage     # Coverage report
 npm run format:check      # Prettier check
