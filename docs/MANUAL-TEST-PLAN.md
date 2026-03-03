@@ -39,7 +39,7 @@ NanoGemClaw 是一個 Telegram AI 助手專案，在過去三天 (v1.1.0 → v1.
 ### ~~A5. Feedback 按鈕~~ ✅ 已測試通過
 > `feedback_menu:350` → 顯示評分按鈕 → `feedback:up:350` → `User feedback received {"rating":"up"}`，無錯誤。
 
-### A6. 長訊息分割 ⏭️ 跳過
+### A6. 長訊息分割 ⏭️ 延後（待實際遇到長回覆場景時再驗證，單元測試已覆蓋）
 - **操作**：發送一個會產生長回覆的提問（如「詳細列出台灣所有縣市及其特色」）
 - **驗證**：log 顯示 `chunks` > 1，Telegram 收到多則拆分訊息
 - **跳過原因**：Gemini 回覆 1904 字元（1495 tokens），未達 Telegram 4096 字元分割門檻。`splitMessageIntelligently`（`telegram-helpers.ts:214`）邏輯存在且有單元測試，但手動觸發需極長回覆。待討論：可嘗試多輪追問累積長文、或暫時降低 `MAX_TELEGRAM_LENGTH` 閾值來驗證
@@ -66,7 +66,7 @@ NanoGemClaw 是一個 Telegram AI 助手專案，在過去三天 (v1.1.0 → v1.
 
 ## Section B：Fast Path 進階功能
 
-### B1. Context Caching ⏭️ 條件不足
+### B1. Context Caching ⏭️ 延後（待 knowledge base 資料量足夠時再驗證）
 - **操作**：對同一群組連續發送 2 則訊息
 - **驗證**：第二則的 log 中 `cached:true` 或 `promptTokens` 明顯降低
 - **跳過原因**：`MIN_CACHE_CHARS` 預設 100,000 字元，測試群組的 system prompt + memory context 遠低於此門檻。需有大量 knowledge base 的群組才能觸發。可暫時調低 `MIN_CACHE_CHARS` 環境變數來驗證

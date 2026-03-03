@@ -107,22 +107,69 @@ async function transcribeWithGCP(audioPath: string): Promise<string> {
 }
 
 /**
- * Transcribe audio using Gemini multimodal (fallback)
+ * Transcribe audio using Gemini multimodal API.
  *
- * This is a stub that returns a placeholder.
- * In production, the audio file would be sent to the Gemini API
- * as part of the multimodal prompt.
+ * Sends the audio file directly to Gemini as inline base64 data.
+ * Supports OGG/Opus (Telegram voice), WAV, MP3, AAC, FLAC — no ffmpeg needed.
  */
 async function transcribeWithGemini(audioPath: string): Promise<string> {
-  logger.info(
-    { audioPath },
-    'Gemini multimodal transcription (pass-through mode)',
-  );
+  const { getGeminiClient } = await import('@nanogemclaw/gemini');
+  const client = getGeminiClient();
+  if (!client) {
+    throw new Error('Gemini API client not available');
+  }
 
-  // In pass-through mode, we don't transcribe here.
-  // Instead, the audio file path is passed to the container,
-  // and Gemini handles it natively with multimodal input.
-  return `[Voice message: ${path.basename(audioPath)}]`;
+  const ext = path.extname(audioPath).toLowerCase();
+  const MIME_MAP: Record<string, string> = {
+    '.ogg': 'audio/ogg',
+    '.oga': 'audio/ogg',
+    '.wav': 'audio/wav',
+    '.mp3': 'audio/mp3',
+    '.aac': 'audio/aac',
+    '.flac': 'audio/flac',
+    '.opus': 'audio/ogg',
+  };
+  const mimeType = MIME_MAP[ext] || 'audio/ogg';
+
+  // Check file size (Gemini inline limit: ~20MB)
+  const MAX_SIZE = 20 * 1024 * 1024;
+  const stats = fs.statSync(audioPath);
+  if (stats.size > MAX_SIZE) {
+    throw new Error(
+      `Audio file too large (${Math.round(stats.size / 1024 / 1024)}MB). Max 20MB.`,
+    );
+  }
+
+  const audioData = fs.readFileSync(audioPath).toString('base64');
+
+  const { GEMINI_MODEL } = await import('./config.js');
+
+  const response = await client.models.generateContent({
+    model: GEMINI_MODEL,
+    contents: [
+      {
+        role: 'user',
+        parts: [
+          {
+            inlineData: {
+              mimeType,
+              data: audioData,
+            },
+          },
+          {
+            text: 'Transcribe this audio message. Return ONLY the transcribed text, nothing else. If the audio is in Chinese, transcribe in Chinese. If in English, transcribe in English. Preserve the original language.',
+          },
+        ],
+      },
+    ],
+  });
+
+  const transcription = response.text?.trim() || '';
+  logger.info(
+    { audioPath, length: transcription.length, provider: 'gemini' },
+    'Gemini audio transcription completed',
+  );
+  return transcription;
 }
 
 /**
@@ -149,11 +196,15 @@ export async function transcribeAudio(audioPath: string): Promise<string> {
         'Audio transcribed',
       );
     } else {
-      // Default: pass-through to Gemini multimodal
+      // Default: Gemini multimodal audio transcription (no ffmpeg needed)
       transcription = await transcribeWithGemini(audioPath);
       logger.info(
-        { duration: Date.now() - startTime, provider: 'gemini' },
-        'Audio transcription (pass-through)',
+        {
+          duration: Date.now() - startTime,
+          provider: 'gemini',
+          length: transcription.length,
+        },
+        'Audio transcribed',
       );
     }
 
