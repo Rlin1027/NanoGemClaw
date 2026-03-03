@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { DashboardLayout } from './components/DashboardLayout';
 import { StatusCard } from './components/StatusCard';
 import { Terminal } from './components/Terminal';
-import { MemoryEditor } from './components/MemoryEditor';
+import { MemoryPage } from './pages/MemoryPage';
 import { LoginScreen } from './components/LoginScreen';
 import { SettingsPage } from './pages/SettingsPage';
 import { GroupDetailPage } from './pages/GroupDetailPage';
@@ -17,7 +17,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastContainer } from './components/ToastContainer';
 import { SearchOverlay } from './components/SearchOverlay';
 import { AddGroupModal } from './components/AddGroupModal';
-import { Search, Loader2, Bot, ChevronRight, Eye, EyeOff } from 'lucide-react';
+import { Search, Loader2, Eye, EyeOff } from 'lucide-react';
 import { useSocket } from './hooks/useSocket';
 import { useApiQuery } from './hooks/useApi';
 
@@ -115,7 +115,7 @@ function App() {
                     {visibleGroups.length === 0 && isConnected ? (
                         <div className="flex flex-col items-center justify-center py-20 text-slate-500">
                             <p className="mb-2">No active groups found.</p>
-                            <button className="text-blue-500 hover:text-blue-400">Discover Groups</button>
+                            <button className="text-blue-500 hover:text-blue-400" onClick={() => setAddGroupOpen(true)}>Discover Groups</button>
                         </div>
                     ) : visibleGroups.length === 0 && !isConnected ? (
                         <div className="flex items-center justify-center py-20 text-slate-500 gap-2">
@@ -142,7 +142,7 @@ function App() {
                             ))}
 
                             {/* Add Card Button (Placeholder) */}
-                            <button className="border-2 border-dashed border-slate-800 rounded-xl p-6 flex flex-col items-center justify-center text-slate-500 hover:text-slate-300 hover:border-slate-700 hover:bg-slate-900/30 transition-all group min-h-[220px]">
+                            <button onClick={() => setAddGroupOpen(true)} className="border-2 border-dashed border-slate-800 rounded-xl p-6 flex flex-col items-center justify-center text-slate-500 hover:text-slate-300 hover:border-slate-700 hover:bg-slate-900/30 transition-all group min-h-[220px]">
                                 <div className="w-12 h-12 rounded-full bg-slate-900 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                                     <span className="text-2xl">+</span>
                                 </div>
@@ -201,39 +201,7 @@ function App() {
 
             {/* MEMORY TAB */}
             {activeTab === 'memory' && (
-                <div className="h-[calc(100vh-12rem)] flex gap-6">
-                    {/* Sidebar Group List */}
-                    <div className="w-64 flex flex-col gap-2">
-                        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2 px-2">Select Group</h3>
-                        {groups.map(group => (
-                            <button
-                                key={group.id}
-                                onClick={() => setSelectedGroupForMemory(group.id)}
-                                className={`flex items-center justify-between p-3 rounded-lg text-left transition-all ${selectedGroupForMemory === group.id
-                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
-                                        : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-                                    }`}
-                            >
-                                <div className="flex items-center gap-3 overflow-hidden">
-                                    <Bot size={16} />
-                                    <span className="truncate font-medium text-sm">{group.name}</span>
-                                </div>
-                                {selectedGroupForMemory === group.id && <ChevronRight size={14} />}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Editor Area */}
-                    <div className="flex-1 min-w-0">
-                        {selectedGroupForMemory ? (
-                            <MemoryEditor groupFolder={selectedGroupForMemory} />
-                        ) : (
-                            <div className="h-full flex items-center justify-center text-slate-600 bg-slate-900/30 rounded-xl border-2 border-dashed border-slate-800">
-                                Select a group to edit memory
-                            </div>
-                        )}
-                    </div>
-                </div>
+                <MemoryPage groups={groups} />
             )}
 
             {/* GROUP DETAIL TAB */}

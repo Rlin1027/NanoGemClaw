@@ -126,7 +126,8 @@ export function startDashboardServer() {
   app.use('/api', createAuthRouter({ accessCode: ACCESS_CODE }));
 
   // Public endpoints that don't require authentication
-  const PUBLIC_PATHS = ['/api/health', '/api/auth/verify'];
+  // Paths are relative to /api mount (req.path strips the mount prefix)
+  const PUBLIC_PATHS = ['/health', '/auth/verify', '/config'];
 
   // Global Auth Middleware - protect all API endpoints when auth is enabled
   app.use('/api', (req, res, next) => {

@@ -31,9 +31,11 @@ export function MemoryPage({ groups }: { groups: GroupData[] }) {
     }, [groups, selectedGroup]);
 
     const prompt = usePrompt(selectedGroup || null);
-    const { data: memorySummary, isLoading: memoryLoading } = useApiQuery<MemorySummary>(
+    const { data: memorySummary, isLoading: memoryLoading } = useApiQuery<MemorySummary | null>(
         selectedGroup ? `/api/memory/${selectedGroup}` : '/api/health'
     );
+    // Guard: health fallback returns non-MemorySummary shape; treat as null
+    const validSummary = memorySummary && 'summary' in memorySummary ? memorySummary : null;
 
     // Load prompt when group changes
     useEffect(() => {
@@ -154,25 +156,25 @@ export function MemoryPage({ groups }: { groups: GroupData[] }) {
                             <div className="flex items-center justify-center h-full text-slate-500">{t('selectGroupPrompt')}</div>
                         ) : memoryLoading ? (
                             <div className="flex items-center justify-center h-full text-slate-500">{t('loadingMemory')}</div>
-                        ) : memorySummary ? (
+                        ) : validSummary ? (
                             <div className="space-y-4">
                                 <div className="grid grid-cols-3 gap-3">
                                     <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
                                         <div className="text-xs text-slate-500 mb-1">{t('messagesArchived')}</div>
-                                        <div className="text-slate-200 font-mono font-bold">{memorySummary.messages_archived}</div>
+                                        <div className="text-slate-200 font-mono font-bold">{validSummary.messages_archived}</div>
                                     </div>
                                     <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
                                         <div className="text-xs text-slate-500 mb-1">{t('charsArchived')}</div>
-                                        <div className="text-slate-200 font-mono font-bold">{memorySummary.chars_archived.toLocaleString(locale)}</div>
+                                        <div className="text-slate-200 font-mono font-bold">{validSummary.chars_archived.toLocaleString(locale)}</div>
                                     </div>
                                     <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
                                         <div className="text-xs text-slate-500 mb-1">{t('lastUpdated')}</div>
-                                        <div className="text-slate-200 font-mono text-sm">{new Date(memorySummary.updated_at).toLocaleString(locale)}</div>
+                                        <div className="text-slate-200 font-mono text-sm">{new Date(validSummary.updated_at).toLocaleString(locale)}</div>
                                     </div>
                                 </div>
                                 <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
                                     <h3 className="text-sm font-medium text-slate-300 mb-2">{t('summary')}</h3>
-                                    <p className="text-slate-400 text-sm whitespace-pre-wrap">{memorySummary.summary}</p>
+                                    <p className="text-slate-400 text-sm whitespace-pre-wrap">{validSummary.summary}</p>
                                 </div>
                             </div>
                         ) : (

@@ -175,12 +175,8 @@ async function runTask(
 
       if (chatJid && result) {
         try {
-          // Embed sentinel in result so plugins (e.g. google-tasks) can still detect it
-          // but users see the actual content, not a raw sentinel
-          await deps.sendMessage(
-            chatJid,
-            `${result}\n\n@task-complete:${task.id}`,
-          );
+          // Send clean result to user; plugins receive task:completed via EventBus
+          await deps.sendMessage(chatJid, result);
         } catch (sendErr) {
           logger.warn(
             { taskId: task.id, sendErr },
