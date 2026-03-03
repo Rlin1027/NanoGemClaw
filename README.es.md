@@ -54,7 +54,7 @@
 - **Ruta Rápida (Direct API)** - Las consultas de texto simples evitan el inicio del contenedor, transmitiendo respuestas en tiempo real mediante el SDK `@google/genai`. Vuelve a los contenedores para la ejecución de código.
 - **Context Caching** - El contenido estático se almacena en caché mediante la API de caché de Gemini, reduciendo los costos de tokens de entrada entre un 75-90%.
 - **Function Calling Nativo** - Las operaciones de herramientas utilizan el function calling nativo de Gemini en lugar del sondeo IPC basado en archivos.
-- **Speech-to-Text** - Los mensajes de voz se transcriben automáticamente (Gemini multimodal o Google Cloud Speech).
+- **Speech-to-Text** - Los mensajes de voz se transcriben automáticamente usando Gemini multimodal (por defecto, sin necesidad de FFmpeg) o Google Cloud Speech.
 - **Generación de Imágenes** - Crea imágenes usando **Imagen 3** mediante lenguaje natural.
 - **Automatización del Navegador** - Los agentes usan `agent-browser` para tareas web complejas.
 - **Base de Conocimiento** - Almacén de documentos por grupo con búsqueda de texto completo SQLite FTS5.
@@ -69,7 +69,7 @@
 - **Soporte Multi-modelo** - Elige el modelo Gemini por grupo (`gemini-3-flash-preview`, `gemini-3-pro-preview`, etc.).
 - **Aislamiento en Contenedores** - Cada grupo se ejecuta en su propio sandbox (Apple Container o Docker).
 - **Panel Web** - Centro de control en tiempo real con 12 módulos incluyendo gestión de cuenta Google, navegador de Drive y configuración de Discord.
-- **i18n** - Soporte completo de interfaz para inglés, chino, japonés y español.
+- **i18n** - Soporte completo de interfaz para 8 idiomas: inglés, chino tradicional, chino simplificado, japonés, coreano, español, portugués y ruso.
 
 ---
 
@@ -124,7 +124,7 @@ nanogemclaw/
 | --------------- | ---------------------------- | ----------------------------------- |
 | **Node.js 20+** | Runtime                      | [nodejs.org](https://nodejs.org)    |
 | **Gemini CLI**  | Agente de IA                 | `npm install -g @google/gemini-cli` |
-| **FFmpeg**      | Procesamiento de audio (STT) | `brew install ffmpeg`               |
+| **FFmpeg**      | Solo GCP STT (opcional) | `brew install ffmpeg`               |
 
 ### 1. Clonar e Instalar
 
@@ -321,10 +321,7 @@ NanoGemClaw incluye 7 plugins integrados en el directorio `plugins/`:
 | ---------------------------- | ---------------------------------------------------------- |
 | `GOOGLE_CLIENT_ID`           | ID de cliente OAuth2 (de Google Cloud Console)             |
 | `GOOGLE_CLIENT_SECRET`       | Secreto de cliente OAuth2                                  |
-| `GOOGLE_KNOWLEDGE_FOLDER_ID` | ID de la carpeta de Drive para la base de conocimiento RAG |
 | `DISCORD_WEBHOOK_URL`        | URL del webhook de Discord para reportes                   |
-| `DISCORD_DAILY_CRON`         | Programa del reporte diario (por defecto: `0 9 * * *`)     |
-| `DISCORD_WEEKLY_CRON`        | Programa del reporte semanal (por defecto: `0 9 * * 1`)    |
 
 ### Opcionales - Infraestructura
 
@@ -336,6 +333,13 @@ NanoGemClaw incluye 7 plugins integrados en el directorio `plugins/`:
 | `RATE_LIMIT_MAX`     | `20`                       | Solicitudes máximas por ventana por grupo         |
 | `RATE_LIMIT_WINDOW`  | `5`                        | Ventana del rate limit (minutos)                  |
 | `WEBHOOK_URL`        | -                          | Webhook externo para notificaciones               |
+| `WEBHOOK_EVENTS`     | `error,alert`              | Eventos que activan el webhook    |
+| `ALERTS_ENABLED`     | `true`                     | Alertas de error al grupo principal |
+| `CONTAINER_MAX_OUTPUT_SIZE` | `10485760`          | Tamaño máximo de salida del contenedor (bytes) |
+| `SCHEDULER_CONCURRENCY` | auto                    | Máximo de contenedores programados simultáneos |
+| `BACKUP_RETENTION_DAYS` | `7`                     | Días de retención de respaldos    |
+| `HEALTH_CHECK_ENABLED` | `true`                   | Habilitar servidor HTTP de health check |
+| `HEALTH_CHECK_PORT`  | `8080`                     | Puerto del servidor de health check |
 | `TZ`                 | sistema                    | Zona horaria para tareas programadas              |
 | `LOG_LEVEL`          | `info`                     | Nivel de registro                                 |
 
@@ -373,9 +377,16 @@ Para la lista completa, consulta [.env.example](.env.example).
 
 Envía estos comandos directamente al bot:
 
-- `/admin language <lang>` - Cambia el idioma de la interfaz del bot
-- `/admin persona <name>` - Cambia la personalidad del bot
-- `/admin report` - Obtiene un resumen de actividad diaria
+- `/admin help` — Listar todos los comandos de administración disponibles
+- `/admin stats` — Mostrar tiempo de actividad, uso de memoria y estadísticas de tokens
+- `/admin groups` — Listar todos los grupos registrados con estado
+- `/admin tasks` — Listar todas las tareas programadas
+- `/admin errors` — Mostrar grupos con errores recientes
+- `/admin report` — Generar reporte de uso diario
+- `/admin language <lang>` — Cambiar idioma de la interfaz del bot
+- `/admin persona <name|list|set>` — Gestionar personas del bot
+- `/admin trigger <group> <on|off>` — Alternar requisito de @mención
+- `/admin export <group>` — Exportar historial de conversación como Markdown
 
 ---
 
@@ -385,7 +396,7 @@ Envía estos comandos directamente al bot:
 graph LR
     TG[Telegram] --> Bot[Node.js Host]
     Bot --> DB[(SQLite + FTS5)]
-    Bot --> STT[FFmpeg / STT]
+    Bot --> STT[Gemini STT]
     Bot --> FP[Fast Path<br/>Direct Gemini API]
     FP --> Cache[Context Cache]
     FP --> FC[Function Calling]
@@ -457,6 +468,17 @@ SPA React + Vite + TailwindCSS con 12 módulos:
 - **SQLite** (`store/messages.db`): Mensajes, tareas, estadísticas, preferencias, base de conocimiento (FTS5)
 - **JSON** (`data/`): Sesiones, grupos registrados, personas personalizadas, configuraciones de calendario, skills de grupos
 - **Sistema de Archivos** (`groups/`): Espacio de trabajo por grupo (GEMINI.md, logs, multimedia, IPC)
+- **Respaldos** (`store/backups/`): Respaldos automáticos diarios de SQLite con retención configurable (`BACKUP_RETENTION_DAYS`)
+
+### Health Check
+
+Servidor HTTP ligero en puerto `HEALTH_CHECK_PORT` (por defecto 8080):
+
+- `GET /health` — Estado de salud del sistema (healthy/degraded/unhealthy)
+- `GET /ready` — Sonda de preparación para orquestadores
+- `GET /metrics` — Métricas en formato Prometheus
+
+Deshabilitar con `HEALTH_CHECK_ENABLED=false`.
 
 ---
 
@@ -514,7 +536,7 @@ npx tsc --noEmit          # Verificación de tipos del frontend
 ## Solución de Problemas
 
 - **¿El bot no responde?** Revisa los logs de `npm run dev` y asegúrate de que el bot sea Admin en el grupo.
-- **¿Falla el STT?** Asegúrate de que `ffmpeg` esté instalado (`brew install ffmpeg`).
+- **¿Falla el STT?** El proveedor por defecto (`gemini`) no necesita dependencias adicionales. Si usas `STT_PROVIDER=gcp`, asegúrate de que `ffmpeg` esté instalado (`brew install ffmpeg`).
 - **¿No se procesa el multimedia?** Verifica que `GEMINI_API_KEY` esté configurado en `.env`.
 - **¿Problemas con el contenedor?** Ejecuta `bash container/build.sh` para reconstruir la imagen.
 - **¿Página en blanco en el panel?** Ejecuta `cd packages/dashboard && npm install` antes de compilar.

@@ -54,7 +54,7 @@
 - **Fast Path (Direct API)** - Simple text queries bypass container startup, streaming responses in real-time via the `@google/genai` SDK. Falls back to containers for code execution.
 - **Context Caching** - Static content cached via the Gemini caching API, reducing input token costs by 75-90%.
 - **Native Function Calling** - Tool operations use Gemini's native function calling instead of file-based IPC polling.
-- **Speech-to-Text** - Voice messages are automatically transcribed (Gemini multimodal or Google Cloud Speech).
+- **Speech-to-Text** - Voice messages are automatically transcribed using Gemini multimodal (default, no FFmpeg needed) or Google Cloud Speech.
 - **Image Generation** - Create images using **Imagen 3** via natural language.
 - **Browser Automation** - Agents use `agent-browser` for complex web tasks.
 - **Knowledge Base** - Per-group document store with SQLite FTS5 full-text search.
@@ -69,7 +69,7 @@
 - **Multi-model Support** - Choose Gemini model per group (`gemini-3-flash-preview`, `gemini-3-pro-preview`, etc.).
 - **Container Isolation** - Every group runs in its own sandbox (Apple Container or Docker).
 - **Web Dashboard** - 12-module real-time command center with log streaming, memory editor, analytics, Google account management, Drive browser, and Discord settings.
-- **i18n** - Full interface support for English, Chinese, Japanese, and Spanish.
+- **i18n** - Full interface support for 8 languages: English, Traditional Chinese, Simplified Chinese, Japanese, Korean, Spanish, Portuguese, and Russian.
 
 ---
 
@@ -124,7 +124,7 @@ nanogemclaw/
 | --------------- | ---------------------- | ----------------------------------- |
 | **Node.js 20+** | Runtime                | [nodejs.org](https://nodejs.org)    |
 | **Gemini CLI**  | AI Agent               | `npm install -g @google/gemini-cli` |
-| **FFmpeg**      | Audio processing (STT) | `brew install ffmpeg`               |
+| **FFmpeg**      | GCP STT only (optional) | `brew install ffmpeg`               |
 
 ### 1. Clone & Install
 
@@ -323,10 +323,7 @@ All Google plugins depend on **google-auth** for OAuth2 tokens. Run the authoriz
 | ---------------------------- | ----------- | ------------------------------------------------ |
 | `GOOGLE_CLIENT_ID`           | -           | OAuth2 client ID from Google Cloud Console       |
 | `GOOGLE_CLIENT_SECRET`       | -           | OAuth2 client secret                             |
-| `GOOGLE_KNOWLEDGE_FOLDER_ID` | -           | Drive folder ID for RAG knowledge indexing       |
 | `DISCORD_WEBHOOK_URL`        | -           | Discord channel webhook URL for reports          |
-| `DISCORD_DAILY_CRON`         | `0 9 * * *` | Daily report schedule (default: 9:00 AM)         |
-| `DISCORD_WEEKLY_CRON`        | `0 9 * * 1` | Weekly report schedule (default: Monday 9:00 AM) |
 
 ### Optional - Infrastructure
 
@@ -338,6 +335,13 @@ All Google plugins depend on **google-auth** for OAuth2 tokens. Run the authoriz
 | `RATE_LIMIT_MAX`     | `20`                       | Max requests per window per group  |
 | `RATE_LIMIT_WINDOW`  | `5`                        | Rate limit window (minutes)        |
 | `WEBHOOK_URL`        | -                          | External webhook for notifications |
+| `WEBHOOK_EVENTS`     | `error,alert`              | Events that trigger webhook        |
+| `ALERTS_ENABLED`     | `true`                     | Enable error alerts to main group  |
+| `CONTAINER_MAX_OUTPUT_SIZE` | `10485760`          | Max container output size (bytes)  |
+| `SCHEDULER_CONCURRENCY` | auto                    | Max concurrent scheduled containers |
+| `BACKUP_RETENTION_DAYS` | `7`                     | Days to keep database backups      |
+| `HEALTH_CHECK_ENABLED` | `true`                   | Enable health check HTTP server    |
+| `HEALTH_CHECK_PORT`  | `8080`                     | Health check server port           |
 | `TZ`                 | system                     | Timezone for scheduled tasks       |
 | `LOG_LEVEL`          | `info`                     | Logging level                      |
 
@@ -375,9 +379,16 @@ For the complete list, see [.env.example](.env.example).
 
 Send these commands directly to the bot:
 
+- `/admin help` - List all available admin commands
+- `/admin stats` - Show uptime, memory usage, and token statistics
+- `/admin groups` - List all registered groups with status
+- `/admin tasks` - List all scheduled tasks
+- `/admin errors` - Show groups with recent errors
+- `/admin report` - Generate daily usage report
 - `/admin language <lang>` - Switch bot interface language
-- `/admin persona <name>` - Change bot personality
-- `/admin report` - Get a daily activity summary
+- `/admin persona <name|list|set>` - Manage bot personas
+- `/admin trigger <group> <on|off>` - Toggle @mention trigger requirement
+- `/admin export <group>` - Export conversation history as Markdown
 
 ---
 
@@ -387,7 +398,7 @@ Send these commands directly to the bot:
 graph LR
     TG[Telegram] --> Bot[Node.js Host]
     Bot --> DB[(SQLite + FTS5)]
-    Bot --> STT[FFmpeg / STT]
+    Bot --> STT[Gemini STT]
     Bot --> FP[Fast Path<br/>Direct Gemini API]
     FP --> Cache[Context Cache]
     FP --> FC[Function Calling]
@@ -459,6 +470,17 @@ React + Vite + TailwindCSS SPA with 12 modules:
 - **SQLite** (`store/messages.db`): Messages, tasks, stats, preferences, knowledge (FTS5)
 - **JSON** (`data/`): Sessions, registered groups, custom personas, calendar configs, group skills
 - **Filesystem** (`groups/`): Per-group workspace (GEMINI.md, logs, media, IPC)
+- **Backups** (`store/backups/`): Automatic daily SQLite backups with configurable retention (`BACKUP_RETENTION_DAYS`)
+
+### Health Check
+
+A lightweight HTTP server runs on port `HEALTH_CHECK_PORT` (default 8080) with:
+
+- `GET /health` — System health status (healthy/degraded/unhealthy)
+- `GET /ready` — Readiness probe for orchestrators
+- `GET /metrics` — Prometheus-format metrics
+
+Disable with `HEALTH_CHECK_ENABLED=false`.
 
 ---
 
@@ -516,7 +538,7 @@ npx tsc --noEmit          # Type check frontend
 ## Troubleshooting
 
 - **Bot not responding?** Check `npm run dev` logs and ensure the bot is an Admin in the group.
-- **STT failing?** Ensure `ffmpeg` is installed (`brew install ffmpeg`).
+- **STT failing?** Default provider (`gemini`) needs no extra dependencies. If using `STT_PROVIDER=gcp`, ensure `ffmpeg` is installed (`brew install ffmpeg`).
 - **Media not processing?** Verify `GEMINI_API_KEY` is set in `.env`.
 - **Container issues?** Run `bash container/build.sh` to rebuild the image.
 - **Dashboard blank page?** Run `cd packages/dashboard && npm install` before building.

@@ -54,7 +54,7 @@
 - **快速通道（Direct API）** — 简单文本查询绕过容器启动，通过 `@google/genai` SDK 实时流式返回响应。代码执行时回退到容器模式。
 - **上下文缓存** — 静态内容通过 Gemini 缓存 API 缓存，将输入 token 成本降低 75-90%。
 - **原生函数调用** — 工具操作使用 Gemini 原生函数调用，而非基于文件的 IPC 轮询。
-- **语音转文字** — 语音消息自动转录（Gemini 多模态或 Google Cloud Speech）。
+- **语音转文字** — 语音消息使用 Gemini 多模态自动转录（默认，无需 FFmpeg）或 Google Cloud Speech。
 - **图像生成** — 通过自然语言使用 **Imagen 3** 创建图像。
 - **浏览器自动化** — Agent 使用 `agent-browser` 执行复杂的网页任务。
 - **知识库** — 每个群组独立的文档存储，支持 SQLite FTS5 全文搜索。
@@ -69,7 +69,7 @@
 - **多模型支持** — 按群组选择 Gemini 模型（`gemini-3-flash-preview`、`gemini-3-pro-preview` 等）。
 - **容器隔离** — 每个群组在独立沙盒中运行（Apple Container 或 Docker）。
 - **Web 控制面板** — 12 模块实时指挥中心，包含日志流、内存编辑器、数据分析、Google 账户管理、Drive 浏览器及 Discord 设置等功能。
-- **国际化** — 完整支持英语、中文、日语和西班牙语界面。
+- **国际化** — 完整界面支持 8 种语言：英语、繁体中文、简体中文、日语、韩语、西班牙语、葡萄牙语和俄语。
 
 ---
 
@@ -124,7 +124,7 @@ nanogemclaw/
 | --------------- | --------------- | ----------------------------------- |
 | **Node.js 20+** | 运行时          | [nodejs.org](https://nodejs.org)    |
 | **Gemini CLI**  | AI Agent        | `npm install -g @google/gemini-cli` |
-| **FFmpeg**      | 音频处理（STT） | `brew install ffmpeg`               |
+| **FFmpeg**      | 仅 GCP STT（可选） | `brew install ffmpeg`               |
 
 ### 1. 克隆并安装
 
@@ -323,10 +323,7 @@ NanoGemClaw 在 `plugins/` 目录中内置 7 个插件：
 | ---------------------------- | ----------- | ---------------------------------------- |
 | `GOOGLE_CLIENT_ID`           | -           | Google Cloud Console 的 OAuth2 客户端 ID |
 | `GOOGLE_CLIENT_SECRET`       | -           | OAuth2 客户端密钥                        |
-| `GOOGLE_KNOWLEDGE_FOLDER_ID` | -           | RAG 知识索引的 Drive 文件夹 ID           |
 | `DISCORD_WEBHOOK_URL`        | -           | Discord 频道 webhook URL                 |
-| `DISCORD_DAILY_CRON`         | `0 9 * * *` | 日报调度（默认：每天上午 9:00）          |
-| `DISCORD_WEEKLY_CRON`        | `0 9 * * 1` | 周报调度（默认：每周一上午 9:00）        |
 
 ### 可选 — 基础设施
 
@@ -338,6 +335,13 @@ NanoGemClaw 在 `plugins/` 目录中内置 7 个插件：
 | `RATE_LIMIT_MAX`     | `20`                       | 每个群组每个窗口期的最大请求数 |
 | `RATE_LIMIT_WINDOW`  | `5`                        | 速率限制窗口期（分钟）         |
 | `WEBHOOK_URL`        | -                          | 通知的外部 webhook             |
+| `WEBHOOK_EVENTS`     | `error,alert`              | 触发 webhook 的事件              |
+| `ALERTS_ENABLED`     | `true`                     | 启用错误警报至主群组             |
+| `CONTAINER_MAX_OUTPUT_SIZE` | `10485760`          | 容器最大输出大小（字节）         |
+| `SCHEDULER_CONCURRENCY` | 自动                    | 最大同时调度容器数               |
+| `BACKUP_RETENTION_DAYS` | `7`                     | 数据库备份保留天数               |
+| `HEALTH_CHECK_ENABLED` | `true`                   | 启用健康检查 HTTP 服务器        |
+| `HEALTH_CHECK_PORT`  | `8080`                     | 健康检查服务器端口               |
 | `TZ`                 | 系统                       | 定时任务的时区                 |
 | `LOG_LEVEL`          | `info`                     | 日志级别                       |
 
@@ -375,9 +379,16 @@ NanoGemClaw 在 `plugins/` 目录中内置 7 个插件：
 
 直接向 Bot 发送以下命令：
 
+- `/admin help` — 列出所有可用的管理命令
+- `/admin stats` — 显示运行时间、内存使用量和 token 统计
+- `/admin groups` — 列出所有已注册群组及状态
+- `/admin tasks` — 列出所有定时任务
+- `/admin errors` — 显示最近有错误的群组
+- `/admin report` — 生成每日使用报告
 - `/admin language <lang>` — 切换 Bot 界面语言
-- `/admin persona <name>` — 更改 Bot 人格
-- `/admin report` — 获取每日活动摘要
+- `/admin persona <name|list|set>` — 管理 Bot 人格
+- `/admin trigger <group> <on|off>` — 切换 @提及触发需求
+- `/admin export <group>` — 导出对话记录为 Markdown
 
 ---
 
@@ -387,7 +398,7 @@ NanoGemClaw 在 `plugins/` 目录中内置 7 个插件：
 graph LR
     TG[Telegram] --> Bot[Node.js Host]
     Bot --> DB[(SQLite + FTS5)]
-    Bot --> STT[FFmpeg / STT]
+    Bot --> STT[Gemini STT]
     Bot --> FP[Fast Path<br/>Direct Gemini API]
     FP --> Cache[Context Cache]
     FP --> FC[Function Calling]
@@ -459,6 +470,17 @@ React + Vite + TailwindCSS SPA，包含 12 个模块：
 - **SQLite**（`store/messages.db`）：消息、任务、统计、偏好设置、知识库（FTS5）
 - **JSON**（`data/`）：会话、已注册群组、自定义人格、日历配置、群组技能
 - **文件系统**（`groups/`）：每个群组的工作区（GEMINI.md、日志、媒体、IPC）
+- **备份**（`store/backups/`）：自动每日 SQLite 备份，可配置保留天数（`BACKUP_RETENTION_DAYS`）
+
+### 健康检查
+
+轻量 HTTP 服务器运行于 `HEALTH_CHECK_PORT`（默认 8080）：
+
+- `GET /health` — 系统健康状态（healthy/degraded/unhealthy）
+- `GET /ready` — 编排器就绪探针
+- `GET /metrics` — Prometheus 格式指标
+
+以 `HEALTH_CHECK_ENABLED=false` 停用。
 
 ---
 
@@ -516,7 +538,7 @@ npx tsc --noEmit          # 前端类型检查
 ## 故障排查
 
 - **Bot 没有响应？** 检查 `npm run dev` 的日志，确保 Bot 在群组中具有管理员权限。
-- **STT 失败？** 确保已安装 `ffmpeg`（`brew install ffmpeg`）。
+- **STT 失败？** 默认提供者（`gemini`）不需要额外依赖。若使用 `STT_PROVIDER=gcp`，请确认已安装 `ffmpeg`（`brew install ffmpeg`）。
 - **媒体无法处理？** 确认 `.env` 中已设置 `GEMINI_API_KEY`。
 - **容器问题？** 运行 `bash container/build.sh` 重新构建镜像。
 - **控制面板空白页？** 构建前先运行 `cd packages/dashboard && npm install`。
