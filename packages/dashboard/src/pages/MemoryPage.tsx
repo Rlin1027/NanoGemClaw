@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FileText, Brain, Save, RotateCcw } from 'lucide-react';
-import { useApiQuery } from '../hooks/useApi';
+import { useApiQuery, apiFetch } from '../hooks/useApi';
 import { usePrompt } from '../hooks/useMemory';
 import { useLocale } from '../hooks/useLocale';
+import { showToast } from '../hooks/useToast';
 import { GroupData } from '../hooks/useSocket';
 
 interface MemorySummary {
@@ -31,11 +32,47 @@ export function MemoryPage({ groups }: { groups: GroupData[] }) {
     }, [groups, selectedGroup]);
 
     const prompt = usePrompt(selectedGroup || null);
-    const { data: memorySummary, isLoading: memoryLoading } = useApiQuery<MemorySummary | null>(
-        selectedGroup ? `/api/memory/${selectedGroup}` : '/api/health'
+    const { data: memorySummary, isLoading: memoryLoading, refetch: refetchMemory } = useApiQuery<MemorySummary | null>(
+        selectedGroup ? `/api/memory/${selectedGroup}` : null
     );
     // Guard: health fallback returns non-MemorySummary shape; treat as null
     const validSummary = memorySummary && 'summary' in memorySummary ? memorySummary : null;
+
+    // Memory editing state
+    const [memoryContent, setMemoryContent] = useState('');
+    const [memoryOriginal, setMemoryOriginal] = useState('');
+    const [memorySaving, setMemorySaving] = useState(false);
+    const memoryHasChanges = memoryContent !== memoryOriginal;
+
+    // Sync memory content when data loads or group changes
+    useEffect(() => {
+        const text = validSummary?.summary ?? '';
+        setMemoryContent(text);
+        setMemoryOriginal(text);
+    }, [validSummary?.summary, selectedGroup]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const saveMemory = useCallback(async () => {
+        if (!selectedGroup || !memoryHasChanges) return;
+        setMemorySaving(true);
+        try {
+            await apiFetch(`/api/memory/${selectedGroup}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ summary: memoryContent }),
+            });
+            setMemoryOriginal(memoryContent);
+            showToast(t('memorySaved', '記憶體已儲存'), 'success');
+            await refetchMemory();
+        } catch {
+            showToast(t('memorySaveError', '儲存失敗'), 'error');
+        } finally {
+            setMemorySaving(false);
+        }
+    }, [selectedGroup, memoryContent, memoryHasChanges, t, refetchMemory]);
+
+    const revertMemory = useCallback(() => {
+        setMemoryContent(memoryOriginal);
+    }, [memoryOriginal]);
 
     // Load prompt when group changes
     useEffect(() => {
@@ -44,19 +81,21 @@ export function MemoryPage({ groups }: { groups: GroupData[] }) {
         }
     }, [selectedGroup]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Keyboard shortcut: Cmd+S / Ctrl+S to save
+    // Keyboard shortcut: Cmd+S / Ctrl+S to save (works for both tabs)
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
             if ((e.metaKey || e.ctrlKey) && e.key === 's') {
                 e.preventDefault();
-                if (prompt.hasChanges && !prompt.saving) {
+                if (activeTab === 'prompt' && prompt.hasChanges && !prompt.saving) {
                     prompt.save();
+                } else if (activeTab === 'memory' && memoryHasChanges && !memorySaving) {
+                    saveMemory();
                 }
             }
         };
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
-    }, [prompt.hasChanges, prompt.saving, prompt.save]);
+    }, [activeTab, prompt.hasChanges, prompt.saving, prompt.save, memoryHasChanges, memorySaving, saveMemory]);
 
     // Warn on navigate away with unsaved changes
     useEffect(() => {
@@ -120,6 +159,23 @@ export function MemoryPage({ groups }: { groups: GroupData[] }) {
                         </button>
                     </div>
                 )}
+                {activeTab === 'memory' && memoryHasChanges && (
+                    <div className="flex items-center gap-2 ml-auto">
+                        <button
+                            onClick={revertMemory}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm transition-colors"
+                        >
+                            <RotateCcw size={14} /> {t('cancelEdit')}
+                        </button>
+                        <button
+                            onClick={saveMemory}
+                            disabled={memorySaving}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                        >
+                            <Save size={14} /> {memorySaving ? t('saving') : t('saveMemory')}
+                        </button>
+                    </div>
+                )}
             </div>
 
             {prompt.error && (
@@ -172,9 +228,19 @@ export function MemoryPage({ groups }: { groups: GroupData[] }) {
                                         <div className="text-slate-200 font-mono text-sm">{new Date(validSummary.updated_at).toLocaleString(locale)}</div>
                                     </div>
                                 </div>
-                                <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
+                                <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4 flex flex-col flex-1">
                                     <h3 className="text-sm font-medium text-slate-300 mb-2">{t('summary')}</h3>
-                                    <p className="text-slate-400 text-sm whitespace-pre-wrap">{validSummary.summary}</p>
+                                    <textarea
+                                        value={memoryContent}
+                                        onChange={e => setMemoryContent(e.target.value)}
+                                        className="flex-1 min-h-[300px] w-full bg-slate-900/50 border border-slate-800 rounded-lg p-3 text-slate-300 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/50 whitespace-pre-wrap"
+                                        spellCheck={false}
+                                    />
+                                    {memoryHasChanges && (
+                                        <div className="mt-2 text-xs text-yellow-400">
+                                            {t('unsavedChanges')}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         ) : (

@@ -423,6 +423,31 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
     },
   );
 
+  // PUT /api/memory/:groupFolder — update memory summary text
+  router.put(
+    '/memory/:groupFolder',
+    validate({ params: groupFolderParams }),
+    async (req, res) => {
+      const { groupFolder } = req.params as unknown as z.infer<
+        typeof groupFolderParams
+      >;
+      const { summary } = req.body as { summary?: string };
+      if (typeof summary !== 'string') {
+        res.status(400).json({ error: 'summary is required' });
+        return;
+      }
+      try {
+        const { upsertMemorySummary } = await import('../db.js');
+        // Pass 0 for counts so upsert only updates the text (counts += 0)
+        upsertMemorySummary(groupFolder, summary, 0, 0);
+        const { getMemorySummary } = await import('../db.js');
+        res.json({ data: getMemorySummary(groupFolder) });
+      } catch {
+        res.status(500).json({ error: 'Failed to update memory' });
+      }
+    },
+  );
+
   // GET /api/search
   router.get('/search', validate({ query: searchQuery }), async (req, res) => {
     try {
