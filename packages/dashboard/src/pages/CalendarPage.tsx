@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Calendar, Plus, Trash2, X, ExternalLink, Loader2, CheckCircle2, RefreshCw } from 'lucide-react';
 import { useCalendarConfigs, useCalendarEvents, useAddCalendarConfig, useRemoveCalendarConfig, type CalendarEvent } from '../hooks/useCalendar';
@@ -51,16 +51,18 @@ export function CalendarPage() {
     const { data: googleAuth } = useApiQuery<GoogleAuthStatus>('/api/plugins/google-auth/status');
     const isGoogleAuthenticated = googleAuth?.authenticated === true;
 
-    // Google Calendar events
-    const now = new Date();
-    const timeMin = now.toISOString();
-    const timeMax = new Date(now.getTime() + days * 86400000).toISOString();
-    const googleEventsUrl = isGoogleAuthenticated
-        ? `/api/plugins/google-calendar-rw/events?time_min=${encodeURIComponent(timeMin)}&time_max=${encodeURIComponent(timeMax)}&max_results=50`
-        : null;
+    // Google Calendar events — useMemo to stabilise the URL between renders
+    // (prevents useApiQuery from re-fetching on every render due to new Date())
+    const googleEventsUrl = useMemo(() => {
+        if (!isGoogleAuthenticated) return null;
+        const now = new Date();
+        const timeMin = now.toISOString();
+        const timeMax = new Date(now.getTime() + days * 86400000).toISOString();
+        return `/api/plugins/google-calendar-rw/events?time_min=${encodeURIComponent(timeMin)}&time_max=${encodeURIComponent(timeMax)}&max_results=50`;
+    }, [isGoogleAuthenticated, days]);
 
     const { data: googleEventsRaw, isLoading: loadingGoogleEvents, refetch: refetchGoogleEvents } =
-        useApiQuery<GoogleCalendarEvent[]>(googleEventsUrl ?? '/api/plugins/google-calendar-rw/events');
+        useApiQuery<GoogleCalendarEvent[]>(googleEventsUrl);
 
     const googleEvents: CalendarEvent[] = isGoogleAuthenticated && googleEventsRaw
         ? googleEventsRaw.map(e => ({

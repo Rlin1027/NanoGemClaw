@@ -27,13 +27,19 @@ interface UseApiQueryResult<T> {
     refetch: () => Promise<void>;
 }
 
-export function useApiQuery<T>(endpoint: string): UseApiQueryResult<T> {
+export function useApiQuery<T>(endpoint: string | null): UseApiQueryResult<T> {
     const [data, setData] = useState<T | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<Error | null>(null);
     const controllerRef = useRef<AbortController | null>(null);
 
     useEffect(() => {
+        // Skip fetch when endpoint is null (e.g. waiting for auth)
+        if (!endpoint) {
+            setIsLoading(false);
+            setData(null);
+            return;
+        }
         const controller = new AbortController();
         controllerRef.current = controller;
         setIsLoading(true);
@@ -56,6 +62,7 @@ export function useApiQuery<T>(endpoint: string): UseApiQueryResult<T> {
     }, [endpoint]);
 
     const refetch = useCallback(async () => {
+        if (!endpoint) return;
         controllerRef.current?.abort();
         const controller = new AbortController();
         controllerRef.current = controller;
