@@ -17,7 +17,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastContainer } from './components/ToastContainer';
 import { SearchOverlay } from './components/SearchOverlay';
 import { AddGroupModal } from './components/AddGroupModal';
-import { Search, Loader2, Bot, ChevronRight } from 'lucide-react';
+import { Search, Loader2, Bot, ChevronRight, Eye, EyeOff } from 'lucide-react';
 import { useSocket } from './hooks/useSocket';
 import { useApiQuery } from './hooks/useApi';
 
@@ -31,12 +31,19 @@ function App() {
     const [hiddenGroups, setHiddenGroups] = useState<string[]>(() => {
         try { return JSON.parse(localStorage.getItem('hiddenGroups') || '[]'); } catch { return []; }
     });
+    const [showHidden, setShowHidden] = useState(false);
     const hideGroup = (id: string) => {
         const updated = [...hiddenGroups, id];
         setHiddenGroups(updated);
         localStorage.setItem('hiddenGroups', JSON.stringify(updated));
     };
+    const unhideGroup = (id: string) => {
+        const updated = hiddenGroups.filter(gid => gid !== id);
+        setHiddenGroups(updated);
+        localStorage.setItem('hiddenGroups', JSON.stringify(updated));
+    };
     const visibleGroups = groups.filter(g => !hiddenGroups.includes(g.id));
+    const hiddenGroupsList = groups.filter(g => hiddenGroups.includes(g.id));
 
     // Cmd+K global shortcut
     useEffect(() => {
@@ -141,6 +148,35 @@ function App() {
                                 </div>
                                 <span className="font-medium">Discover Group</span>
                             </button>
+                        </div>
+                    )}
+
+                    {/* Hidden Groups Toggle & List */}
+                    {hiddenGroupsList.length > 0 && (
+                        <div className="mt-4">
+                            <button
+                                onClick={() => setShowHidden(!showHidden)}
+                                className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-colors"
+                            >
+                                {showHidden ? <Eye size={16} /> : <EyeOff size={16} />}
+                                {hiddenGroupsList.length} hidden group{hiddenGroupsList.length > 1 ? 's' : ''}
+                            </button>
+                            {showHidden && (
+                                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 opacity-60">
+                                    {hiddenGroupsList.map(group => (
+                                        <div key={group.id} className="relative">
+                                            <StatusCard {...group} />
+                                            <button
+                                                onClick={() => unhideGroup(group.id)}
+                                                className="absolute top-3 right-3 p-1.5 rounded-lg bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 transition-colors"
+                                                title="Show group"
+                                            >
+                                                <Eye size={16} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     )}
                 </>
