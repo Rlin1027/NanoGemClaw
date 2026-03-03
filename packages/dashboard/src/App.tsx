@@ -28,6 +28,15 @@ function App() {
     const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
     const [searchOpen, setSearchOpen] = useState(false);
     const [addGroupOpen, setAddGroupOpen] = useState(false);
+    const [hiddenGroups, setHiddenGroups] = useState<string[]>(() => {
+        try { return JSON.parse(localStorage.getItem('hiddenGroups') || '[]'); } catch { return []; }
+    });
+    const hideGroup = (id: string) => {
+        const updated = [...hiddenGroups, id];
+        setHiddenGroups(updated);
+        localStorage.setItem('hiddenGroups', JSON.stringify(updated));
+    };
+    const visibleGroups = groups.filter(g => !hiddenGroups.includes(g.id));
 
     // Cmd+K global shortcut
     useEffect(() => {
@@ -96,22 +105,23 @@ function App() {
                         </div>
                     </div>
 
-                    {groups.length === 0 && isConnected ? (
+                    {visibleGroups.length === 0 && isConnected ? (
                         <div className="flex flex-col items-center justify-center py-20 text-slate-500">
                             <p className="mb-2">No active groups found.</p>
                             <button className="text-blue-500 hover:text-blue-400">Discover Groups</button>
                         </div>
-                    ) : groups.length === 0 && !isConnected ? (
+                    ) : visibleGroups.length === 0 && !isConnected ? (
                         <div className="flex items-center justify-center py-20 text-slate-500 gap-2">
                             <Loader2 className="animate-spin" /> Connecting to server...
                         </div>
                     ) : (
                         /* Grid Layout */
                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
-                            {groups.map(group => (
+                            {visibleGroups.map(group => (
                                 <StatusCard
                                     key={group.id}
                                     {...group}
+                                    onHide={() => hideGroup(group.id)}
                                     onOpenTerminal={() => setActiveTab('logs')}
                                     onViewMemory={() => {
                                         setSelectedGroupForMemory(group.id);
