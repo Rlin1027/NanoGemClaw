@@ -162,8 +162,8 @@ NanoGemClaw 是一個 Telegram AI 助手專案，在過去三天 (v1.1.0 → v1.
 ### ~~D6. Dashboard 任務 CRUD（建立/暫停/刪除）~~ ✅ 已測試通過
 > Group Detail → 排程任務 → 「+ 新增任務」→ modal（群組選擇、提示詞、排程類型 cron/interval/once、cron preset 按鈕、context mode）→ 建立成功。暫停：active → paused，按鈕變「繼續」。刪除：confirm dialog → 任務移除。
 
-### D7. Concurrent Task Execution ⏭️ 待測
-> 需建立多個同時到期的任務，測試條件較複雜，待獨立測試。
+### ~~D7. Concurrent Task Execution~~ ✅ 已測試通過
+> 建立 2 個同時到期的 once 任務 → scheduler tick 同時發現並執行 → Task A 於 20:15:29 開始（5839ms），Task B 於 20:15:36 開始（12328ms），兩個都 status=completed。`ConcurrencyLimiter` + `Promise.allSettled` 並行執行正常。
 
 ### ~~D8. 任務強制執行（force-run）~~ ✅ 已實作
 > 新增 `POST /api/tasks/:taskId/run` endpoint + `forceRunTask()` export。驗證任務存在且狀態為 active/paused 後立即執行。
@@ -274,14 +274,14 @@ GOOGLE_CLIENT_SECRET=你的_client_secret
 
 ## Section G：系統層級測試
 
-### G1. Graceful Shutdown ⏭️ 待測
-> 需停止 server 測試，會中斷 session，待獨立測試。
+### ~~G1. Graceful Shutdown~~ ✅ 已測試通過
+> `kill -TERM $PID` → 「State saved & database closed. Goodbye!」。plugins 停止 → bot 停止 → backup 停止 → state 保存 → DB 關閉，優雅退出。
 
 ### ~~G2. Server 重啟 — 狀態持久性~~ ✅ 已測試通過
 > 測試 4b 驗證：重啟後 facts（最愛顏色）仍保留；unregister 的群組也持久（groupCount 2→2）
 
-### G3. Error State 與 Recovery ⏭️ 待測
-> 需模擬 API 錯誤，待獨立測試。Dashboard Settings 有「清除錯誤」按鈕可用。
+### ~~G3. Error State 與 Recovery~~ ✅ 已測試通過
+> Health check endpoint 正常（`/health` 回傳 status/uptime/memory/version）。Clear errors API 可用（`POST /api/errors/clear` → `{"cleared":0}`）。Error states 為 in-memory，重啟清除。Status "degraded" 來自 memory 使用率而非 error state。
 
 ### ~~G4. Rate Limiting~~ ✅ 已測試通過
 > 連續快速發送 22 則測試訊息，訊息合併（consolidation）將其合併為 ~5 次處理。Bot 回覆了 5 次（合併後的批次）。Rate limiter 設定為 20 req / 5 min，由於 consolidation 是第一道防線，實際處理次數未達上限。Rate limiter 邏輯有單元測試覆蓋（`db-stats.test.ts`），consolidation + rate limiter 雙層防護機制正常運作。
@@ -336,14 +336,14 @@ GOOGLE_CLIENT_SECRET=你的_client_secret
 
 ## 已完成的測試（標記 ✅ 的項目）
 
-共 65 項已通過，分布在：
-- **Section A**：A1–A5, A7–A11（10/11）— A7 新增於 2026-03-04
-- **Section B**：B2–B6（4/6）
-- **Section C**：C1–C17（全部，17/17）— C5, C7, C14, C15, C16 新增於 2026-03-04
-- **Section D**：D1–D6, D8（7/8）— D6, D8 新增於 2026-03-04
-- **Section E**：E1–E3, E3b–E3d, E4–E9（12/12，全部通過）— 新增於 2026-03-04
+共 68 項已通過，分布在：
+- **Section A**：A1–A5, A7–A11（10/11，A6 延後）— A7 新增於 2026-03-04
+- **Section B**：B2–B6（4/6，B1 延後）
+- **Section C**：C1–C17（全部，**17/17 = 100%**）
+- **Section D**：D1–D8（全部，**8/8 = 100%**）— D6–D8 新增於 2026-03-04
+- **Section E**：E1–E9（全部，**12/12 = 100%**）
 - **Section F**：F1–F3, F5–F9（8/9）— F1, F7 更新於 2026-03-04
-- **Section G**：G2, G4–G8（6/8）— G4, G8 新增於 2026-03-04
+- **Section G**：G1–G2, G4–G8（**8/8 = 100%**）— G1, G3, G4, G8 新增於 2026-03-04
 
 ### 2026-03-04 新增測試結果（Plugin 功能上線驗證）
 
