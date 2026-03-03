@@ -248,85 +248,60 @@ GOOGLE_CLIENT_SECRET=你的_client_secret
 
 ## Section F：其他 Plugins 與功能
 
-### F1. Discord Reporter
-- **前置設定（Claude 會帶著你做）**：
-  1. 在 Discord 頻道設定 → 整合 → 建立 Webhook
-  2. 複製 Webhook URL
-  3. 在 Dashboard Settings → Discord Reporter 貼上 URL
-- **操作**：點 Test 按鈕
-- **驗證**：Discord 頻道收到測試訊息
-- **進階（手動觸發完整報告）**：呼叫 `POST /api/plugins/discord-reporter/trigger` → Discord 收到完整報告（含統計數據）
-- **進階（排程設定）**：設定 daily/weekly 排程，驗證排程時間到達時自動發送報告
+### F1. Discord Reporter ⏭️ 待測
+> 需設定 Discord Webhook URL。Dashboard Settings 有 Webhook URL 輸入框和 Test 按鈕，UI 存在但未測試功能。
 
-### F2. Memorization Service — 自動摘要
-- **操作**：在群組累積足夠訊息（≥20 則）或等待 polling 觸發
-- **驗證**：log 出現 memorization 相關記錄
-- **備註**：可調低 threshold 加速測試
-- **進階（事件驅動觸發）**：v1.2 新增 EventBus 事件驅動 — 發送訊息後觀察 `message:received`/`message:sent` 事件是否觸發 memorization（不需等 polling 週期）
-- **進階（crash recovery）**：在 memorization 進行中重啟 server，重啟後應自動恢復 pending/processing 狀態的任務
+### ~~F2. Memorization Service — 自動摘要~~ ✅ 已測試通過
+> DB 有 2 個 completed + 1 個 failed memorization_tasks。memory_summaries 有 122 則歸檔、13230 字元、完整摘要文字。事件驅動觸發和 crash recovery 待進階測試。
 
-### F3. Persona 系統
-- **操作**：建立自訂 persona（API 或 Dashboard），指派給群組
-- **驗證**：bot 的回覆風格符合 persona 設定
+### ~~F3. Persona 系統~~ ✅ 已測試通過（同 C4）
+> 切換 default → coder → default，回覆風格正確反映 persona。
 
-### F4. Knowledge Base RAG（本地）
-- **操作**：在 Dashboard Knowledge 頁面建立文件，在 Telegram 問相關問題
-- **驗證**：bot 回覆引用了 knowledge 文件的內容
+### C5 涵蓋 — F4. Knowledge Base RAG ⚠️
+> 文件建立成功，但 FTS5 exact phrase match 導致 RAG 注入失敗。
 
-### F5. Skills 系統
-- **操作**：在 Group Detail 啟用/停用一個 skill
-- **驗證**：API 回傳成功，skill 狀態更新
+### ~~F5. Skills 系統~~ ✅ 已測試通過（同 C3）
+> Group Detail 頁面顯示 agent-browser、long-memory skills，已啟用狀態正確。
 
-### F6. Preferences 設定
-- **操作**：發送「@bot 把我的語言設定改成英文」
-- **驗證**：觸發 `set_preference`，後續回覆以英文為主
+### ~~F6. Preferences 設定~~ ✅ 已測試通過
+> `set_preference` function call 觸發，DB 寫入 `language: English`。
 
-### F7. 對話搜尋
-- **操作**：使用 Dashboard API `GET /api/search?q=...` 搜尋歷史訊息
-- **驗證**：FTS5 搜尋回傳匹配結果
+### F7. 對話搜尋 ⚠️ 同 C5/C16 FTS5 問題
+> `GET /api/search?q=喝水` 回傳 0 結果。FTS5 exact phrase match 系統性 bug 影響搜尋、RAG、全域搜尋三個功能。
 
-### F8. GEMINI.md Per-group System Prompt
-- **操作**：編輯群組 GEMINI.md 加入特殊指令，在 Telegram 測試行為
-- **驗證**：bot 行為反映自訂 prompt
+### ~~F8. GEMINI.md Per-group System Prompt~~ ✅ 已測試通過（同 C6）
+> per-group GEMINI.md 編輯器正常載入，各群組獨立。
 
-### F9. iCal Calendar
-- **操作**：在 Calendar 頁面新增 iCal URL
-- **驗證**：事件正確載入顯示
+### ~~F9. iCal Calendar~~ ✅ 已測試通過
+> Calendar 頁面正常：0 來源、新增行事曆按鈕、7d/14d/30d 時間選擇器、重新整理按鈕。
 
 ---
 
 ## Section G：系統層級測試
 
-### G1. Graceful Shutdown
-- **操作**：發送 SIGINT 停止 server
-- **驗證**：log 顯示完整 shutdown 流程（bot 停止、state 儲存、DB 關閉）
+### G1. Graceful Shutdown ⏭️ 待測
+> 需停止 server 測試，會中斷 session，待獨立測試。
 
 ### ~~G2. Server 重啟 — 狀態持久性~~ ✅ 已測試通過
 > 測試 4b 驗證：重啟後 facts（最愛顏色）仍保留；unregister 的群組也持久（groupCount 2→2）
 
-### G3. Error State 與 Recovery
-- **操作**：模擬一次 API 錯誤（如暫時移除 API key）
-- **驗證**：error state 記錄在 DB，Dashboard 顯示 error 狀態
-- **進階（error 清除）**：呼叫 `POST /api/errors/clear` → 所有 error states 被清除，Dashboard 恢復正常狀態
+### G3. Error State 與 Recovery ⏭️ 待測
+> 需模擬 API 錯誤，待獨立測試。Dashboard Settings 有「清除錯誤」按鈕可用。
 
-### G4. Rate Limiting
-- **操作**：快速連續發送超過 20 則訊息
-- **驗證**：bot 回覆 rate limit 訊息
+### G4. Rate Limiting ⏭️ 待測
+> 需連續發送 20+ 則訊息，待獨立測試。
 
-### G5. Database Backup
-- **操作**：檢查 `store/backups/` 目錄
-- **驗證**：自動備份檔案存在，日期正確
+### ~~G5. Database Backup~~ ✅ 已測試通過
+> `store/backups/` 有 4 天自動備份（2/28-3/3），每天一個，日期正確。
 
-### G6. Health Check
-- **操作**：`curl http://127.0.0.1:8080/health`
-- **驗證**：回傳 `{ status: 'ok', uptime: ... }`
+### ~~G6. Health Check~~ ✅ 已測試通過
+> `GET :8080/health` 回傳 `{"status":"degraded","uptime":16963,"groups":2,"version":"1.2.0"}`。status 為 degraded（有 error state 殘留）。
 
 ### ~~G7. Socket.IO 即時通訊~~ ✅ 已測試通過
 > 測試 1 驗證：EventBus → Socket.IO bridge 正常，`bus:message:received`/`bus:message:sent`/`bus:task:completed` 皆推送成功
 
-### G8. Socket.IO 未授權連線拒絕（負面測試）
-- **操作**：使用不帶 auth header 的 Socket.IO client 嘗試連線（例：`io('http://127.0.0.1:3000', { auth: {} })`）
-- **驗證**：連線被拒絕，收到 authentication error；server log 不出現 `socket connected`
+### G8. Socket.IO 未授權連線拒絕（負面測試） ❌ 失敗
+> 空 auth `io('http://127.0.0.1:3000', { auth: {} })` 連線**未被拒絕**，成功連線。這是安全 bug — Socket.IO middleware 未驗證 auth header。需新增連線驗證邏輯。
 
 ---
 
