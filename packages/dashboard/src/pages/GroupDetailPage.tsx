@@ -119,12 +119,14 @@ export function GroupDetailPage({ groupFolder, onBack }: GroupDetailPageProps) {
     const { t } = useTranslation('groups');
     const locale = useLocale();
     const { group, loading, error, refetch, updateSettings } = useGroupDetail(groupFolder);
-    const { data: allPersonas, refetch: refetchPersonas } = usePersonas();
+    const { data: allPersonas } = usePersonas();
     const [showTaskForm, setShowTaskForm] = useState(false);
     const [editingTask, setEditingTask] = useState<any>(null);
     const [saving, setSaving] = useState(false);
     const [unregistering, setUnregistering] = useState(false);
     const [showCreatePersona, setShowCreatePersona] = useState(false);
+    const [editingPersona, setEditingPersona] = useState<{ key: string; persona: any } | null>(null);
+    const [personaRefreshKey, setPersonaRefreshKey] = useState(0);
 
     const handleSettingChange = async (updates: Record<string, any>) => {
         setSaving(true);
@@ -218,7 +220,9 @@ export function GroupDetailPage({ groupFolder, onBack }: GroupDetailPageProps) {
                         selectedKey={group.persona}
                         onSelect={persona => handleSettingChange({ persona })}
                         onCreateNew={() => setShowCreatePersona(true)}
+                        onEdit={(key, persona) => setEditingPersona({ key, persona })}
                         disabled={saving}
+                        refreshKey={personaRefreshKey}
                     />
                 </div>
 
@@ -333,7 +337,17 @@ export function GroupDetailPage({ groupFolder, onBack }: GroupDetailPageProps) {
                 <CreateEditPersonaModal
                     templates={allPersonas ?? undefined}
                     onClose={() => setShowCreatePersona(false)}
-                    onSaved={() => { setShowCreatePersona(false); refetchPersonas(); }}
+                    onSaved={() => { setShowCreatePersona(false); setPersonaRefreshKey(k => k + 1); }}
+                />
+            )}
+
+            {editingPersona && (
+                <CreateEditPersonaModal
+                    editKey={editingPersona.key}
+                    editPersona={editingPersona.persona}
+                    templates={allPersonas ?? undefined}
+                    onClose={() => setEditingPersona(null)}
+                    onSaved={() => { setEditingPersona(null); setPersonaRefreshKey(k => k + 1); }}
                 />
             )}
         </div>

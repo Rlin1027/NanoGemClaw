@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, X, Eye, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -31,11 +31,17 @@ interface PersonaBrowserProps {
     onCreateNew: () => void;
     onEdit?: (key: string, persona: PersonaWithMeta) => void;
     disabled?: boolean;
+    /** Increment to trigger internal data refetch */
+    refreshKey?: number;
 }
 
-export function PersonaBrowser({ selectedKey, onSelect, onCreateNew, onEdit, disabled }: PersonaBrowserProps) {
+export function PersonaBrowser({ selectedKey, onSelect, onCreateNew, onEdit, disabled, refreshKey }: PersonaBrowserProps) {
     const { t } = useTranslation('groups');
-    const { data: personas, loading, error } = usePersonas();
+    const { data: personas, loading, error, refetch } = usePersonas();
+
+    useEffect(() => {
+        if (refreshKey && refreshKey > 0) refetch();
+    }, [refreshKey]);
     const [activeCategory, setActiveCategory] = useState<PersonaCategory | 'all'>('all');
     const [search, setSearch] = useState('');
     const [previewKey, setPreviewKey] = useState<string | null>(null);

@@ -77,6 +77,9 @@ export function saveCustomPersona(key: string, persona: Persona): void {
   if (PERSONAS[key]) {
     throw new Error(`Cannot override built-in persona: ${key}`);
   }
+  if (customPersonas[key]) {
+    throw new Error(`Persona key already exists: ${key}`);
+  }
   customPersonas[key] = persona;
   saveCustomPersonas();
 }

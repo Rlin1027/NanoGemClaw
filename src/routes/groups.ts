@@ -246,6 +246,10 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
         });
         res.json({ data: { key } });
       } catch (err) {
+        if (err instanceof Error && (err.message.includes('already exists') || err.message.includes('Cannot override'))) {
+          res.status(409).json({ error: err.message });
+          return;
+        }
         const { logger } = await import('../logger.js');
         logger.error({ err }, 'Persona operation failed');
         res.status(500).json({ error: 'Failed to create persona' });
@@ -270,6 +274,10 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
         }
         res.json({ data: { success: true } });
       } catch (err) {
+        if (err instanceof Error && err.message.includes('Cannot delete')) {
+          res.status(400).json({ error: err.message });
+          return;
+        }
         const { logger } = await import('../logger.js');
         logger.error({ err }, 'Persona operation failed');
         res.status(500).json({ error: 'Failed to delete persona' });
