@@ -10,6 +10,7 @@ import path from 'path';
 
 import { ADMIN_PRIVATE_FOLDER, ADMIN_USER_ID, DATA_DIR } from './config.js';
 import { logger } from './logger.js';
+import { safeCompare } from './utils/safe-compare.js';
 
 const ADMIN_FILE = path.join(DATA_DIR, 'admin_user_id.txt');
 
@@ -61,7 +62,7 @@ export function setAdminUserId(userId: string): void {
  * Check if a user ID matches the admin.
  */
 export function isAdminUser(userId: string): boolean {
-  return !!adminUserId && userId === adminUserId;
+  return !!adminUserId && safeCompare(userId, adminUserId);
 }
 
 /**

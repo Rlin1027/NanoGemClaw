@@ -1,4 +1,5 @@
 import { getDatabase } from './connection.js';
+import { ADMIN_PRIVATE_FOLDER } from '../config.js';
 
 // ============================================================================
 // Usage Analytics
@@ -145,9 +146,9 @@ export function getUsageByGroup(since?: string): UsageByGroupEntry[] {
            COALESCE(SUM(response_tokens), 0) as response_tokens,
            COALESCE(AVG(duration_ms), 0) as avg_duration_ms
     FROM usage_stats
-    WHERE group_folder != '_admin_private'
+    WHERE group_folder != ?
   `;
-  const params: string[] = [];
+  const params: string[] = [ADMIN_PRIVATE_FOLDER];
 
   if (since) {
     query += ' AND timestamp > ?';
@@ -201,13 +202,13 @@ export function getGroupTokenRanking(limit: number = 10): Array<{
       COUNT(*) as request_count,
       COALESCE(AVG(prompt_tokens + response_tokens), 0) as avg_tokens_per_request
     FROM usage_stats
-    WHERE group_folder != '_admin_private'
+    WHERE group_folder != ?
     GROUP BY group_folder
     ORDER BY total_tokens DESC
     LIMIT ?
   `,
     )
-    .all(limit) as any[];
+    .all(ADMIN_PRIVATE_FOLDER, limit) as any[];
 }
 
 /** Get response time percentiles (P50/P95) */

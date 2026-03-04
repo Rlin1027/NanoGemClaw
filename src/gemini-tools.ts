@@ -13,6 +13,22 @@ import type { IpcContext, ToolMetadata } from './types.js';
 import { logger } from './logger.js';
 
 // ============================================================================
+// Input Validation Helpers
+// ============================================================================
+
+const SAFE_FOLDER_RE = /^[a-zA-Z0-9_-]+$/;
+
+function validateGroupFolder(
+  name: string,
+  folder: string,
+): { name: string; response: { success: boolean; error: string } } | null {
+  if (!SAFE_FOLDER_RE.test(folder)) {
+    return { name, response: { success: false, error: 'Invalid group folder name' } };
+  }
+  return null;
+}
+
+// ============================================================================
 // Tool Metadata Registry
 // ============================================================================
 
@@ -737,12 +753,16 @@ export async function executeFunctionCall(
       }
 
       case 'get_group_detail': {
+        const invalid = validateGroupFolder(name, args.group_folder);
+        if (invalid) return invalid;
         const { getGroupDetailContext } = await import('./admin-context.js');
         const detail = getGroupDetailContext(args.group_folder);
         return { name, response: { success: true, detail } };
       }
 
       case 'update_group_settings': {
+        const invalid = validateGroupFolder(name, args.group_folder);
+        if (invalid) return invalid;
         const { getRegisteredGroups: getGroups } = await import('./state.js');
         const { isAdminGroup: isAdminCheck } = await import('./admin-auth.js');
         const groups = getGroups();
@@ -765,10 +785,13 @@ export async function executeFunctionCall(
 
         const [, targetGroup] = entry;
         const ALLOWED_SETTINGS = ['persona', 'requireTrigger', 'enableWebSearch', 'enableFastPath', 'geminiModel', 'name'];
+        const BOOL_FIELDS = new Set(['requireTrigger', 'enableWebSearch', 'enableFastPath']);
         const applied: string[] = [];
         for (const key of Object.keys(settings)) {
           if (!ALLOWED_SETTINGS.includes(key)) continue;
-          (targetGroup as any)[key] = settings[key];
+          let value = settings[key];
+          if (BOOL_FIELDS.has(key)) value = Boolean(value);
+          (targetGroup as any)[key] = value;
           applied.push(key);
         }
 
@@ -783,12 +806,16 @@ export async function executeFunctionCall(
       }
 
       case 'read_group_prompt': {
+        const invalid = validateGroupFolder(name, args.group_folder);
+        if (invalid) return invalid;
         const { readGroupGeminiMd } = await import('./group-manager.js');
         const content = readGroupGeminiMd(args.group_folder);
         return { name, response: { success: true, content: content || '(No GEMINI.md found)' } };
       }
 
       case 'write_group_prompt': {
+        const invalid = validateGroupFolder(name, args.group_folder);
+        if (invalid) return invalid;
         const fsMod = await import('fs');
         const pathMod = await import('path');
         const { GROUPS_DIR: groupsDir } = await import('./config.js');
@@ -860,6 +887,8 @@ export async function executeFunctionCall(
       }
 
       case 'send_message_to_group': {
+        const invalid = validateGroupFolder(name, args.group_folder);
+        if (invalid) return invalid;
         const { getRegisteredGroups: allGroups } = await import('./state.js');
         const { isAdminGroup: isAdminFolderCheck } = await import('./admin-auth.js');
         const groups = allGroups();

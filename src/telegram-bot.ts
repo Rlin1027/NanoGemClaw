@@ -51,6 +51,11 @@ export async function connectTelegram(): Promise<void> {
   const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
   setBot(bot);
 
+  // Warn if auto-detect mode is armed
+  if (!getAdminUserId()) {
+    logger.warn('ADMIN_USER_ID not set — first /start in DM will become admin. Set ADMIN_USER_ID for production.');
+  }
+
   // Import and setup message consolidator
   const { messageConsolidator } = await import('./message-consolidator.js');
 
@@ -103,9 +108,11 @@ export async function connectTelegram(): Promise<void> {
     if (msg.chat.type === 'private' && senderId) {
       // Bootstrap: first /start when no admin configured → auto-detect
       if (!getAdminUserId() && content === '/start') {
-        setAdminUserId(senderId);
-        logger.info({ userId: senderId }, 'Admin user auto-detected via /start');
-        await sendMessage(chatId, '✅ You are now the bot admin. Send messages here to manage all groups.');
+        if (!getAdminUserId()) {  // Double-check to prevent TOCTOU race
+          setAdminUserId(senderId);
+          logger.warn({ userId: senderId }, 'Admin auto-detected via /start — set ADMIN_USER_ID env var for production');
+          await sendMessage(chatId, '✅ You are now the bot admin. Send messages here to manage all groups.');
+        }
       }
 
       if (isAdminUser(senderId)) {

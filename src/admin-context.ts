@@ -32,7 +32,7 @@ export function buildAdminSystemPrompt(): string {
     .map(([chatId, g]) => {
       const msgCount = messageCounts.get(chatId) || 0;
       const taskCount = taskCounts.get(g.folder) || 0;
-      return `- **${g.name}** (folder: \`${g.folder}\`, chatId: ${chatId}): ${msgCount} msgs, ${taskCount} active tasks, persona: ${g.persona || 'default'}, trigger: ${g.requireTrigger !== false ? 'required' : 'always respond'}, model: ${g.geminiModel || 'auto'}`;
+      return `- **${g.name}** (folder: \`${g.folder}\`): ${msgCount} msgs, ${taskCount} active tasks, persona: ${g.persona || 'default'}, trigger: ${g.requireTrigger !== false ? 'required' : 'always respond'}, model: ${g.geminiModel || 'auto'}`;
     });
 
   // Build task summary
