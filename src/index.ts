@@ -138,16 +138,20 @@ async function main(): Promise<void> {
 
   const manifestPath = path.join(DATA_DIR, 'plugins.json');
   const projectRoot = path.resolve(DATA_DIR, '..');
-  await discoverAndLoadPlugins(manifestPath, {
-    getDatabase: () => getDatabase(),
-    sendMessage,
-    getGroups: () => getRegisteredGroups() as any,
-    eventBus,
-    dataDir: DATA_DIR,
-  }, {
-    pluginsDir: path.join(projectRoot, 'plugins'),
-    nodeModulesDir: path.join(projectRoot, 'node_modules'),
-  });
+  await discoverAndLoadPlugins(
+    manifestPath,
+    {
+      getDatabase: () => getDatabase(),
+      sendMessage,
+      getGroups: () => getRegisteredGroups() as any,
+      eventBus,
+      dataDir: DATA_DIR,
+    },
+    {
+      pluginsDir: path.join(projectRoot, 'plugins'),
+      nodeModulesDir: path.join(projectRoot, 'node_modules'),
+    },
+  );
 
   // Register plugin IPC handlers
   const pluginIpcHandlers = getPluginIpcHandlers();
@@ -222,11 +226,19 @@ async function main(): Promise<void> {
   setDashboardEventEmitter(emitDashboardEvent);
 
   // Bridge Event Bus to Dashboard Socket.IO
-  const dashboardEvents: Array<keyof import('@nanogemclaw/event-bus').NanoEventMap> = [
-    'message:received', 'message:sent',
-    'group:registered', 'group:unregistered', 'group:updated',
-    'task:created', 'task:completed', 'task:failed',
-    'memory:fact-stored', 'memory:summarized',
+  const dashboardEvents: Array<
+    keyof import('@nanogemclaw/event-bus').NanoEventMap
+  > = [
+    'message:received',
+    'message:sent',
+    'group:registered',
+    'group:unregistered',
+    'group:updated',
+    'task:created',
+    'task:completed',
+    'task:failed',
+    'memory:fact-stored',
+    'memory:summarized',
   ];
   for (const evt of dashboardEvents) {
     eventBus.on(evt, (data) => {
@@ -244,27 +256,27 @@ async function main(): Promise<void> {
     return Object.entries(registeredGroups)
       .filter(([, group]) => !isAdminGroup(group.folder))
       .map(([chatId, group]) => {
-      const activeTasks = activeTaskCounts.get(group.folder) || 0;
-      const errorState = getErrorState(group.folder);
+        const activeTasks = activeTaskCounts.get(group.folder) || 0;
+        const errorState = getErrorState(group.folder);
 
-      let status = 'idle';
-      if (errorState && errorState.consecutiveFailures > 0) status = 'error';
+        let status = 'idle';
+        if (errorState && errorState.consecutiveFailures > 0) status = 'error';
 
-      return {
-        id: group.folder,
-        name: group.name,
-        status,
-        messageCount: chatId ? messageCounts.get(chatId) || 0 : 0,
-        activeTasks,
-        // Extended fields
-        persona: group.persona,
-        requireTrigger: group.requireTrigger,
-        enableWebSearch: group.enableWebSearch,
-        enableFastPath: group.enableFastPath,
-        geminiModel: group.geminiModel,
-        folder: group.folder,
-      };
-    });
+        return {
+          id: group.folder,
+          name: group.name,
+          status,
+          messageCount: chatId ? messageCounts.get(chatId) || 0 : 0,
+          activeTasks,
+          // Extended fields
+          persona: group.persona,
+          requireTrigger: group.requireTrigger,
+          enableWebSearch: group.enableWebSearch,
+          enableFastPath: group.enableFastPath,
+          geminiModel: group.geminiModel,
+          folder: group.folder,
+        };
+      });
   });
 
   // Inject group registrar
@@ -371,7 +383,9 @@ async function gracefulShutdown(signal: string): Promise<void> {
       const pluginLoaderPath = '../app/src/plugin-loader.js';
       const { stopPlugins } = await import(pluginLoaderPath);
       await stopPlugins();
-    } catch { /* plugins may not be loaded */ }
+    } catch {
+      /* plugins may not be loaded */
+    }
 
     // Import shutdown dependencies in parallel
     const [

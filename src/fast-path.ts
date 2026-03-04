@@ -59,8 +59,10 @@ function isMutating(name: string): boolean {
  * (they're typically used in multi-round contexts like pause/resume/cancel).
  */
 const EXPLICIT_INTENT_PATTERNS: Record<string, RegExp> = {
-  generate_image: /畫|圖片|生成.*圖|產生.*圖|image|draw|picture|photo|illustrat|pic/i,
-  schedule_task: /排程|定時|定期|提醒|每天|每週|每月|每小時|schedule|remind|recurring|timer|cron|設[定置].*任務|建立.*任務|加.*任務/i,
+  generate_image:
+    /畫|圖片|生成.*圖|產生.*圖|image|draw|picture|photo|illustrat|pic/i,
+  schedule_task:
+    /排程|定時|定期|提醒|每天|每週|每月|每小時|schedule|remind|recurring|timer|cron|設[定置].*任務|建立.*任務|加.*任務/i,
 };
 
 /** Check if a tool call has explicit user intent based on the user's prompt. */
@@ -379,7 +381,10 @@ You are in direct conversation mode. IMPORTANT RULES:
     if (fnDeclarations.length > 0) {
       tools.push({ functionDeclarations: fnDeclarations });
     }
-    if (input.enableWebSearch !== false) {
+    // Gemini API Key mode: built-in tools (google_search) and custom tools
+    // (Function Calling) cannot be combined in the same request.
+    // Only add googleSearch when there are no function declarations.
+    if (input.enableWebSearch !== false && fnDeclarations.length === 0) {
       tools.push({ googleSearch: {} });
     }
 
@@ -747,7 +752,8 @@ function summarizeFunctionResult(result: FunctionCallResult): string {
         // Calendar event created/updated
         if (response.event) {
           const event = response.event;
-          const start = event.start?.dateTime || event.start?.date || event.start || '';
+          const start =
+            event.start?.dateTime || event.start?.date || event.start || '';
           return `✅ ${event.summary || name} (${typeof start === 'string' ? start : ''})`;
         }
         // Calendar/Tasks list results

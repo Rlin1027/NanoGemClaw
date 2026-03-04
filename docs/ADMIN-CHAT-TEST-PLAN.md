@@ -6,7 +6,56 @@ NanoGemClaw v1.2.0 新增「Private Chat Global Admin」功能，允許管理員
 
 本測試計畫驗證 admin 授權流程、私聊基礎功能、AI 管理工具、隔離過濾機制、以及錯誤邊界處理。
 
-測試方式：使用者在 Telegram 私訊 bot 操作，Claude 監控 server log 和 API 回應來驗證結果。
+測試方式：使用者在 Telegram 私訊 bot 操作，Claude 透過 Playwright 操控 Telegram Web + 監控 server log 來驗證結果。
+
+---
+
+## 測試執行記錄
+
+**執行日期**: 2026-03-04
+**測試環境**: macOS, Telegram Web A, gemini-3-flash-preview, API Key 認證
+**Bot**: @UmedaShark9688_bot
+
+### Bug 修復（測試中發現）
+
+1. **google_search + Function Calling 衝突** (`src/fast-path.ts:384`)
+   - Gemini API Key 模式下，built-in tools (`google_search`) 和 custom tools (Function Calling) 不能同時使用
+   - 修復：有 function declarations 時不加 `googleSearch`
+   - 影響：所有 admin 私聊（使用 admin tools = function calling）
+
+### 進度總覽
+
+| 測試項 | 狀態 | 備註 |
+|--------|------|------|
+| H1.1 環境變數 Admin 啟動 | ⏭️ 跳過 | 需設定 `ADMIN_USER_ID` env var 並重啟，目前以自動偵測替代 |
+| H1.2 自動偵測 Admin | ✅ PASS | `admin_user_id.txt` 建立，ID=1236911363 |
+| H1.3 Admin 持久化 | ✅ PASS | 重啟後 log: `Admin user ID loaded from file` |
+| H1.4 非 Admin 私訊拒絕 | ⏭️ 跳過 | 需第二個 Telegram 帳號發私訊驗證拒絕行為 |
+| H1.5 Env var 優先權 | ⏭️ 跳過 | 需第二帳號 + `ADMIN_USER_ID` env var 組合測試 |
+| H2.1 自動註冊 | ✅ PASS | `_admin_private` 群組與目錄建立 |
+| H2.2 免 Trigger 回應 | ✅ PASS | 直接輸入「你好」，log 顯示 Processing message |
+| H2.3 跳過訊息合併 | ✅ PASS | 連發 3 則各自獨立 Processing message，無合併 |
+| H2.4 對話歷史限制 | ✅ PASS | 程式碼確認 `historyLimit = 10`，15+ 則持續正常 |
+| H2.5 `/admin help` | ✅ PASS | 列出 10 個管理指令 |
+| H2.6 `/admin stats` | ✅ PASS | 顯示群組數/訊息/運行時間/Token |
+| H2.7 `/admin groups` | ✅ PASS | 列出 2 群組，不含 `_admin_private` |
+| H3.1 `list_all_groups` | ✅ PASS | Gemini function call 確認，不含 admin |
+| H3.2 `get_group_detail` | ✅ PASS | 含偏好/facts/prompt 摘要 |
+| H3.3 `update_group_settings` | ✅ PASS | persona 改為 coder 成功 |
+| H3.4 `read_group_prompt` | ✅ PASS | 完整 GEMINI.md 內容回傳 |
+| H3.5 `write_group_prompt` | ✅ PASS | GEMINI.md 第 26 行新增「回覆時要附上 emoji」 |
+| H3.6 `list_all_tasks` | ✅ PASS | 跨群組 4 個任務 |
+| H3.7 `manage_cross_group_task` | ✅ PASS | 暫停 + 恢復 AutoGeminiCLI 名言任務 |
+| H3.8 `send_message_to_group` | ✅ PASS | 訊息成功送到測試環境群組 |
+| H3.9 `generate_image` | ✅ PASS | 貓咪圖片生成並傳送成功 |
+| H4.1 Dashboard 不顯示 admin | ✅ PASS | `/api/groups` 回傳 2 組，無 `_admin_private` |
+| H4.2 Analytics 排除 admin | ✅ PASS | `/api/groups` 不含 admin 私聊 |
+| H4.3 Group Discovery 排除 admin | ✅ PASS | `/api/groups` 僅 2 群組 |
+| H4.4 Context Cache 跳過 admin | ✅ PASS | 所有 admin 請求 `cached:false`，程式碼 `return null` |
+| H4.5 Fact 不提取 | ✅ PASS | `_admin_private/` 無 facts 檔案 |
+| H4.6 Rate Limit 不適用 | ✅ PASS | 連發 3 則無限流，程式碼 `!isAdminChat` 確認 |
+| H5.1 Fast Path 失敗無 Container Fallback | ✅ PASS | 程式碼 + H1.2 實際觸發：回傳錯誤文字，無 container |
+| H5.2 三層 Cache 隔離 | ✅ PASS | admin=不 cache，各群組以 folder 為 key 獨立 |
 
 ---
 

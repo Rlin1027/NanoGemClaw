@@ -329,7 +329,8 @@ const plugin: NanoPlugin = {
       name: 'search_knowledge',
       description:
         'Search the knowledge base (indexed Google Drive documents) for relevant information. ' +
-        'Use when user asks questions that might be answered by their documents.',
+        'Use ONLY when the user explicitly asks about their own documents, files, notes, or stored knowledge. ' +
+        'Do NOT use for general questions, greetings, time, weather, calculations, opinions, or anything unrelated to the user\'s documents.',
       parameters: {
         type: 'OBJECT',
         properties: {
