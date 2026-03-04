@@ -47,13 +47,13 @@
     "info": "資訊",
     "searchPlaceholder": "搜尋... (⌘K)",
     "cmdK": "⌘K",
-    "group": "Group",
-    "allGroups": "All groups",
-    "searchMessages": "Search messages...",
-    "searchMinChars": "Type at least 2 characters to search",
-    "noResultsFor": "No results found for \"{{query}}\"",
-    "result": "result",
-    "results": "results",
-    "navigate": "navigate",
-    "saving": "Saving..."
+    "group": "群組",
+    "allGroups": "所有群組",
+    "searchMessages": "搜尋訊息...",
+    "searchMinChars": "至少輸入 2 個字元進行搜尋",
+    "noResultsFor": "找不到「{{query}}」的結果",
+    "result": "筆結果",
+    "results": "筆結果",
+    "navigate": "導覽",
+    "saving": "儲存中..."
 }

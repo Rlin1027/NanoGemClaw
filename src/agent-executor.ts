@@ -25,6 +25,7 @@ import { sendMessage } from './telegram-helpers.js';
 import { getAvailableGroups, saveState } from './group-manager.js';
 import { RegisteredGroup } from './types.js';
 import { saveJson } from './utils.js';
+import { getEnabledSkillContents } from './skills.js';
 
 // ============================================================================
 // Agent Execution with Retry Helper
@@ -218,6 +219,10 @@ export async function runAgent(
           memoryContext: memoryContext ?? undefined,
           enableWebSearch: group.enableWebSearch ?? true,
           conversationHistory,
+          skillContents: getEnabledSkillContents(
+            path.join(process.cwd(), 'container', 'skills'),
+            group.folder,
+          ) || undefined,
         },
         ipcContext,
         onProgress,

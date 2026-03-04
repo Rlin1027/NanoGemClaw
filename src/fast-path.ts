@@ -192,6 +192,8 @@ export interface FastPathInput {
   disableFunctionCalling?: boolean;
   /** Recent conversation history for multi-turn context */
   conversationHistory?: Array<{ role: 'user' | 'model'; text: string }>;
+  /** Enabled skill contents to inject into system instruction */
+  skillContents?: string;
 }
 
 /**
@@ -370,6 +372,11 @@ You are in direct conversation mode. IMPORTANT RULES:
     // If NOT using cache, inject static context into system instruction
     if (!cachedContent && input.memoryContext) {
       systemInstruction += `\n\n${input.memoryContext}`;
+    }
+
+    // Inject enabled skill contents into system instruction
+    if (input.skillContents) {
+      systemInstruction += `\n\n[SKILLS]\n${input.skillContents}\n[END SKILLS]`;
     }
 
     // Build tools — each tool_type must be a separate entry (proto oneof constraint)

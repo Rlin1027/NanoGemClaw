@@ -1,12 +1,12 @@
 {
-    "filterGroups": "Filter groups...",
-    "discover": "Discover",
-    "hidden": "Hidden",
-    "hiddenCount": "{{count}} Hidden",
-    "noActiveGroups": "No active groups found.",
-    "discoverGroups": "Discover Groups",
-    "connectingToServer": "Connecting to server...",
-    "discoverGroup": "Discover Group",
-    "hiddenGroups": "Hidden Groups",
-    "showGroup": "Show group"
+  "filterGroups": "筛选群组...",
+  "discover": "发现",
+  "hidden": "已隐藏",
+  "hiddenCount": "{{count}} 个已隐藏",
+  "noActiveGroups": "未找到活跃群组。",
+  "discoverGroups": "发现群组",
+  "connectingToServer": "正在连接服务器...",
+  "discoverGroup": "发现群组",
+  "hiddenGroups": "已隐藏群组",
+  "showGroup": "显示群组"
 }

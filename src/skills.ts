@@ -148,9 +148,8 @@ export function getEnabledSkillContents(
   const allSkills = scanAvailableSkills(skillsDir);
   const enabledIds = getGroupSkills(groupFolder);
 
-  // Default: all skills enabled if no entry exists
-  const effectiveIds =
-    enabledIds.length > 0 ? enabledIds : allSkills.map((s) => s.id);
+  // Default: no skills enabled — must be explicitly enabled via Dashboard
+  const effectiveIds = enabledIds;
 
   const contents: string[] = [];
 
