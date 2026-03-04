@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { folderParam, chatIdParam, paginationQuery } from './shared.js';
+import { PERSONA_CATEGORIES } from '../personas.js';
 
 /** Params for routes with :folder */
 export const folderParams = z.object({
@@ -44,6 +45,7 @@ export const createPersonaBody = z.object({
   name: z.string().min(1, 'Name is required'),
   description: z.string().optional(),
   systemPrompt: z.string().min(1, 'systemPrompt is required'),
+  category: z.enum(PERSONA_CATEGORIES).optional(),
 });
 
 /** PUT /api/groups/:folder/preferences body */

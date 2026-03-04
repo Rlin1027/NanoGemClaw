@@ -2,7 +2,9 @@ import { ArrowLeft, Loader2, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGroupDetail } from '../hooks/useGroupDetail';
-import { PersonaSelector } from '../components/PersonaSelector';
+import { PersonaBrowser } from '../components/PersonaBrowser';
+import { CreateEditPersonaModal } from '../components/CreateEditPersonaModal';
+import { usePersonas } from '../hooks/usePersonas';
 import { ToggleSwitch } from '../components/ToggleSwitch';
 import { StatsCards } from '../components/StatsCards';
 import { TaskList } from '../components/TaskList';
@@ -117,10 +119,12 @@ export function GroupDetailPage({ groupFolder, onBack }: GroupDetailPageProps) {
     const { t } = useTranslation('groups');
     const locale = useLocale();
     const { group, loading, error, refetch, updateSettings } = useGroupDetail(groupFolder);
+    const { data: allPersonas, refetch: refetchPersonas } = usePersonas();
     const [showTaskForm, setShowTaskForm] = useState(false);
     const [editingTask, setEditingTask] = useState<any>(null);
     const [saving, setSaving] = useState(false);
     const [unregistering, setUnregistering] = useState(false);
+    const [showCreatePersona, setShowCreatePersona] = useState(false);
 
     const handleSettingChange = async (updates: Record<string, any>) => {
         setSaving(true);
@@ -204,14 +208,22 @@ export function GroupDetailPage({ groupFolder, onBack }: GroupDetailPageProps) {
             ]} />
 
             {/* Settings */}
-            <div className="space-y-2">
+            <div className="space-y-3">
                 <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider">{t('settings')}</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                    <PersonaSelector
-                        value={group.persona}
-                        onChange={persona => handleSettingChange({ persona })}
+
+                {/* Persona Browser - full width */}
+                <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-800">
+                    <div className="text-sm font-medium text-slate-200 mb-3">{t('persona', 'Persona')}</div>
+                    <PersonaBrowser
+                        selectedKey={group.persona}
+                        onSelect={persona => handleSettingChange({ persona })}
+                        onCreateNew={() => setShowCreatePersona(true)}
                         disabled={saving}
                     />
+                </div>
+
+                {/* Toggles + Model in 3-col grid */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <ToggleSwitch
                         label={t('triggerMode')}
                         description={t('triggerModeDesc')}
@@ -226,7 +238,6 @@ export function GroupDetailPage({ groupFolder, onBack }: GroupDetailPageProps) {
                         onChange={val => handleSettingChange({ enableWebSearch: val })}
                         disabled={saving}
                     />
-                    {/* Model Selector */}
                     <ModelSelector
                         value={group.geminiModel || 'auto'}
                         onChange={model => handleSettingChange({ geminiModel: model })}
@@ -315,6 +326,14 @@ export function GroupDetailPage({ groupFolder, onBack }: GroupDetailPageProps) {
                     editTask={editingTask}
                     onClose={() => setEditingTask(null)}
                     onCreated={() => { setEditingTask(null); refetch(); }}
+                />
+            )}
+
+            {showCreatePersona && (
+                <CreateEditPersonaModal
+                    templates={allPersonas ?? undefined}
+                    onClose={() => setShowCreatePersona(false)}
+                    onSaved={() => { setShowCreatePersona(false); refetchPersonas(); }}
                 />
             )}
         </div>

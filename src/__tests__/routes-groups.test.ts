@@ -19,13 +19,37 @@ vi.mock('../utils/pagination.js', () => ({
 }));
 
 vi.mock('../personas.js', () => ({
+  PERSONA_CATEGORIES: [
+    'general',
+    'technical',
+    'productivity',
+    'creative',
+    'learning',
+    'finance',
+    'lifestyle',
+  ],
   getAllPersonas: vi.fn(() => ({
     default: {
       name: 'Default',
       description: '',
       systemPrompt: 'You are helpful.',
+      category: 'general',
+    },
+    'my-custom': {
+      name: 'My Custom',
+      description: 'Custom persona',
+      systemPrompt: 'You are custom.',
+      category: 'creative',
     },
   })),
+  PERSONA_TEMPLATES: {
+    default: {
+      name: 'Default',
+      description: '',
+      systemPrompt: 'You are helpful.',
+      category: 'general',
+    },
+  },
   saveCustomPersona: vi.fn(),
   deleteCustomPersona: vi.fn(() => true),
 }));
@@ -284,6 +308,66 @@ describe('routes/groups', () => {
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty('data');
     });
+
+    it('decorates built-in personas with builtIn: true', async () => {
+      vi.mocked(personasModule.getAllPersonas).mockReturnValue({
+        default: {
+          name: 'Default',
+          description: '',
+          systemPrompt: 'You are helpful.',
+          category: 'general' as const,
+        },
+        'my-custom': {
+          name: 'My Custom',
+          description: 'Custom',
+          systemPrompt: 'You are custom.',
+          category: 'creative' as const,
+        },
+      });
+      const deps = createGroupsDeps();
+      const app = createTestApp(createGroupsRouter(deps));
+      const res = await request(app).get('/api/personas');
+      expect(res.status).toBe(200);
+      expect(res.body.data['default']).toHaveProperty('builtIn', true);
+    });
+
+    it('decorates custom personas with builtIn: false', async () => {
+      vi.mocked(personasModule.getAllPersonas).mockReturnValue({
+        default: {
+          name: 'Default',
+          description: '',
+          systemPrompt: 'You are helpful.',
+          category: 'general' as const,
+        },
+        'my-custom': {
+          name: 'My Custom',
+          description: 'Custom',
+          systemPrompt: 'You are custom.',
+          category: 'creative' as const,
+        },
+      });
+      const deps = createGroupsDeps();
+      const app = createTestApp(createGroupsRouter(deps));
+      const res = await request(app).get('/api/personas');
+      expect(res.status).toBe(200);
+      expect(res.body.data['my-custom']).toHaveProperty('builtIn', false);
+    });
+
+    it('includes category in persona data', async () => {
+      vi.mocked(personasModule.getAllPersonas).mockReturnValue({
+        default: {
+          name: 'Default',
+          description: '',
+          systemPrompt: 'You are helpful.',
+          category: 'general' as const,
+        },
+      });
+      const deps = createGroupsDeps();
+      const app = createTestApp(createGroupsRouter(deps));
+      const res = await request(app).get('/api/personas');
+      expect(res.status).toBe(200);
+      expect(res.body.data['default']).toHaveProperty('category', 'general');
+    });
   });
 
   // POST /api/personas
@@ -298,6 +382,31 @@ describe('routes/groups', () => {
       });
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveProperty('key', 'my-persona');
+    });
+
+    it('creates a persona with valid category', async () => {
+      const deps = createGroupsDeps();
+      const app = createTestApp(createGroupsRouter(deps));
+      const res = await request(app).post('/api/personas').send({
+        key: 'my-persona',
+        name: 'My Persona',
+        systemPrompt: 'You are...',
+        category: 'general',
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveProperty('key', 'my-persona');
+    });
+
+    it('returns 400 for invalid category', async () => {
+      const deps = createGroupsDeps();
+      const app = createTestApp(createGroupsRouter(deps));
+      const res = await request(app).post('/api/personas').send({
+        key: 'my-persona',
+        name: 'My Persona',
+        systemPrompt: 'You are...',
+        category: 'invalid-category',
+      });
+      expect(res.status).toBe(400);
     });
 
     it('returns 400 when required fields missing', async () => {

@@ -24,5 +24,6 @@ export function createMockDeps() {
       return isNaN(num) || num < 0 ? null : num;
     }),
     emitDashboardEvent: vi.fn(),
+    groupUnregistrar: vi.fn((_folder: string) => true),
   };
 }

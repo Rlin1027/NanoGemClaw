@@ -213,8 +213,17 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
   // GET /api/personas
   router.get('/personas', async (_req, res) => {
     try {
-      const { getAllPersonas } = await import('../personas.js');
-      res.json({ data: getAllPersonas() });
+      const { getAllPersonas, PERSONA_TEMPLATES } =
+        await import('../personas.js');
+      const all = getAllPersonas();
+      const builtInKeys = new Set(Object.keys(PERSONA_TEMPLATES));
+      const data = Object.fromEntries(
+        Object.entries(all).map(([k, v]) => [
+          k,
+          { ...v, builtIn: builtInKeys.has(k) },
+        ]),
+      );
+      res.json({ data });
     } catch {
       res.status(500).json({ error: 'Failed to fetch personas' });
     }
@@ -226,14 +235,14 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
     validate({ body: createPersonaBody }),
     async (req, res) => {
       try {
-        const { key, name, description, systemPrompt } = req.body as z.infer<
-          typeof createPersonaBody
-        >;
+        const { key, name, description, systemPrompt, category } =
+          req.body as z.infer<typeof createPersonaBody>;
         const { saveCustomPersona } = await import('../personas.js');
         saveCustomPersona(key, {
           name,
           description: description || '',
           systemPrompt,
+          category,
         });
         res.json({ data: { key } });
       } catch (err) {
