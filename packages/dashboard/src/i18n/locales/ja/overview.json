@@ -1,12 +1,12 @@
 {
-    "filterGroups": "Filter groups...",
-    "discover": "Discover",
-    "hidden": "Hidden",
-    "hiddenCount": "{{count}} Hidden",
-    "noActiveGroups": "No active groups found.",
-    "discoverGroups": "Discover Groups",
-    "connectingToServer": "Connecting to server...",
-    "discoverGroup": "Discover Group",
-    "hiddenGroups": "Hidden Groups",
-    "showGroup": "Show group"
+  "filterGroups": "グループを絞り込む...",
+  "discover": "探す",
+  "hidden": "非表示",
+  "hiddenCount": "{{count}} 件非表示",
+  "noActiveGroups": "アクティブなグループが見つかりません。",
+  "discoverGroups": "グループを探す",
+  "connectingToServer": "サーバーに接続中...",
+  "discoverGroup": "グループを探す",
+  "hiddenGroups": "非表示のグループ",
+  "showGroup": "グループを表示"
 }

@@ -1,12 +1,12 @@
 {
-    "filterGroups": "Filter groups...",
-    "discover": "Discover",
-    "hidden": "Hidden",
-    "hiddenCount": "{{count}} Hidden",
-    "noActiveGroups": "No active groups found.",
-    "discoverGroups": "Discover Groups",
-    "connectingToServer": "Connecting to server...",
-    "discoverGroup": "Discover Group",
-    "hiddenGroups": "Hidden Groups",
-    "showGroup": "Show group"
+  "filterGroups": "그룹 필터...",
+  "discover": "탐색",
+  "hidden": "숨김",
+  "hiddenCount": "{{count}}개 숨김",
+  "noActiveGroups": "활성 그룹 없음",
+  "discoverGroups": "그룹 탐색",
+  "connectingToServer": "서버 연결 중...",
+  "discoverGroup": "그룹 탐색",
+  "hiddenGroups": "숨겨진 그룹",
+  "showGroup": "그룹 표시"
 }

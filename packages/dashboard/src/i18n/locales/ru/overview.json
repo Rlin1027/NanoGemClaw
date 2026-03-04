@@ -1,12 +1,12 @@
 {
-    "filterGroups": "Filter groups...",
-    "discover": "Discover",
-    "hidden": "Hidden",
-    "hiddenCount": "{{count}} Hidden",
-    "noActiveGroups": "No active groups found.",
-    "discoverGroups": "Discover Groups",
-    "connectingToServer": "Connecting to server...",
-    "discoverGroup": "Discover Group",
-    "hiddenGroups": "Hidden Groups",
-    "showGroup": "Show group"
+  "filterGroups": "Фильтр групп...",
+  "discover": "Найти",
+  "hidden": "Скрытые",
+  "hiddenCount": "{{count}} скрытых",
+  "noActiveGroups": "Активные группы не найдены.",
+  "discoverGroups": "Найти группы",
+  "connectingToServer": "Подключение к серверу...",
+  "discoverGroup": "Найти группу",
+  "hiddenGroups": "Скрытые группы",
+  "showGroup": "Показать группу"
 }
