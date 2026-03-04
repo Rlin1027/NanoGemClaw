@@ -181,7 +181,9 @@ async function handleGroupsCommand(
   ctx: AdminCommandContext,
 ): Promise<string> {
   const { isAdminGroup } = await import('./admin-auth.js');
-  const groups = Object.values(ctx.registeredGroups).filter((g) => !isAdminGroup(g.folder));
+  const groups = Object.values(ctx.registeredGroups).filter(
+    (g) => !isAdminGroup(g.folder),
+  );
   if (groups.length === 0) {
     return ctx.i18n.tf('noGroupsRegistered');
   }

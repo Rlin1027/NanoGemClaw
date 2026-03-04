@@ -11,10 +11,10 @@ import { GROUPS_DIR } from './config.js';
  */
 function sanitizeFTS5Query(query: string): string {
   const stripped = query.replace(/[*^{}():\-+]/g, '');
-  const tokens = stripped.split(/\s+/).filter(t => t.length > 0);
+  const tokens = stripped.split(/\s+/).filter((t) => t.length > 0);
   if (tokens.length === 0) return '""';
   if (tokens.length === 1) return `"${tokens[0].replace(/"/g, '""')}"`;
-  return tokens.map(t => `"${t.replace(/"/g, '""')}"`).join(' OR ');
+  return tokens.map((t) => `"${t.replace(/"/g, '""')}"`).join(' OR ');
 }
 
 // ============================================================================

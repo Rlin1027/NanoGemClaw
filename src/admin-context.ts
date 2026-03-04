@@ -36,12 +36,19 @@ export function buildAdminSystemPrompt(): string {
     });
 
   // Build task summary
-  const activeTasks = allTasks.filter((t) => t.status === 'active' || t.status === 'paused');
-  const taskSummary = activeTasks.length > 0
-    ? activeTasks.slice(0, 20).map((t) =>
-        `- [${t.status}] **${t.group_folder}**: "${t.prompt.slice(0, 80)}" (${t.schedule_type}: ${t.schedule_value}, next: ${t.next_run || 'N/A'})`
-      ).join('\n')
-    : 'No active tasks.';
+  const activeTasks = allTasks.filter(
+    (t) => t.status === 'active' || t.status === 'paused',
+  );
+  const taskSummary =
+    activeTasks.length > 0
+      ? activeTasks
+          .slice(0, 20)
+          .map(
+            (t) =>
+              `- [${t.status}] **${t.group_folder}**: "${t.prompt.slice(0, 80)}" (${t.schedule_type}: ${t.schedule_value}, next: ${t.next_run || 'N/A'})`,
+          )
+          .join('\n')
+      : 'No active tasks.';
 
   return `You are ${ASSISTANT_NAME}, a global admin assistant for the NanoGemClaw Telegram bot system.
 You are in a PRIVATE CHAT with the bot owner/admin. You have full access to manage all groups.
@@ -80,16 +87,24 @@ ${taskSummary}
  */
 export function getGroupDetailContext(folder: string): string {
   const registeredGroups = getRegisteredGroups();
-  const entry = Object.entries(registeredGroups).find(([, g]) => g.folder === folder);
+  const entry = Object.entries(registeredGroups).find(
+    ([, g]) => g.folder === folder,
+  );
   if (!entry) return `Group "${folder}" not found.`;
 
   const [chatId, group] = entry;
   const parts: string[] = [`## Group: ${group.name} (${folder})`];
   parts.push(`- Chat ID: ${chatId}`);
   parts.push(`- Persona: ${group.persona || 'default'}`);
-  parts.push(`- Trigger: ${group.requireTrigger !== false ? 'required' : 'always respond'}`);
-  parts.push(`- Web Search: ${group.enableWebSearch !== false ? 'enabled' : 'disabled'}`);
-  parts.push(`- Fast Path: ${group.enableFastPath !== false ? 'enabled' : 'disabled'}`);
+  parts.push(
+    `- Trigger: ${group.requireTrigger !== false ? 'required' : 'always respond'}`,
+  );
+  parts.push(
+    `- Web Search: ${group.enableWebSearch !== false ? 'enabled' : 'disabled'}`,
+  );
+  parts.push(
+    `- Fast Path: ${group.enableFastPath !== false ? 'enabled' : 'disabled'}`,
+  );
   parts.push(`- Model: ${group.geminiModel || 'auto'}`);
 
   // GEMINI.md content

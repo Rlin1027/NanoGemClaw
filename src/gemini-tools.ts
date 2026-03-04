@@ -23,7 +23,10 @@ function validateGroupFolder(
   folder: string,
 ): { name: string; response: { success: boolean; error: string } } | null {
   if (!SAFE_FOLDER_RE.test(folder)) {
-    return { name, response: { success: false, error: 'Invalid group folder name' } };
+    return {
+      name,
+      response: { success: false, error: 'Invalid group folder name' },
+    };
   }
   return null;
 }
@@ -90,10 +93,15 @@ let cachedAdminDeclarations: any[] | null = null;
  * Three tiers: non-main (basic), main (+ register_group), admin (global admin tools).
  * Results are cached since declarations are static.
  */
-export function buildFunctionDeclarations(isMain: boolean, isAdmin?: boolean): any[] {
+export function buildFunctionDeclarations(
+  isMain: boolean,
+  isAdmin?: boolean,
+): any[] {
   if (isAdmin && cachedAdminDeclarations) return cachedAdminDeclarations;
-  if (isMain && !isAdmin && cachedMainDeclarations) return cachedMainDeclarations;
-  if (!isMain && !isAdmin && cachedNonMainDeclarations) return cachedNonMainDeclarations;
+  if (isMain && !isAdmin && cachedMainDeclarations)
+    return cachedMainDeclarations;
+  if (!isMain && !isAdmin && cachedNonMainDeclarations)
+    return cachedNonMainDeclarations;
 
   // ========================================================================
   // Admin-only declarations (completely separate tool set)
@@ -102,21 +110,34 @@ export function buildFunctionDeclarations(isMain: boolean, isAdmin?: boolean): a
     const adminDeclarations: any[] = [
       {
         name: 'list_all_groups',
-        description: 'List all registered groups with their stats, settings, and chat IDs.',
+        description:
+          'List all registered groups with their stats, settings, and chat IDs.',
         parameters: { type: 'OBJECT', properties: {} },
-        _metadata: { readOnly: true, requiresExplicitIntent: false, dangerLevel: 'safe' } as ToolMetadata,
+        _metadata: {
+          readOnly: true,
+          requiresExplicitIntent: false,
+          dangerLevel: 'safe',
+        } as ToolMetadata,
       },
       {
         name: 'get_group_detail',
-        description: 'Get detailed info for a specific group including GEMINI.md, preferences, and facts.',
+        description:
+          'Get detailed info for a specific group including GEMINI.md, preferences, and facts.',
         parameters: {
           type: 'OBJECT',
           properties: {
-            group_folder: { type: 'STRING', description: 'The group folder name (e.g. "main", "family-chat")' },
+            group_folder: {
+              type: 'STRING',
+              description: 'The group folder name (e.g. "main", "family-chat")',
+            },
           },
           required: ['group_folder'],
         },
-        _metadata: { readOnly: true, requiresExplicitIntent: false, dangerLevel: 'safe' } as ToolMetadata,
+        _metadata: {
+          readOnly: true,
+          requiresExplicitIntent: false,
+          dangerLevel: 'safe',
+        } as ToolMetadata,
       },
       {
         name: 'update_group_settings',
@@ -125,12 +146,23 @@ export function buildFunctionDeclarations(isMain: boolean, isAdmin?: boolean): a
         parameters: {
           type: 'OBJECT',
           properties: {
-            group_folder: { type: 'STRING', description: 'The group folder name' },
-            settings: { type: 'STRING', description: 'JSON string of settings to update, e.g. {"persona":"coder","requireTrigger":false}' },
+            group_folder: {
+              type: 'STRING',
+              description: 'The group folder name',
+            },
+            settings: {
+              type: 'STRING',
+              description:
+                'JSON string of settings to update, e.g. {"persona":"coder","requireTrigger":false}',
+            },
           },
           required: ['group_folder', 'settings'],
         },
-        _metadata: { readOnly: false, requiresExplicitIntent: true, dangerLevel: 'moderate' } as ToolMetadata,
+        _metadata: {
+          readOnly: false,
+          requiresExplicitIntent: true,
+          dangerLevel: 'moderate',
+        } as ToolMetadata,
       },
       {
         name: 'read_group_prompt',
@@ -138,30 +170,53 @@ export function buildFunctionDeclarations(isMain: boolean, isAdmin?: boolean): a
         parameters: {
           type: 'OBJECT',
           properties: {
-            group_folder: { type: 'STRING', description: 'The group folder name' },
+            group_folder: {
+              type: 'STRING',
+              description: 'The group folder name',
+            },
           },
           required: ['group_folder'],
         },
-        _metadata: { readOnly: true, requiresExplicitIntent: false, dangerLevel: 'safe' } as ToolMetadata,
+        _metadata: {
+          readOnly: true,
+          requiresExplicitIntent: false,
+          dangerLevel: 'safe',
+        } as ToolMetadata,
       },
       {
         name: 'write_group_prompt',
-        description: 'Write/replace the GEMINI.md system prompt file for a group. This is destructive — the entire file will be replaced.',
+        description:
+          'Write/replace the GEMINI.md system prompt file for a group. This is destructive — the entire file will be replaced.',
         parameters: {
           type: 'OBJECT',
           properties: {
-            group_folder: { type: 'STRING', description: 'The group folder name' },
-            content: { type: 'STRING', description: 'The new GEMINI.md content' },
+            group_folder: {
+              type: 'STRING',
+              description: 'The group folder name',
+            },
+            content: {
+              type: 'STRING',
+              description: 'The new GEMINI.md content',
+            },
           },
           required: ['group_folder', 'content'],
         },
-        _metadata: { readOnly: false, requiresExplicitIntent: true, dangerLevel: 'destructive' } as ToolMetadata,
+        _metadata: {
+          readOnly: false,
+          requiresExplicitIntent: true,
+          dangerLevel: 'destructive',
+        } as ToolMetadata,
       },
       {
         name: 'list_all_tasks',
-        description: 'List all scheduled tasks across all groups, with group folder, status, schedule, and next run time.',
+        description:
+          'List all scheduled tasks across all groups, with group folder, status, schedule, and next run time.',
         parameters: { type: 'OBJECT', properties: {} },
-        _metadata: { readOnly: true, requiresExplicitIntent: false, dangerLevel: 'safe' } as ToolMetadata,
+        _metadata: {
+          readOnly: true,
+          requiresExplicitIntent: false,
+          dangerLevel: 'safe',
+        } as ToolMetadata,
       },
       {
         name: 'manage_cross_group_task',
@@ -172,24 +227,43 @@ export function buildFunctionDeclarations(isMain: boolean, isAdmin?: boolean): a
           type: 'OBJECT',
           properties: {
             task_id: { type: 'STRING', description: 'The task ID' },
-            action: { type: 'STRING', description: 'Action to perform', enum: ['pause', 'resume', 'cancel'] },
+            action: {
+              type: 'STRING',
+              description: 'Action to perform',
+              enum: ['pause', 'resume', 'cancel'],
+            },
           },
           required: ['task_id', 'action'],
         },
-        _metadata: { readOnly: false, requiresExplicitIntent: true, dangerLevel: 'destructive' } as ToolMetadata,
+        _metadata: {
+          readOnly: false,
+          requiresExplicitIntent: true,
+          dangerLevel: 'destructive',
+        } as ToolMetadata,
       },
       {
         name: 'send_message_to_group',
-        description: 'Send a text message to a specific group. Uses group_folder to identify the target.',
+        description:
+          'Send a text message to a specific group. Uses group_folder to identify the target.',
         parameters: {
           type: 'OBJECT',
           properties: {
-            group_folder: { type: 'STRING', description: 'The target group folder name' },
-            message: { type: 'STRING', description: 'The message text to send' },
+            group_folder: {
+              type: 'STRING',
+              description: 'The target group folder name',
+            },
+            message: {
+              type: 'STRING',
+              description: 'The message text to send',
+            },
           },
           required: ['group_folder', 'message'],
         },
-        _metadata: { readOnly: false, requiresExplicitIntent: true, dangerLevel: 'moderate' } as ToolMetadata,
+        _metadata: {
+          readOnly: false,
+          requiresExplicitIntent: true,
+          dangerLevel: 'moderate',
+        } as ToolMetadata,
       },
       // Admin also gets generate_image
       {
@@ -200,11 +274,18 @@ export function buildFunctionDeclarations(isMain: boolean, isAdmin?: boolean): a
         parameters: {
           type: 'OBJECT',
           properties: {
-            prompt: { type: 'STRING', description: 'A detailed description of the image to generate' },
+            prompt: {
+              type: 'STRING',
+              description: 'A detailed description of the image to generate',
+            },
           },
           required: ['prompt'],
         },
-        _metadata: { readOnly: false, requiresExplicitIntent: true, dangerLevel: 'moderate' } as ToolMetadata,
+        _metadata: {
+          readOnly: false,
+          requiresExplicitIntent: true,
+          dangerLevel: 'moderate',
+        } as ToolMetadata,
       },
     ];
 
@@ -729,7 +810,8 @@ export async function executeFunctionCall(
       case 'list_all_groups': {
         const { getRegisteredGroups } = await import('./state.js');
         const { isAdminGroup } = await import('./admin-auth.js');
-        const { getActiveTaskCountsBatch, getMessageCountsBatch } = await import('./db.js');
+        const { getActiveTaskCountsBatch, getMessageCountsBatch } =
+          await import('./db.js');
         const groups = getRegisteredGroups();
         const taskCounts = getActiveTaskCountsBatch();
         const msgCounts = getMessageCountsBatch();
@@ -749,7 +831,14 @@ export async function executeFunctionCall(
             activeTaskCount: taskCounts.get(g.folder) || 0,
           }));
 
-        return { name, response: { success: true, groups: groupList, count: groupList.length } };
+        return {
+          name,
+          response: {
+            success: true,
+            groups: groupList,
+            count: groupList.length,
+          },
+        };
       }
 
       case 'get_group_detail': {
@@ -768,24 +857,52 @@ export async function executeFunctionCall(
         const groups = getGroups();
 
         if (isAdminCheck(args.group_folder)) {
-          return { name, response: { success: false, error: 'Cannot modify admin chat settings' } };
+          return {
+            name,
+            response: {
+              success: false,
+              error: 'Cannot modify admin chat settings',
+            },
+          };
         }
 
-        const entry = Object.entries(groups).find(([, g]) => g.folder === args.group_folder);
+        const entry = Object.entries(groups).find(
+          ([, g]) => g.folder === args.group_folder,
+        );
         if (!entry) {
-          return { name, response: { success: false, error: `Group "${args.group_folder}" not found` } };
+          return {
+            name,
+            response: {
+              success: false,
+              error: `Group "${args.group_folder}" not found`,
+            },
+          };
         }
 
         let settings: Record<string, any>;
         try {
           settings = JSON.parse(args.settings);
         } catch {
-          return { name, response: { success: false, error: 'Invalid JSON in settings' } };
+          return {
+            name,
+            response: { success: false, error: 'Invalid JSON in settings' },
+          };
         }
 
         const [, targetGroup] = entry;
-        const ALLOWED_SETTINGS = ['persona', 'requireTrigger', 'enableWebSearch', 'enableFastPath', 'geminiModel', 'name'];
-        const BOOL_FIELDS = new Set(['requireTrigger', 'enableWebSearch', 'enableFastPath']);
+        const ALLOWED_SETTINGS = [
+          'persona',
+          'requireTrigger',
+          'enableWebSearch',
+          'enableFastPath',
+          'geminiModel',
+          'name',
+        ];
+        const BOOL_FIELDS = new Set([
+          'requireTrigger',
+          'enableWebSearch',
+          'enableFastPath',
+        ]);
         const applied: string[] = [];
         for (const key of Object.keys(settings)) {
           if (!ALLOWED_SETTINGS.includes(key)) continue;
@@ -802,7 +919,10 @@ export async function executeFunctionCall(
           save(pathMod.join(dataDir, 'registered_groups.json'), groups);
         }
 
-        return { name, response: { success: true, applied, group_folder: args.group_folder } };
+        return {
+          name,
+          response: { success: true, applied, group_folder: args.group_folder },
+        };
       }
 
       case 'read_group_prompt': {
@@ -810,7 +930,13 @@ export async function executeFunctionCall(
         if (invalid) return invalid;
         const { readGroupGeminiMd } = await import('./group-manager.js');
         const content = readGroupGeminiMd(args.group_folder);
-        return { name, response: { success: true, content: content || '(No GEMINI.md found)' } };
+        return {
+          name,
+          response: {
+            success: true,
+            content: content || '(No GEMINI.md found)',
+          },
+        };
       }
 
       case 'write_group_prompt': {
@@ -819,11 +945,21 @@ export async function executeFunctionCall(
         const fsMod = await import('fs');
         const pathMod = await import('path');
         const { GROUPS_DIR: groupsDir } = await import('./config.js');
-        const filePath = pathMod.join(groupsDir, args.group_folder, 'GEMINI.md');
+        const filePath = pathMod.join(
+          groupsDir,
+          args.group_folder,
+          'GEMINI.md',
+        );
         const dir = pathMod.dirname(filePath);
 
         if (!fsMod.existsSync(dir)) {
-          return { name, response: { success: false, error: `Group folder "${args.group_folder}" does not exist` } };
+          return {
+            name,
+            response: {
+              success: false,
+              error: `Group folder "${args.group_folder}" does not exist`,
+            },
+          };
         }
 
         fsMod.writeFileSync(filePath, args.content, 'utf-8');
@@ -832,9 +968,18 @@ export async function executeFunctionCall(
         try {
           const { invalidateCache } = await import('./context-cache.js');
           await invalidateCache(args.group_folder);
-        } catch { /* best effort */ }
+        } catch {
+          /* best effort */
+        }
 
-        return { name, response: { success: true, group_folder: args.group_folder, written: true } };
+        return {
+          name,
+          response: {
+            success: true,
+            group_folder: args.group_folder,
+            written: true,
+          },
+        };
       }
 
       case 'list_all_tasks': {
@@ -859,30 +1004,75 @@ export async function executeFunctionCall(
       }
 
       case 'manage_cross_group_task': {
-        const { getTaskById: lookupTask, updateTask: modifyTask, deleteTask: removeTask } = await import('./db.js');
+        const {
+          getTaskById: lookupTask,
+          updateTask: modifyTask,
+          deleteTask: removeTask,
+        } = await import('./db.js');
         const task = lookupTask(args.task_id);
         if (!task) {
-          return { name, response: { success: false, error: `Task not found: ${args.task_id}` } };
+          return {
+            name,
+            response: {
+              success: false,
+              error: `Task not found: ${args.task_id}`,
+            },
+          };
         }
 
         switch (args.action) {
           case 'pause':
             if (task.status !== 'active') {
-              return { name, response: { success: false, error: `Task is ${task.status}, not active` } };
+              return {
+                name,
+                response: {
+                  success: false,
+                  error: `Task is ${task.status}, not active`,
+                },
+              };
             }
             modifyTask(args.task_id, { status: 'paused' });
-            return { name, response: { success: true, task_id: args.task_id, status: 'paused' } };
+            return {
+              name,
+              response: {
+                success: true,
+                task_id: args.task_id,
+                status: 'paused',
+              },
+            };
           case 'resume':
             if (task.status !== 'paused') {
-              return { name, response: { success: false, error: `Task is ${task.status}, not paused` } };
+              return {
+                name,
+                response: {
+                  success: false,
+                  error: `Task is ${task.status}, not paused`,
+                },
+              };
             }
             modifyTask(args.task_id, { status: 'active' });
-            return { name, response: { success: true, task_id: args.task_id, status: 'active' } };
+            return {
+              name,
+              response: {
+                success: true,
+                task_id: args.task_id,
+                status: 'active',
+              },
+            };
           case 'cancel':
             removeTask(args.task_id);
-            return { name, response: { success: true, task_id: args.task_id, deleted: true } };
+            return {
+              name,
+              response: { success: true, task_id: args.task_id, deleted: true },
+            };
           default:
-            return { name, response: { success: false, error: `Unknown action: ${args.action}` } };
+            return {
+              name,
+              response: {
+                success: false,
+                error: `Unknown action: ${args.action}`,
+              },
+            };
         }
       }
 
@@ -890,21 +1080,36 @@ export async function executeFunctionCall(
         const invalid = validateGroupFolder(name, args.group_folder);
         if (invalid) return invalid;
         const { getRegisteredGroups: allGroups } = await import('./state.js');
-        const { isAdminGroup: isAdminFolderCheck } = await import('./admin-auth.js');
+        const { isAdminGroup: isAdminFolderCheck } =
+          await import('./admin-auth.js');
         const groups = allGroups();
 
         if (isAdminFolderCheck(args.group_folder)) {
-          return { name, response: { success: false, error: 'Cannot send to admin chat' } };
+          return {
+            name,
+            response: { success: false, error: 'Cannot send to admin chat' },
+          };
         }
 
-        const entry = Object.entries(groups).find(([, g]) => g.folder === args.group_folder);
+        const entry = Object.entries(groups).find(
+          ([, g]) => g.folder === args.group_folder,
+        );
         if (!entry) {
-          return { name, response: { success: false, error: `Group "${args.group_folder}" not found` } };
+          return {
+            name,
+            response: {
+              success: false,
+              error: `Group "${args.group_folder}" not found`,
+            },
+          };
         }
 
         const [targetChatId] = entry;
         await context.sendMessage(targetChatId, args.message);
-        return { name, response: { success: true, sent_to: args.group_folder } };
+        return {
+          name,
+          response: { success: true, sent_to: args.group_folder },
+        };
       }
 
       case 'register_group': {

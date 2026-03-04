@@ -9,7 +9,7 @@ Personal AI assistant powered by Gemini, delivered via Telegram. TypeScript mono
 npm run dev              # Start with tsx (hot reload)
 npm run build            # tsc → dist/
 npm run typecheck        # tsc --noEmit
-npm test                 # vitest run (12 files, ~335 tests)
+npm test                 # vitest run (41 files, ~948 tests)
 npm run test:watch       # vitest (watch mode)
 npm run test:coverage    # vitest with coverage report
 npm run format:check     # prettier --check
@@ -33,6 +33,7 @@ packages/                # Monorepo workspaces
 ├── gemini/              # @nanogemclaw/gemini — Gemini SDK, context caching, fast path
 ├── telegram/            # @nanogemclaw/telegram — bot adapter, rate limiter
 ├── server/              # @nanogemclaw/server — Express + Socket.IO REST API
+├── event-bus/           # @nanogemclaw/event-bus — typed event emitter
 ├── plugin-api/          # @nanogemclaw/plugin-api — plugin SDK (6 extension points)
 └── dashboard/           # @nanogemclaw/dashboard — React + Vite + Tailwind + shadcn/ui
 
@@ -51,7 +52,7 @@ src/                     # Backend business logic
 ├── routes/              # Express routers (8): auth, groups, tasks, knowledge, calendar, skills, config, analytics
 ├── ipc-handlers/        # IPC handlers (9): schedule, cancel, pause, resume, register-group, etc.
 ├── utils/               # safe-compare.ts (timingSafeEqual)
-└── __tests__/           # Vitest tests (12 files)
+└── __tests__/           # Vitest tests (27 files)
 
 container/               # Agent execution environment
 ├── Dockerfile           # Container image definition
@@ -61,11 +62,15 @@ container/               # Agent execution environment
 
 docs/                    # Project documentation
 ├── GUIDE.md             # User guide
+├── ADMIN-CHAT-TEST-PLAN.md  # Admin chat test plan
+├── MANUAL-TEST-PLAN.md      # Manual test plan
 ├── SECURITY.md          # Security model documentation
 ├── SPEC.md              # Technical specification
-└── REQUIREMENTS.md      # Requirements document
+├── REQUIREMENTS.md      # Requirements document
+└── learning/            # Learning resources
 
 examples/plugin-skeleton/ # Plugin template with package.json + src/index.ts
+plugins/                  # Plugin packages (discord-reporter, google-auth, google-drive, etc.)
 store/                    # Runtime data (gitignored): messages.db, registered_groups.json
 groups/                   # Per-group folders with conversation context
 ```
@@ -115,6 +120,16 @@ Required: `TELEGRAM_BOT_TOKEN`
 Required for image gen: `GEMINI_API_KEY`
 Dashboard: `DASHBOARD_API_KEY`, `DASHBOARD_HOST` (default 127.0.0.1), `DASHBOARD_ORIGINS`
 Optional: `GEMINI_MODEL` (default gemini-3-flash-preview), `CONTAINER_TIMEOUT`, `WEBHOOK_URL`, `STT_PROVIDER`, `TZ`
+
+## Agent Workflow
+
+**遵循「規劃 → 執行 → 驗證」循環**，避免直接跳入實作。
+
+- **複雜任務先規劃**：涉及 3+ 檔案或架構決策時，先用 `/plan` 或 `/ralplan` 拆解任務再動手
+- **大功能用 Team 模式**：多 agent 協作用 `/team`；端到端自動完成用 `/autopilot` 或 `/ralph`
+- **每次重大變更後驗證**：用 verifier agent 確認完成度，不要自行宣告完成
+- **定期安全審查**：本專案有 auth headers、path traversal 防護、secret comparison 等安全敏感元素，PR 前跑 `/security-review`
+- **程式碼導航優先用 LSP**：`lsp_goto_definition`、`lsp_find_references`、`lsp_document_symbols` 比 Explore agent 更快更精準，只在需要跨目錄廣泛搜尋時才用 Explore
 
 ## Security Notes
 

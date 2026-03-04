@@ -97,12 +97,26 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
   const isBotCommand = botCommandPattern.test(content);
   if (isBotCommand) {
     // Strip @BotName suffix so commands work uniformly (e.g. /start@Bot → /start)
-    content = content.replace(new RegExp(`@${ASSISTANT_NAME}\\b`, 'i'), '').trim();
+    content = content
+      .replace(new RegExp(`@${ASSISTANT_NAME}\\b`, 'i'), '')
+      .trim();
   }
   // Media messages (photo, voice, video, document) bypass trigger check — high-intent interaction
-  const isMedia = !!(msg.photo || msg.voice || msg.audio || msg.video || msg.document);
+  const isMedia = !!(
+    msg.photo ||
+    msg.voice ||
+    msg.audio ||
+    msg.video ||
+    msg.document
+  );
   const needsTrigger = !isMainGroup && group.requireTrigger !== false;
-  if (needsTrigger && !isBotCommand && !isMedia && !TRIGGER_PATTERN.test(content)) return;
+  if (
+    needsTrigger &&
+    !isBotCommand &&
+    !isMedia &&
+    !TRIGGER_PATTERN.test(content)
+  )
+    return;
 
   // Onboarding check for new groups (before processing first message)
   const isCommand = content.startsWith('/');
@@ -153,7 +167,8 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
     const replyMsg = msg.reply_to_message;
     const replySender = replyMsg.from?.first_name || 'Unknown';
     const replyContent = replyMsg.text || replyMsg.caption || '[非文字內容]';
-    const truncatedReply = replyContent.slice(0, 500) + (replyContent.length > 500 ? '...' : '');
+    const truncatedReply =
+      replyContent.slice(0, 500) + (replyContent.length > 500 ? '...' : '');
     replyContext = `[使用者正在回覆 ${replySender} 的以下訊息，請根據此訊息內容回答]\n---\n${truncatedReply}\n---\n`;
     content = replyContext + content;
     logger.info(
@@ -319,13 +334,19 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
     const pluginLoaderPath = '../app/src/plugin-loader.js';
     const { runBeforeMessageHooks } = await import(pluginLoaderPath);
     const beforeResult = await runBeforeMessageHooks(hookContext);
-    if (beforeResult && typeof beforeResult === 'object' && 'skip' in beforeResult) {
+    if (
+      beforeResult &&
+      typeof beforeResult === 'object' &&
+      'skip' in beforeResult
+    ) {
       return;
     }
     if (typeof beforeResult === 'string') {
       content = beforeResult;
     }
-  } catch { /* plugin hooks should not break message processing */ }
+  } catch {
+    /* plugin hooks should not break message processing */
+  }
 
   try {
     const response = await runAgent(
@@ -408,7 +429,9 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
       try {
         const pluginLoaderPath = '../app/src/plugin-loader.js';
         import(pluginLoaderPath).then(({ runAfterMessageHooks }) =>
-          runAfterMessageHooks({ ...hookContext, reply: cleanText }).catch(() => {}),
+          runAfterMessageHooks({ ...hookContext, reply: cleanText }).catch(
+            () => {},
+          ),
         );
       } catch {}
     } else if (ipcAlreadySent && statusMsg) {

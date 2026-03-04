@@ -3,7 +3,11 @@
  */
 import TelegramBot from 'node-telegram-bot-api';
 
-import { ADMIN_PRIVATE_FOLDER, ASSISTANT_NAME, TELEGRAM_BOT_TOKEN } from './config.js';
+import {
+  ADMIN_PRIVATE_FOLDER,
+  ASSISTANT_NAME,
+  TELEGRAM_BOT_TOKEN,
+} from './config.js';
 import { storeChatMetadata, storeMessage } from './db.js';
 import { logger } from './logger.js';
 import { getBot, setBot, getRegisteredGroups, getSessions } from './state.js';
@@ -21,11 +25,7 @@ import { saveState, registerGroup, updateGroupName } from './group-manager.js';
 import { startIpcWatcher } from './ipc-watcher.js';
 import { startSchedulerLoop } from './task-scheduler.js';
 import { formatError } from './utils.js';
-import {
-  getAdminUserId,
-  isAdminUser,
-  setAdminUserId,
-} from './admin-auth.js';
+import { getAdminUserId, isAdminUser, setAdminUserId } from './admin-auth.js';
 
 // ============================================================================
 // Telegram Connection
@@ -53,7 +53,9 @@ export async function connectTelegram(): Promise<void> {
 
   // Warn if auto-detect mode is armed
   if (!getAdminUserId()) {
-    logger.warn('ADMIN_USER_ID not set — first /start in DM will become admin. Set ADMIN_USER_ID for production.');
+    logger.warn(
+      'ADMIN_USER_ID not set — first /start in DM will become admin. Set ADMIN_USER_ID for production.',
+    );
   }
 
   // Import and setup message consolidator
@@ -70,9 +72,13 @@ export async function connectTelegram(): Promise<void> {
       // Create a synthetic message with combined text
       const lastMsg = result.messages[result.messages.length - 1];
       // Preserve reply_to_message from the first message that has one
-      const replyToMsg = result.messages.find((m: any) => m.replyToMessage)?.replyToMessage;
+      const replyToMsg = result.messages.find(
+        (m: any) => m.replyToMessage,
+      )?.replyToMessage;
       const { isAdminGroup } = await import('./admin-auth.js');
-      const chatType = isAdminGroup(group.folder) ? 'private' as const : 'group' as const;
+      const chatType = isAdminGroup(group.folder)
+        ? ('private' as const)
+        : ('group' as const);
       const syntheticMsg = {
         chat: { id: parseInt(chatId), type: chatType },
         text: result.combinedText,
@@ -108,10 +114,17 @@ export async function connectTelegram(): Promise<void> {
     if (msg.chat.type === 'private' && senderId) {
       // Bootstrap: first /start when no admin configured → auto-detect
       if (!getAdminUserId() && content === '/start') {
-        if (!getAdminUserId()) {  // Double-check to prevent TOCTOU race
+        if (!getAdminUserId()) {
+          // Double-check to prevent TOCTOU race
           setAdminUserId(senderId);
-          logger.warn({ userId: senderId }, 'Admin auto-detected via /start — set ADMIN_USER_ID env var for production');
-          await sendMessage(chatId, '✅ You are now the bot admin. Send messages here to manage all groups.');
+          logger.warn(
+            { userId: senderId },
+            'Admin auto-detected via /start — set ADMIN_USER_ID env var for production',
+          );
+          await sendMessage(
+            chatId,
+            '✅ You are now the bot admin. Send messages here to manage all groups.',
+          );
         }
       }
 
@@ -157,7 +170,10 @@ export async function connectTelegram(): Promise<void> {
       }
 
       // Non-admin DM → reject
-      await sendMessage(chatId, '❌ Unauthorized. This bot only accepts private messages from the admin.');
+      await sendMessage(
+        chatId,
+        '❌ Unauthorized. This bot only accepts private messages from the admin.',
+      );
       return;
     }
 

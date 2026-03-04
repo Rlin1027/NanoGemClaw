@@ -82,10 +82,10 @@ export function removeFromIndex(db: Database.Database, rowid: number): void {
  */
 function sanitizeFTS5Query(query: string): string {
   const stripped = query.replace(/[*^{}():\-+]/g, '');
-  const tokens = stripped.split(/\s+/).filter(t => t.length > 0);
+  const tokens = stripped.split(/\s+/).filter((t) => t.length > 0);
   if (tokens.length === 0) return '""';
   if (tokens.length === 1) return `"${tokens[0].replace(/"/g, '""')}"`;
-  return tokens.map(t => `"${t.replace(/"/g, '""')}"`).join(' OR ');
+  return tokens.map((t) => `"${t.replace(/"/g, '""')}"`).join(' OR ');
 }
 
 export interface SearchResult {
@@ -117,8 +117,11 @@ export function searchMessages(
 
   // Trigram tokenizer requires >= 3 characters per token.
   // For short queries, fall back to LIKE search.
-  const tokens = query.trim().split(/\s+/).filter(t => t.length > 0);
-  const needsLikeFallback = tokens.some(t => t.length < 3);
+  const tokens = query
+    .trim()
+    .split(/\s+/)
+    .filter((t) => t.length > 0);
+  const needsLikeFallback = tokens.some((t) => t.length < 3);
 
   if (needsLikeFallback) {
     return searchMessagesLike(db, query, options);
@@ -208,7 +211,9 @@ function searchMessagesLike(
     ORDER BY timestamp DESC
     LIMIT ? OFFSET ?
   `;
-  const results = db.prepare(searchSql).all(...params, limit, offset) as SearchResult[];
+  const results = db
+    .prepare(searchSql)
+    .all(...params, limit, offset) as SearchResult[];
 
   return { results, total };
 }
