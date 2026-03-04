@@ -226,8 +226,8 @@ export function GroupDetailPage({ groupFolder, onBack }: GroupDetailPageProps) {
                     />
                 </div>
 
-                {/* Toggles + Model in 3-col grid */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {/* Toggles + Model + Path in grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                     <ToggleSwitch
                         label={t('triggerMode')}
                         description={t('triggerModeDesc')}
@@ -247,6 +247,19 @@ export function GroupDetailPage({ groupFolder, onBack }: GroupDetailPageProps) {
                         onChange={model => handleSettingChange({ geminiModel: model })}
                         disabled={saving}
                     />
+                    <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-800">
+                        <label className="block text-sm font-medium text-slate-200 mb-2">{t('preferredPath')}</label>
+                        <select
+                            value={group.preferredPath || 'fast'}
+                            onChange={e => handleSettingChange({ preferredPath: e.target.value })}
+                            disabled={saving}
+                            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                        >
+                            <option value="fast">Fast Path (API, {t('paid')})</option>
+                            <option value="container">Container ({t('free')})</option>
+                        </select>
+                        <p className="mt-1.5 text-xs text-slate-500">{t('preferredPathDesc')}</p>
+                    </div>
                 </div>
             </div>
 

@@ -21,13 +21,12 @@ import {
   logTaskRun,
   updateTaskAfterRun,
 } from './db.js';
-import { isFastPathEligible, runFastPath } from './fast-path.js';
+// Task scheduler: tasks always use container path (free)
 import { readGroupGeminiMd } from './group-manager.js';
 import { logger } from './logger.js';
 import { isMaintenanceMode } from './maintenance.js';
-import { getEffectiveSystemPrompt } from './personas.js';
 import { getEventBus } from '@nanogemclaw/event-bus';
-import { RegisteredGroup, ScheduledTask, type IpcContext } from './types.js';
+import { RegisteredGroup, ScheduledTask } from './types.js';
 
 export interface SchedulerDependencies {
   sendMessage: (jid: string, text: string) => Promise<void>;
@@ -121,12 +120,7 @@ async function runTask(
     task.context_mode === 'group' ? sessions[task.group_folder] : undefined;
 
   try {
-    // Resolve system prompt: GEMINI.md > group.systemPrompt > persona > default
     const geminiMdContent = readGroupGeminiMd(task.group_folder);
-    const systemPrompt = getEffectiveSystemPrompt(
-      geminiMdContent || group.systemPrompt,
-      group.persona,
-    );
 
     // Enrich prompt with current time so Gemini doesn't need to call bash
     const now = new Date();
@@ -137,54 +131,25 @@ async function runTask(
     });
     const enrichedPrompt = `[Current time: ${timeStr}]\n[This is an automated scheduled task. Respond with text directly.]\n\n${task.prompt}`;
 
-    // Choose execution path: fast path (preferred) or container fallback
+    // Scheduled tasks always use container path (free, no API cost)
     let output: ContainerOutput;
     const effectiveChatJid = chatJid || task.chat_jid;
 
-    if (isFastPathEligible(group, false)) {
-      logger.info(
-        { taskId: task.id, group: task.group_folder },
-        'Scheduled task using fast path',
-      );
+    logger.info(
+      { taskId: task.id, group: task.group_folder },
+      'Scheduled task using container path (default for tasks)',
+    );
 
-      const ipcContext: IpcContext = {
-        sourceGroup: task.group_folder,
-        isMain,
-        registeredGroups: deps.registeredGroups(),
-        sendMessage: deps.sendMessage,
-      };
-
-      output = await runFastPath(
-        group,
-        {
-          prompt: enrichedPrompt,
-          groupFolder: task.group_folder,
-          chatJid: effectiveChatJid,
-          isMain,
-          systemPrompt,
-          enableWebSearch: group.enableWebSearch ?? true,
-          conversationHistory: [], // Scheduled tasks use independent context
-          disableFunctionCalling: true, // Prevent duplicate task creation & hallucinated tool calls
-        },
-        ipcContext,
-      );
-    } else {
-      logger.info(
-        { taskId: task.id, group: task.group_folder },
-        'Scheduled task using container path',
-      );
-
-      output = await runContainerAgent(group, {
-        prompt: enrichedPrompt,
-        sessionId,
-        groupFolder: task.group_folder,
-        chatJid: effectiveChatJid,
-        isMain,
-        isScheduledTask: true,
-        systemPrompt: geminiMdContent || group.systemPrompt,
-        enableWebSearch: group.enableWebSearch ?? true,
-      });
-    }
+    output = await runContainerAgent(group, {
+      prompt: enrichedPrompt,
+      sessionId,
+      groupFolder: task.group_folder,
+      chatJid: effectiveChatJid,
+      isMain,
+      isScheduledTask: true,
+      systemPrompt: geminiMdContent || group.systemPrompt,
+      enableWebSearch: group.enableWebSearch ?? true,
+    });
 
     if (output.status === 'error') {
       error = output.error || 'Unknown error';

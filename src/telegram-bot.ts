@@ -138,7 +138,7 @@ export async function connectTelegram(): Promise<void> {
             trigger: '',
             added_at: new Date().toISOString(),
             requireTrigger: false,
-            enableFastPath: true,
+            preferredPath: 'fast' as const,
           });
           logger.info({ chatId }, 'Admin private chat auto-registered');
         }

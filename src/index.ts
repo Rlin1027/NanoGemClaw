@@ -63,6 +63,25 @@ async function main(): Promise<void> {
 
   await loadState();
   ensureGroupDefaults();
+  // Migrate enableFastPath → preferredPath (one-time startup migration)
+  {
+    const groups = getRegisteredGroups();
+    let needsSave = false;
+    for (const group of Object.values(groups)) {
+      if ((group as any).enableFastPath === false && !group.preferredPath) {
+        group.preferredPath = 'container';
+        delete (group as any).enableFastPath;
+        needsSave = true;
+      }
+      if ((group as any).enableFastPath !== undefined) {
+        delete (group as any).enableFastPath;
+        needsSave = true;
+      }
+    }
+    if (needsSave) {
+      saveJson(path.join(DATA_DIR, 'registered_groups.json'), groups);
+    }
+  }
   loadMaintenanceState();
 
   // Load admin user ID for private chat admin access
@@ -272,7 +291,7 @@ async function main(): Promise<void> {
           persona: group.persona,
           requireTrigger: group.requireTrigger,
           enableWebSearch: group.enableWebSearch,
-          enableFastPath: group.enableFastPath,
+          preferredPath: group.preferredPath,
           geminiModel: group.geminiModel,
           folder: group.folder,
         };
@@ -315,8 +334,8 @@ async function main(): Promise<void> {
     if (updates.name !== undefined) updated.name = updates.name;
     if (updates.geminiModel !== undefined)
       updated.geminiModel = updates.geminiModel;
-    if (updates.enableFastPath !== undefined)
-      updated.enableFastPath = updates.enableFastPath;
+    if (updates.preferredPath !== undefined)
+      updated.preferredPath = updates.preferredPath;
 
     // Invalidate context cache if relevant settings changed
     if (
@@ -334,7 +353,7 @@ async function main(): Promise<void> {
     registeredGroups[chatId] = updated;
     saveJson(path.join(DATA_DIR, 'registered_groups.json'), registeredGroups);
 
-    return { ...group, id: folder };
+    return { ...updated, id: folder };
   });
 
   // Inject chat JID resolver for export API

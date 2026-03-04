@@ -155,10 +155,11 @@ export async function runAgent(
     // ========================================================================
     // Fast Path: Direct Gemini API with streaming + function calling
     // ========================================================================
-    const { isFastPathEligible, runFastPath } = await import('./fast-path.js');
+    const { isFastPathEligible, runFastPath, resolvePreferredPath } = await import('./fast-path.js');
     const hasMedia = !!mediaPath;
+    const prefersFast = isAdminChat || resolvePreferredPath(group) === 'fast';
 
-    if (isFastPathEligible(group, hasMedia)) {
+    if (prefersFast && isFastPathEligible(group, hasMedia)) {
       logger.info({ group: group.name }, 'Using fast path (direct API)');
 
       // Admin chat: use dynamic global admin system prompt
@@ -270,6 +271,10 @@ export async function runAgent(
       } else {
         return output.result;
       }
+    }
+
+    if (!hasMedia && !prefersFast) {
+      logger.info({ group: group.name }, 'Using container path (group preferred)');
     }
 
     // ========================================================================

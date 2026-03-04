@@ -11,6 +11,7 @@
 
 import type { IpcContext, ToolMetadata } from './types.js';
 import { logger } from './logger.js';
+import { resolvePreferredPath } from './fast-path.js';
 
 // ============================================================================
 // Input Validation Helpers
@@ -142,7 +143,7 @@ export function buildFunctionDeclarations(
       {
         name: 'update_group_settings',
         description:
-          'Update settings for a group. Supported fields: persona, requireTrigger (boolean), enableWebSearch (boolean), enableFastPath (boolean), geminiModel (string), name (string).',
+          'Update settings for a group. Supported fields: persona, requireTrigger (boolean), enableWebSearch (boolean), preferredPath (\'fast\' | \'container\'), geminiModel (string), name (string).',
         parameters: {
           type: 'OBJECT',
           properties: {
@@ -825,7 +826,7 @@ export async function executeFunctionCall(
             persona: g.persona || 'default',
             requireTrigger: g.requireTrigger !== false,
             enableWebSearch: g.enableWebSearch !== false,
-            enableFastPath: g.enableFastPath !== false,
+            preferredPath: resolvePreferredPath(g),
             geminiModel: g.geminiModel || 'auto',
             messageCount: msgCounts.get(chatId) || 0,
             activeTaskCount: taskCounts.get(g.folder) || 0,
@@ -894,20 +895,20 @@ export async function executeFunctionCall(
           'persona',
           'requireTrigger',
           'enableWebSearch',
-          'enableFastPath',
+          'preferredPath',
           'geminiModel',
           'name',
         ];
         const BOOL_FIELDS = new Set([
           'requireTrigger',
           'enableWebSearch',
-          'enableFastPath',
         ]);
         const applied: string[] = [];
         for (const key of Object.keys(settings)) {
           if (!ALLOWED_SETTINGS.includes(key)) continue;
           let value = settings[key];
           if (BOOL_FIELDS.has(key)) value = Boolean(value);
+          if (key === 'preferredPath' && !['fast', 'container'].includes(value)) continue;
           (targetGroup as any)[key] = value;
           applied.push(key);
         }

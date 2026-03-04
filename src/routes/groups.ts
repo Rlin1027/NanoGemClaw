@@ -161,7 +161,7 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
         return;
       }
 
-      const { persona, enableWebSearch, requireTrigger, name, geminiModel } =
+      const { persona, enableWebSearch, requireTrigger, name, geminiModel, preferredPath } =
         req.body as z.infer<typeof updateGroupBody>;
 
       // Validate persona if provided (dynamic DB lookup stays in handler)
@@ -193,6 +193,7 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
       if (requireTrigger !== undefined) updates.requireTrigger = requireTrigger;
       if (name !== undefined) updates.name = name;
       if (geminiModel !== undefined) updates.geminiModel = geminiModel;
+      if (preferredPath !== undefined) updates.preferredPath = preferredPath;
 
       try {
         const result = deps.groupUpdater(folder, updates);

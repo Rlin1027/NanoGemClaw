@@ -11,6 +11,7 @@ interface GroupDetail {
     requireTrigger?: boolean;
     enableWebSearch?: boolean;
     geminiModel?: string;
+    preferredPath?: string;
     folder: string;
     tasks: any[];
     usage: {

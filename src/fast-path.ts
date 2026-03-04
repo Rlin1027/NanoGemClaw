@@ -9,13 +9,12 @@
  * 3. Function Calling: Native Gemini function calling replaces file-based IPC
  *
  * The fast path is used when:
- * - The group has enableFastPath !== false (default: enabled)
+ * - The group's preferredPath is resolved by resolvePreferredPath() at the call site
  * - The message doesn't contain media that needs container processing
  * - The Gemini API client is available (API key configured)
  *
  * Falls back to container execution when:
  * - Media files are attached (images, voice, documents)
- * - Group explicitly disables fast path
  * - API key is not available
  */
 
@@ -152,6 +151,14 @@ function prioritizedTruncate(
 // ============================================================================
 
 /**
+ * Resolve the preferred execution path for a group.
+ * Returns 'fast' (default) or 'container'.
+ */
+export function resolvePreferredPath(group: RegisteredGroup): 'fast' | 'container' {
+  return group.preferredPath ?? 'fast';
+}
+
+/**
  * Determine if a message should use the fast path.
  */
 export function isFastPathEligible(
@@ -160,9 +167,6 @@ export function isFastPathEligible(
 ): boolean {
   // Globally disabled
   if (!FAST_PATH.ENABLED) return false;
-
-  // Group explicitly disabled
-  if (group.enableFastPath === false) return false;
 
   // Media requires container for multi-modal file processing
   if (hasMedia) return false;

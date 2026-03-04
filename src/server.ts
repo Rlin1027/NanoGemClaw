@@ -32,7 +32,7 @@ export interface DashboardGroup {
   enableWebSearch?: boolean;
   requireTrigger?: boolean;
   geminiModel?: string;
-  enableFastPath?: boolean;
+  preferredPath?: 'fast' | 'container';
   [key: string]: unknown; // Allow extra fields like status, messageCount, etc.
 }
 
