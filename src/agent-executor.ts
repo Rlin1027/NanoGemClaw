@@ -219,10 +219,11 @@ export async function runAgent(
           memoryContext: memoryContext ?? undefined,
           enableWebSearch: group.enableWebSearch ?? true,
           conversationHistory,
-          skillContents: getEnabledSkillContents(
-            path.join(process.cwd(), 'container', 'skills'),
-            group.folder,
-          ) || undefined,
+          skillContents:
+            getEnabledSkillContents(
+              path.join(process.cwd(), 'container', 'skills'),
+              group.folder,
+            ) || undefined,
         },
         ipcContext,
         onProgress,

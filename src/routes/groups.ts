@@ -246,7 +246,11 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
         });
         res.json({ data: { key } });
       } catch (err) {
-        if (err instanceof Error && (err.message.includes('already exists') || err.message.includes('Cannot override'))) {
+        if (
+          err instanceof Error &&
+          (err.message.includes('already exists') ||
+            err.message.includes('Cannot override'))
+        ) {
           res.status(409).json({ error: err.message });
           return;
         }
