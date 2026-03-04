@@ -10,7 +10,6 @@
     { "path": "../packages/db" },
     { "path": "../packages/gemini" },
     { "path": "../packages/telegram" },
-    { "path": "../packages/server" },
     { "path": "../packages/plugin-api" }
   ]
 }
