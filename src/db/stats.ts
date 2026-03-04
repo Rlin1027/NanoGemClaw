@@ -145,11 +145,12 @@ export function getUsageByGroup(since?: string): UsageByGroupEntry[] {
            COALESCE(SUM(response_tokens), 0) as response_tokens,
            COALESCE(AVG(duration_ms), 0) as avg_duration_ms
     FROM usage_stats
+    WHERE group_folder != '_admin_private'
   `;
   const params: string[] = [];
 
   if (since) {
-    query += ' WHERE timestamp > ?';
+    query += ' AND timestamp > ?';
     params.push(since);
   }
 
@@ -200,6 +201,7 @@ export function getGroupTokenRanking(limit: number = 10): Array<{
       COUNT(*) as request_count,
       COALESCE(AVG(prompt_tokens + response_tokens), 0) as avg_tokens_per_request
     FROM usage_stats
+    WHERE group_folder != '_admin_private'
     GROUP BY group_folder
     ORDER BY total_tokens DESC
     LIMIT ?

@@ -73,6 +73,8 @@ export const STORE_DIR = path.resolve(PROJECT_ROOT, 'store');
 export const GROUPS_DIR = path.resolve(PROJECT_ROOT, 'groups');
 export const DATA_DIR = path.resolve(PROJECT_ROOT, 'data');
 export const MAIN_GROUP_FOLDER = 'main';
+export const ADMIN_USER_ID = process.env.ADMIN_USER_ID || '';
+export const ADMIN_PRIVATE_FOLDER = '_admin_private';
 
 function safeParseInt(value: string | undefined, defaultValue: number): number {
   const parsed = parseInt(value || String(defaultValue), 10);

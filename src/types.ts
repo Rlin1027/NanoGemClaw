@@ -100,6 +100,7 @@ export interface TaskRunLog {
 export interface IpcContext {
   sourceGroup: string;
   isMain: boolean;
+  isAdmin?: boolean;
   registeredGroups: Record<string, RegisteredGroup>;
   sendMessage: (chatJid: string, text: string) => Promise<void>;
   registerGroup?: (chatId: string, group: RegisteredGroup) => void;

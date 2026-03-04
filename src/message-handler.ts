@@ -69,8 +69,10 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
   const isMainGroup =
     group.folder === (await import('./config.js')).MAIN_GROUP_FOLDER;
 
-  // Handle admin commands (main group only)
-  if (isMainGroup && content.startsWith('/admin')) {
+  // Handle admin commands (main group or admin private chat)
+  const { isAdminGroup } = await import('./admin-auth.js');
+  const isAdminChat = isAdminGroup(group.folder);
+  if ((isMainGroup || isAdminChat) && content.startsWith('/admin')) {
     const parts = content.slice(7).trim().split(/\s+/);
     const adminCmd = parts[0] || 'help';
     const adminArgs = parts.slice(1);
@@ -104,7 +106,7 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
 
   // Onboarding check for new groups (before processing first message)
   const isCommand = content.startsWith('/');
-  if (!isCommand) {
+  if (!isCommand && !isAdminChat) {
     const { checkAndStartOnboarding } = await import('./onboarding.js');
     const triggered = await checkAndStartOnboarding(
       chatId,
@@ -120,7 +122,7 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
   const { RATE_LIMIT } = await import('./config.js');
   const { tf, getGroupLang } = await import('./i18n/index.js');
 
-  if (RATE_LIMIT.ENABLED) {
+  if (RATE_LIMIT.ENABLED && !isAdminChat) {
     const rateLimitKey = `group:${chatId}`;
     const windowMs = RATE_LIMIT.WINDOW_MINUTES * 60 * 1000;
     const result = checkRateLimit(
@@ -287,10 +289,13 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
   );
 
   // Extract structured facts from user message (fire-and-forget)
-  try {
-    extractFacts(content, group.folder);
-  } catch {
-    // Non-critical: don't fail message processing if extraction errors
+  // Skip for admin chat — admin messages are operational, not personal facts
+  if (!isAdminChat) {
+    try {
+      extractFacts(content, group.folder);
+    } catch {
+      // Non-critical: don't fail message processing if extraction errors
+    }
   }
 
   const ipcMessageSentChats = getIpcMessageSentChats();

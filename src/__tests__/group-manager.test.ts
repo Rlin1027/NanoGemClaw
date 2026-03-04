@@ -5,6 +5,12 @@ import type { RegisteredGroup } from '../types.js';
 vi.mock('../config.js', () => ({
   DATA_DIR: '/test/data',
   GROUPS_DIR: '/test/groups',
+  ADMIN_PRIVATE_FOLDER: '_admin_private',
+}));
+
+// Mock admin-auth
+vi.mock('../admin-auth.js', () => ({
+  isAdminGroup: vi.fn((folder: string) => folder === '_admin_private'),
 }));
 
 // Mock logger

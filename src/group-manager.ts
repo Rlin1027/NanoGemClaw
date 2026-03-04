@@ -18,6 +18,7 @@ import {
   setLastAgentTimestamp,
 } from './state.js';
 import { getEventBus } from '@nanogemclaw/event-bus';
+import { isAdminGroup } from './admin-auth.js';
 import { RegisteredGroup, GroupStateBag } from './types.js';
 import { loadJson, saveJson } from './utils.js';
 
@@ -281,8 +282,15 @@ export function getAvailableGroups(): AvailableGroup[] {
   const registeredGroups = getRegisteredGroups();
   const registeredIds = new Set(Object.keys(registeredGroups));
 
+  // Build set of admin chat JIDs to exclude from discovery
+  const adminChatIds = new Set(
+    Object.entries(registeredGroups)
+      .filter(([, g]) => isAdminGroup(g.folder))
+      .map(([chatId]) => chatId),
+  );
+
   return chats
-    .filter((c) => c.jid !== '__group_sync__')
+    .filter((c) => c.jid !== '__group_sync__' && !adminChatIds.has(c.jid))
     .map((c) => ({
       jid: c.jid,
       name: c.name,

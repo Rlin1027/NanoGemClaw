@@ -81,6 +81,10 @@ export async function getOrCreateCache(
   knowledgeContent?: string,
   memoryContext?: string,
 ): Promise<string | null> {
+  // Admin chat uses dynamic system prompts — never cache
+  const { isAdminGroup } = await import('./admin-auth.js');
+  if (isAdminGroup(groupFolder)) return null;
+
   const client = await getGeminiClient();
   if (!client) return null;
 

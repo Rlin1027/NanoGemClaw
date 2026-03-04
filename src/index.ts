@@ -65,6 +65,10 @@ async function main(): Promise<void> {
   ensureGroupDefaults();
   loadMaintenanceState();
 
+  // Load admin user ID for private chat admin access
+  const { loadAdminUserId } = await import('./admin-auth.js');
+  loadAdminUserId();
+
   // Auto-detect available Gemini models and set the default
   try {
     const { discoverModels, resolveLatestModel, setExternalModels } =
@@ -230,13 +234,16 @@ async function main(): Promise<void> {
     });
   }
 
-  // Inject data provider
+  // Inject data provider (exclude admin private chat from dashboard)
+  const { isAdminGroup } = await import('./admin-auth.js');
   setGroupsProvider(() => {
     const registeredGroups = getRegisteredGroups();
     const activeTaskCounts = getActiveTaskCountsBatch();
     const messageCounts = getMessageCountsBatch();
 
-    return Object.entries(registeredGroups).map(([chatId, group]) => {
+    return Object.entries(registeredGroups)
+      .filter(([, group]) => !isAdminGroup(group.folder))
+      .map(([chatId, group]) => {
       const activeTasks = activeTaskCounts.get(group.folder) || 0;
       const errorState = getErrorState(group.folder);
 

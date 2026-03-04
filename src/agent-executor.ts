@@ -10,6 +10,7 @@ import {
   FAST_PATH,
   MAIN_GROUP_FOLDER,
 } from './config.js';
+import { isAdminGroup } from './admin-auth.js';
 import {
   AvailableGroup,
   runContainerAgent,
@@ -67,6 +68,7 @@ export async function runAgent(
   const sessions = getSessions();
   const registeredGroups = getRegisteredGroups();
   const isMain = group.folder === MAIN_GROUP_FOLDER;
+  const isAdminChat = isAdminGroup(group.folder);
   const sessionId = sessions[group.folder];
 
   // Import streaming utilities
@@ -158,17 +160,25 @@ export async function runAgent(
     if (isFastPathEligible(group, hasMedia)) {
       logger.info({ group: group.name }, 'Using fast path (direct API)');
 
-      // Resolve system prompt: GEMINI.md > group.systemPrompt > persona > default
-      const { getEffectiveSystemPrompt } = await import('./personas.js');
-      const systemPrompt = getEffectiveSystemPrompt(
-        geminiMdContent || group.systemPrompt,
-        group.persona,
-      );
+      // Admin chat: use dynamic global admin system prompt
+      // Regular chat: GEMINI.md > group.systemPrompt > persona > default
+      let systemPrompt: string;
+      if (isAdminChat) {
+        const { buildAdminSystemPrompt } = await import('./admin-context.js');
+        systemPrompt = buildAdminSystemPrompt();
+      } else {
+        const { getEffectiveSystemPrompt } = await import('./personas.js');
+        systemPrompt = getEffectiveSystemPrompt(
+          geminiMdContent || group.systemPrompt,
+          group.persona,
+        );
+      }
 
       // Build IPC context for function calling
       const ipcContext = {
         sourceGroup: group.folder,
         isMain,
+        isAdmin: isAdminChat,
         registeredGroups,
         sendMessage: async (jid: string, text: string) => {
           await sendMessage(jid, text, messageThreadId);
@@ -183,9 +193,11 @@ export async function runAgent(
       }> = [];
       try {
         const { getRecentConversation } = await import('./db.js');
+        // Admin chat: bounded to 10 messages to keep context focused (Gap 11)
+        const historyLimit = isAdminChat ? 10 : FAST_PATH.MAX_HISTORY_MESSAGES;
         conversationHistory = getRecentConversation(
           chatId,
-          FAST_PATH.MAX_HISTORY_MESSAGES,
+          historyLimit,
           messageThreadId?.toString(),
         );
       } catch {
@@ -201,6 +213,7 @@ export async function runAgent(
           groupFolder: group.folder,
           chatJid: chatId,
           isMain,
+          isAdmin: isAdminChat,
           systemPrompt,
           memoryContext: memoryContext ?? undefined,
           enableWebSearch: group.enableWebSearch ?? true,
@@ -235,6 +248,14 @@ export async function runAgent(
       }
 
       if (output.status === 'error') {
+        // Admin chat: NO container fallback (Gap 7) — return error text
+        if (isAdminChat) {
+          logger.error(
+            { group: group.name, error: output.error },
+            'Admin fast path failed (no container fallback)',
+          );
+          return `❌ Admin request failed: ${output.error || 'Unknown error'}. Please try again.`;
+        }
         // Fast path failed - fall through to container as fallback
         logger.warn(
           { group: group.name, error: output.error },

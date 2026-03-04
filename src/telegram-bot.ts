@@ -3,7 +3,7 @@
  */
 import TelegramBot from 'node-telegram-bot-api';
 
-import { ASSISTANT_NAME, TELEGRAM_BOT_TOKEN } from './config.js';
+import { ADMIN_PRIVATE_FOLDER, ASSISTANT_NAME, TELEGRAM_BOT_TOKEN } from './config.js';
 import { storeChatMetadata, storeMessage } from './db.js';
 import { logger } from './logger.js';
 import { getBot, setBot, getRegisteredGroups, getSessions } from './state.js';
@@ -17,10 +17,15 @@ import {
   processMessage,
   startMediaCleanupScheduler,
 } from './message-handler.js';
-import { saveState, updateGroupName } from './group-manager.js';
+import { saveState, registerGroup, updateGroupName } from './group-manager.js';
 import { startIpcWatcher } from './ipc-watcher.js';
 import { startSchedulerLoop } from './task-scheduler.js';
 import { formatError } from './utils.js';
+import {
+  getAdminUserId,
+  isAdminUser,
+  setAdminUserId,
+} from './admin-auth.js';
 
 // ============================================================================
 // Telegram Connection
@@ -61,8 +66,10 @@ export async function connectTelegram(): Promise<void> {
       const lastMsg = result.messages[result.messages.length - 1];
       // Preserve reply_to_message from the first message that has one
       const replyToMsg = result.messages.find((m: any) => m.replyToMessage)?.replyToMessage;
+      const { isAdminGroup } = await import('./admin-auth.js');
+      const chatType = isAdminGroup(group.folder) ? 'private' as const : 'group' as const;
       const syntheticMsg = {
-        chat: { id: parseInt(chatId), type: 'group' as const },
+        chat: { id: parseInt(chatId), type: chatType },
         text: result.combinedText,
         date: Math.floor(Date.now() / 1000),
         message_id: lastMsg.messageId || Date.now(),
@@ -89,6 +96,63 @@ export async function connectTelegram(): Promise<void> {
     const timestamp = new Date(msg.date * 1000).toISOString();
     const chatName = msg.chat.title || msg.chat.first_name || chatId;
     const messageThreadId = msg.message_thread_id ?? null;
+
+    // ================================================================
+    // Admin Private Chat — early interception (before storeChatMetadata)
+    // ================================================================
+    if (msg.chat.type === 'private' && senderId) {
+      // Bootstrap: first /start when no admin configured → auto-detect
+      if (!getAdminUserId() && content === '/start') {
+        setAdminUserId(senderId);
+        logger.info({ userId: senderId }, 'Admin user auto-detected via /start');
+        await sendMessage(chatId, '✅ You are now the bot admin. Send messages here to manage all groups.');
+      }
+
+      if (isAdminUser(senderId)) {
+        const registeredGroups = getRegisteredGroups();
+        // Auto-register admin private chat if not yet registered
+        if (!registeredGroups[chatId]) {
+          registerGroup(chatId, {
+            name: 'Admin Private Chat',
+            folder: ADMIN_PRIVATE_FOLDER,
+            trigger: '',
+            added_at: new Date().toISOString(),
+            requireTrigger: false,
+            enableFastPath: true,
+          });
+          logger.info({ chatId }, 'Admin private chat auto-registered');
+        }
+
+        // SKIP storeChatMetadata (Gap 15) — admin chat should not appear in group discovery
+        // SKIP consolidator (Gap 4) — process admin messages immediately
+
+        // Store message for conversation history
+        if (content) {
+          storeMessage(
+            msg.message_id.toString(),
+            chatId,
+            senderId,
+            senderName,
+            content,
+            timestamp,
+            false,
+            null,
+          );
+        }
+
+        try {
+          await processMessage(msg);
+          saveState();
+        } catch (err) {
+          logger.error({ err, chatId }, 'Error processing admin message');
+        }
+        return; // Skip normal message flow
+      }
+
+      // Non-admin DM → reject
+      await sendMessage(chatId, '❌ Unauthorized. This bot only accepts private messages from the admin.');
+      return;
+    }
 
     // Store chat metadata for group discovery
     storeChatMetadata(chatId, timestamp, chatName);

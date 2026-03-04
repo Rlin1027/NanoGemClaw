@@ -180,6 +180,8 @@ export interface FastPathInput {
   groupFolder: string;
   chatJid: string;
   isMain: boolean;
+  /** Admin private chat — uses admin-only tools, no container fallback */
+  isAdmin?: boolean;
   systemPrompt?: string;
   memoryContext?: string;
   enableWebSearch?: boolean;
@@ -371,7 +373,7 @@ You are in direct conversation mode. IMPORTANT RULES:
     // Build tools — each tool_type must be a separate entry (proto oneof constraint)
     const fnDeclarations = input.disableFunctionCalling
       ? []
-      : buildFunctionDeclarations(input.isMain);
+      : buildFunctionDeclarations(input.isMain, input.isAdmin);
     const tools: any[] = [];
 
     if (fnDeclarations.length > 0) {
@@ -674,10 +676,13 @@ You are in direct conversation mode. IMPORTANT RULES:
     );
 
     // Extract facts from the user's input (fire-and-forget)
-    try {
-      extractFacts(input.prompt, input.groupFolder);
-    } catch {
-      // Non-critical: don't fail the response if extraction errors
+    // Skip for admin chat — admin messages are operational, not personal facts
+    if (!input.isAdmin) {
+      try {
+        extractFacts(input.prompt, input.groupFolder);
+      } catch {
+        // Non-critical: don't fail the response if extraction errors
+      }
     }
 
     return {
