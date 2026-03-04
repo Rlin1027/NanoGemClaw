@@ -14,6 +14,29 @@ import { getFileContent } from './drive-api.js';
 const MAX_CONTENT_CHARS = 100_000;
 const TRUNCATION_MARKER = '... [truncated]';
 
+/**
+ * MIME types that cannot be meaningfully extracted as text.
+ * These are binary formats — downloading with responseType:'text' yields garbage.
+ */
+const BINARY_MIME_TYPES = new Set([
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
+  'application/msword', // .doc
+  'application/vnd.ms-excel', // .xls
+  'application/vnd.ms-powerpoint', // .ppt
+  'application/zip',
+  'application/x-zip-compressed',
+  'application/octet-stream',
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+  'audio/mpeg',
+  'audio/ogg',
+  'video/mp4',
+]);
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -43,8 +66,28 @@ export async function extractContent(
   fileId: string,
   mimeType: string,
 ): Promise<ExtractedContent> {
+  // Reject known binary formats — downloading them as text yields garbage
+  if (BINARY_MIME_TYPES.has(mimeType)) {
+    return {
+      content: `[Binary file — cannot extract text from ${mimeType}]`,
+      mimeType: 'text/plain',
+      truncated: false,
+    };
+  }
+
   const effectiveMime = resolveEffectiveMime(mimeType);
   const raw = await getFileContent(fileId, mimeType);
+
+  // Safety check: detect binary content that slipped through
+  // (e.g. unknown MIME types that are actually binary)
+  if (looksLikeBinary(raw)) {
+    return {
+      content: `[Binary content detected — cannot extract text from ${mimeType}]`,
+      mimeType: 'text/plain',
+      truncated: false,
+    };
+  }
+
   return truncateContent(raw, MAX_CONTENT_CHARS, effectiveMime);
 }
 
@@ -70,6 +113,20 @@ export function truncateContent(
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Heuristic check for binary content that was incorrectly decoded as text.
+ * Looks for null bytes and common binary file signatures (ZIP/PK, PDF header).
+ */
+function looksLikeBinary(content: string): boolean {
+  // Check first 512 chars for signs of binary data
+  const head = content.slice(0, 512);
+  // Null bytes are a strong indicator of binary content
+  if (head.includes('\0')) return true;
+  // ZIP magic bytes (PK\x03\x04) — covers .docx, .xlsx, .pptx, .zip
+  if (head.startsWith('PK')) return true;
+  return false;
+}
 
 /**
  * Maps a Google Drive MIME type to the format that will be returned after
