@@ -12,6 +12,7 @@
  * as injected dependencies via FunctionCallDeps to avoid coupling to src/.
  */
 
+// TODO: consolidate FunctionCallResult types across packages/gemini and src/gemini-tools.ts
 import type { IpcContext } from '@nanogemclaw/core';
 import { logger } from '@nanogemclaw/core/logger';
 

@@ -7,7 +7,7 @@
 
 import path from 'path';
 import fs from 'fs';
-import { logger } from '@nanogemclaw/core/logger';
+import { logger, scanForInjection } from '@nanogemclaw/core';
 import type {
   NanoPlugin,
   PluginApi,
@@ -26,6 +26,50 @@ import {
 // ============================================================================
 
 const loadedPlugins: LoadedPlugin[] = [];
+
+// Internal (builtin) plugins — prepended to getLoadedPlugins() so they run first
+const internalPlugins: (import('@nanogemclaw/plugin-api').NanoPlugin & { builtin: true })[] = [];
+
+// Module-level eventBus reference, set when plugins are loaded
+let moduleEventBus: import('@nanogemclaw/event-bus').EventBus | undefined;
+
+export function registerInternalPlugin(
+  plugin: import('@nanogemclaw/plugin-api').NanoPlugin & { builtin: true },
+): void {
+  internalPlugins.push(plugin);
+}
+
+// Register the built-in injection scanner plugin
+registerInternalPlugin({
+  id: 'builtin-injection-scanner',
+  name: 'Built-in Injection Scanner',
+  version: '1.0.0',
+  builtin: true,
+  hooks: {
+    afterToolCall: async (ctx) => {
+      const text =
+        typeof ctx.result === 'string' ? ctx.result : JSON.stringify(ctx.result);
+      const scan = scanForInjection(text);
+      if (scan.status === 'suspicious') {
+        logger.warn('Potential prompt injection detected in tool result', {
+          toolName: ctx.toolName,
+          patterns: scan.patterns,
+          groupFolder: ctx.groupFolder,
+        });
+        if (moduleEventBus) {
+          moduleEventBus.emit('security:injection-detected', {
+            toolName: ctx.toolName,
+            patterns: scan.patterns,
+            groupFolder: ctx.groupFolder,
+            chatJid: ctx.chatJid,
+          });
+        }
+      }
+      // Log-only: never modify the result
+      return undefined;
+    },
+  },
+});
 
 // ============================================================================
 // PluginApi factory
@@ -81,6 +125,7 @@ export async function loadPlugins(
     dataDir: string;
   },
 ): Promise<void> {
+  moduleEventBus = deps.eventBus;
   if (!fs.existsSync(manifestPath)) {
     logger.debug(
       { manifestPath },
@@ -132,6 +177,7 @@ export async function discoverAndLoadPlugins(
   },
   options?: DiscoverAndLoadOptions,
 ): Promise<void> {
+  moduleEventBus = deps.eventBus;
   // 1. Read manifest (tolerant of missing file)
   let manifest: PluginManifest = { plugins: [] };
   if (fs.existsSync(manifestPath)) {
@@ -294,7 +340,14 @@ export async function stopPlugins(): Promise<void> {
 // ============================================================================
 
 export function getLoadedPlugins(): LoadedPlugin[] {
-  return loadedPlugins.filter((p) => p.enabled);
+  // Builtin internal plugins always run first and cannot be disabled
+  const builtinEntries: LoadedPlugin[] = internalPlugins.map((p) => ({
+    plugin: p,
+    api: undefined as unknown as import('@nanogemclaw/plugin-api').PluginApi,
+    config: {},
+    enabled: true,
+  }));
+  return [...builtinEntries, ...loadedPlugins.filter((p) => p.enabled)];
 }
 
 /**
@@ -442,6 +495,80 @@ export async function runOnMessageErrorHooks(
       logger.error({ err }, 'onMessageError hook error');
     }
   }
+}
+
+// TODO: extract HookPipeline<T> if a third hook domain is added
+
+// --- Tool hook collection ---
+
+/**
+ * Get all before-tool-call hooks from enabled plugins (including builtins).
+ */
+export function getBeforeToolCallHooks(): Array<
+  import('@nanogemclaw/plugin-api').BeforeToolCallHook
+> {
+  return getLoadedPlugins()
+    .map((p) => p.plugin.hooks?.beforeToolCall)
+    .filter(
+      (h): h is import('@nanogemclaw/plugin-api').BeforeToolCallHook => h != null,
+    );
+}
+
+/**
+ * Get all after-tool-call hooks from enabled plugins (including builtins).
+ */
+export function getAfterToolCallHooks(): Array<
+  import('@nanogemclaw/plugin-api').AfterToolCallHook
+> {
+  return getLoadedPlugins()
+    .map((p) => p.plugin.hooks?.afterToolCall)
+    .filter(
+      (h): h is import('@nanogemclaw/plugin-api').AfterToolCallHook => h != null,
+    );
+}
+
+/**
+ * Execute beforeToolCall hooks in order.
+ * Returns block signal if any hook blocks the call.
+ * If any hook throws, the error propagates (broken gate = closed).
+ */
+export async function runBeforeToolCallHooks(
+  context: import('@nanogemclaw/plugin-api').ToolCallHookContext,
+): Promise<{ block: true; reason: string } | null> {
+  for (const hook of getBeforeToolCallHooks()) {
+    const result = await hook(context);
+    if (result && 'block' in result && result.block) {
+      return result;
+    }
+  }
+  return null;
+}
+
+/**
+ * Execute afterToolCall hooks in order.
+ * Errors are logged and swallowed (matching afterMessage pattern).
+ * Each hook may modify the result for subsequent hooks.
+ * Returns the final (possibly modified) result, or null if unchanged.
+ */
+export async function runAfterToolCallHooks(
+  context: import('@nanogemclaw/plugin-api').ToolCallHookContext & {
+    result: Record<string, unknown>;
+  },
+): Promise<Record<string, unknown> | null> {
+  let currentResult = context.result;
+  let modified = false;
+  for (const hook of getAfterToolCallHooks()) {
+    try {
+      const hookResult = await hook({ ...context, result: currentResult });
+      if (hookResult && 'modifiedResult' in hookResult) {
+        currentResult = hookResult.modifiedResult;
+        modified = true;
+      }
+    } catch (err) {
+      logger.error({ err }, 'afterToolCall hook error');
+    }
+  }
+  return modified ? currentResult : null;
 }
 
 /**

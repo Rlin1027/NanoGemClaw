@@ -75,18 +75,7 @@ export function removeFromIndex(db: Database.Database, rowid: number): void {
   db.prepare('DELETE FROM messages_fts WHERE rowid = ?').run(rowid);
 }
 
-/**
- * Sanitize a user-provided query for safe use in FTS5 MATCH expressions.
- * Strips special FTS5 operators, splits into tokens, and joins with OR
- * for better recall with the trigram tokenizer.
- */
-function sanitizeFTS5Query(query: string): string {
-  const stripped = query.replace(/[*^{}():\-+]/g, '');
-  const tokens = stripped.split(/\s+/).filter((t) => t.length > 0);
-  if (tokens.length === 0) return '""';
-  if (tokens.length === 1) return `"${tokens[0].replace(/"/g, '""')}"`;
-  return tokens.map((t) => `"${t.replace(/"/g, '""')}"`).join(' OR ');
-}
+import { escapeFts5Query } from '@nanogemclaw/core';
 
 export interface SearchResult {
   id: number;
@@ -128,7 +117,7 @@ export function searchMessages(
   }
 
   // Strip FTS5 special characters to prevent query injection, then wrap as literal phrase
-  const escapedQuery = sanitizeFTS5Query(query);
+  const escapedQuery = escapeFts5Query(query);
 
   // Build WHERE clause for optional group filter
   let groupFilter = '';

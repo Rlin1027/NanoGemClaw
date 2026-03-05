@@ -3,19 +3,7 @@ import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
 import { GROUPS_DIR } from './config.js';
-
-/**
- * Sanitize a user-provided query for safe use in FTS5 MATCH expressions.
- * Strips special FTS5 operators, splits into tokens, and joins with OR
- * for better recall with the trigram tokenizer.
- */
-function sanitizeFTS5Query(query: string): string {
-  const stripped = query.replace(/[*^{}():\-+]/g, '');
-  const tokens = stripped.split(/\s+/).filter((t) => t.length > 0);
-  if (tokens.length === 0) return '""';
-  if (tokens.length === 1) return `"${tokens[0].replace(/"/g, '""')}"`;
-  return tokens.map((t) => `"${t.replace(/"/g, '""')}"`).join(' OR ');
-}
+import { escapeFts5Query } from '@nanogemclaw/core';
 
 // ============================================================================
 // Types
@@ -335,7 +323,7 @@ export function searchKnowledge(
   limit = 10,
 ): KnowledgeSearchResult[] {
   // Sanitize FTS5 query - wrap in quotes to treat as literal phrase
-  const sanitizedQuery = sanitizeFTS5Query(query);
+  const sanitizedQuery = escapeFts5Query(query);
 
   const results = db
     .prepare(
@@ -369,7 +357,7 @@ export function getRelevantKnowledge(
   groupFolder: string,
   maxChars = 50000,
 ): string {
-  const sanitizedQuery = sanitizeFTS5Query(query);
+  const sanitizedQuery = escapeFts5Query(query);
 
   // Single query: JOIN full document content with FTS results
   const results = db

@@ -143,7 +143,30 @@ export interface HookContributions {
   afterMessage?: AfterMessageHook;
   /** On error — can provide fallback reply */
   onMessageError?: OnMessageErrorHook;
+  /** Before tool execution — can block */
+  beforeToolCall?: BeforeToolCallHook;
+  /** After tool execution — can modify result */
+  afterToolCall?: AfterToolCallHook;
 }
+
+// Tool-level hook context
+export interface ToolCallHookContext {
+  toolName: string;
+  args: Record<string, unknown>;
+  chatJid: string;
+  groupFolder: string;
+  isMain: boolean;
+}
+
+// Before tool execution — can block the call
+export type BeforeToolCallHook = (
+  context: ToolCallHookContext,
+) => Promise<void | { block: true; reason: string }>;
+
+// After tool execution — can modify the result
+export type AfterToolCallHook = (
+  context: ToolCallHookContext & { result: Record<string, unknown> },
+) => Promise<void | { modifiedResult: Record<string, unknown> }>;
 
 export type BeforeMessageHook = (
   context: MessageHookContext,

@@ -1,7 +1,6 @@
 import { IpcHandler, IpcContext } from '../types.js';
 import { logger } from '../logger.js';
-
-const SAFE_FOLDER_RE = /^[a-zA-Z0-9_-]+$/;
+import { SAFE_FOLDER_RE } from '@nanogemclaw/core';
 
 export const RegisterGroupHandler: IpcHandler = {
   type: 'register_group',

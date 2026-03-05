@@ -45,4 +45,4 @@ export const knowledgeFilename = z
   .regex(/^[a-zA-Z0-9_-]+\.md$/, 'Invalid knowledge filename');
 
 /** Raw regex for path traversal protection (for use in non-Zod contexts) */
-export const SAFE_FOLDER_RE = /^[a-zA-Z0-9_-]+$/;
+export { SAFE_FOLDER_RE } from '@nanogemclaw/core';

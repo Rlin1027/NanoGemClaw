@@ -1,3 +1,11 @@
+export interface ToolResponse {
+  success: boolean;
+  data?: Record<string, unknown>;
+  error?: string;
+  /** Internal metadata added by hooks. Stripped before Gemini API serialization. */
+  _meta?: Record<string, unknown>;
+}
+
 export interface AdditionalMount {
   hostPath: string; // Absolute path on host (supports ~ for home)
   containerPath: string; // Path inside container (under /workspace/extra/)

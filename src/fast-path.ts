@@ -529,10 +529,12 @@ You are in direct conversation mode. IMPORTANT RULES:
                   const idx = executedQueue.findIndex((r) => r.name === name);
                   if (idx !== -1) {
                     const [result] = executedQueue.splice(idx, 1);
+                    const strippedResponse = { ...result.response };
+                    delete strippedResponse._meta;
                     return {
                       functionResponse: {
                         name: result.name,
-                        response: result.response,
+                        response: strippedResponse,
                       },
                     };
                   }
@@ -547,12 +549,16 @@ You are in direct conversation mode. IMPORTANT RULES:
                   },
                 };
               })
-            : functionResults.map((fr) => ({
-                functionResponse: {
-                  name: fr.name,
-                  response: fr.response,
-                },
-              }));
+            : functionResults.map((fr) => {
+                const strippedResponse = { ...fr.response };
+                delete strippedResponse._meta;
+                return {
+                  functionResponse: {
+                    name: fr.name,
+                    response: strippedResponse,
+                  },
+                };
+              });
 
         contents.push(
           {

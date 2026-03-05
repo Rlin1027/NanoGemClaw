@@ -10,14 +10,16 @@
  */
 
 import type { IpcContext, ToolMetadata } from './types.js';
+import type { ToolResponse } from '@nanogemclaw/core';
 import { logger } from './logger.js';
 import { resolvePreferredPath } from './fast-path.js';
+import { SAFE_FOLDER_RE } from '@nanogemclaw/core';
+
+// TODO: consolidate FunctionCallResult types across packages/gemini and src/gemini-tools.ts
 
 // ============================================================================
 // Input Validation Helpers
 // ============================================================================
-
-const SAFE_FOLDER_RE = /^[a-zA-Z0-9_-]+$/;
 
 function validateGroupFolder(
   name: string,
@@ -30,6 +32,23 @@ function validateGroupFolder(
     };
   }
   return null;
+}
+
+function wrapToolResponse(
+  success: boolean,
+  dataOrError: Record<string, unknown> | string,
+): ToolResponse {
+  if (!success) {
+    return {
+      success: false,
+      error:
+        typeof dataOrError === 'string' ? dataOrError : String(dataOrError),
+    };
+  }
+  if (typeof dataOrError === 'string') {
+    return { success: true, data: { message: dataOrError } };
+  }
+  return { success: true, data: dataOrError };
 }
 
 // ============================================================================
@@ -596,6 +615,30 @@ export async function executeFunctionCall(
     'Executing Gemini function call',
   );
 
+  // Run beforeToolCall hooks
+  const hookCtx = {
+    toolName: name,
+    args: args as Record<string, unknown>,
+    chatJid,
+    groupFolder,
+    isMain: context.isMain,
+  };
+  {
+    const pluginLoaderPath = '../app/src/plugin-loader.js';
+    const { runBeforeToolCallHooks } = await import(pluginLoaderPath);
+    const blockResult = await runBeforeToolCallHooks(hookCtx);
+    if (blockResult) {
+      return {
+        name,
+        response: {
+          success: false,
+          error: `Tool call blocked: ${blockResult.reason}`,
+        },
+      };
+    }
+  }
+
+  const executeSwitch = async (): Promise<FunctionCallResult> => {
   try {
     switch (name) {
       case 'schedule_task': {
@@ -647,7 +690,7 @@ export async function executeFunctionCall(
 
         return {
           name,
-          response: { success: true, task_id: taskId, next_run: nextRun },
+          response: wrapToolResponse(true, { task_id: taskId, next_run: nextRun }),
         };
       }
 
@@ -656,8 +699,7 @@ export async function executeFunctionCall(
         const tasks = getTasksForGroup(groupFolder);
         return {
           name,
-          response: {
-            success: true,
+          response: wrapToolResponse(true, {
             tasks: tasks.map((t) => ({
               id: t.id,
               prompt: t.prompt.slice(0, 100),
@@ -666,7 +708,7 @@ export async function executeFunctionCall(
               status: t.status,
               next_run: t.next_run,
             })),
-          },
+          }),
         };
       }
 
@@ -743,7 +785,7 @@ export async function executeFunctionCall(
         deleteTask(args.task_id);
         return {
           name,
-          response: { success: true, task_id: args.task_id, deleted: true },
+          response: wrapToolResponse(true, { task_id: args.task_id, deleted: true }),
         };
       }
 
@@ -800,7 +842,7 @@ export async function executeFunctionCall(
         upsertFact(groupFolder, factKey, factValue, 'user_set', 1.0);
         return {
           name,
-          response: { success: true, key: factKey, remembered: true },
+          response: wrapToolResponse(true, { key: factKey, remembered: true }),
         };
       }
 
@@ -1147,11 +1189,14 @@ export async function executeFunctionCall(
           },
         });
         if (pluginResult !== null) {
-          try {
-            return { name, response: JSON.parse(pluginResult) };
-          } catch {
-            return { name, response: { success: true, result: pluginResult } };
+          if (typeof pluginResult === 'string') {
+            try {
+              return { name, response: JSON.parse(pluginResult) };
+            } catch {
+              return { name, response: { success: true, data: { text: pluginResult } } };
+            }
           }
+          return { name, response: pluginResult };
         }
         return {
           name,
@@ -1173,4 +1218,20 @@ export async function executeFunctionCall(
       response: { success: false, error: 'Function execution failed' },
     };
   }
+  };
+
+  const result = await executeSwitch();
+
+  // Run afterToolCall hooks (skipped if beforeToolCall blocked above)
+  {
+    const pluginLoaderPath = '../app/src/plugin-loader.js';
+    const { runAfterToolCallHooks } = await import(pluginLoaderPath);
+    const afterCtx = { ...hookCtx, result: result.response as Record<string, unknown> };
+    const modifiedResponse = await runAfterToolCallHooks(afterCtx);
+    if (modifiedResponse) {
+      return { name, response: modifiedResponse };
+    }
+  }
+
+  return result;
 }
