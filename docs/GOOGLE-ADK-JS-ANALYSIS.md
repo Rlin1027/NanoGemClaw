@@ -1,0 +1,832 @@
+# Google ADK JS 深度分析：NanoGemClaw 可借鑑之處
+
+> 研究日期：2025-03-05
+> 目標版本：@google/adk v0.4.0
+> 目的：分析 Google ADK JS 架構設計，找出可導入 NanoGemClaw 的模式與源碼
+
+---
+
+## 目錄
+
+1. [ADK JS 概覽](#1-adk-js-概覽)
+2. [架構對比](#2-架構對比)
+3. [值得參考的七大設計模式](#3-值得參考的七大設計模式)
+4. [導入改進計劃](#4-導入改進計劃)
+5. [不建議導入的部分](#5-不建議導入的部分)
+6. [優先級與路線圖](#6-優先級與路線圖)
+
+---
+
+## 1. ADK JS 概覽
+
+Google Agent Development Kit for JavaScript（`@google/adk`）是 Google 開源的 AI Agent 開發框架，採 code-first 設計，支援 TypeScript。核心功能包括：
+
+- **多層 Agent 編排**：LlmAgent、SequentialAgent、ParallelAgent、LoopAgent
+- **統一工具系統**：FunctionTool、AgentTool、MCP Toolset、Google Search Tool
+- **Session 與 Memory 分離**：Session 存原始對話，Memory 提供語意搜尋
+- **Plugin 攔截框架**：10 個 callback hook，全域生效
+- **三種 Streaming 模式**：None、SSE、Bidirectional（Live API）
+- **A2A 協議**：跨服務 Agent 間通訊
+
+Repo 結構為 monorepo，主要 packages：
+- `core/` — 主套件，包含所有 agent、tool、session、memory、plugin 抽象
+- `dev/` — CLI 工具、開發 UI、API server、整合測試框架
+
+---
+
+## 2. 架構對比
+
+| 面向 | NanoGemClaw | Google ADK JS |
+|------|-------------|---------------|
+| **Agent 類型** | 單一 LLM agent per group | LlmAgent + Sequential/Parallel/Loop |
+| **工具系統** | `GeminiToolContribution` + IPC handlers | `FunctionTool` + `AgentTool` + MCP + `BaseTool` |
+| **工具驗證** | 無 schema 驗證，直接信任 LLM args | Zod schema 驗證（支援 v3/v4） |
+| **Plugin hooks** | 3 個 message hooks（before/after/onError） | 10 個 callback hooks（涵蓋 agent/model/tool/runner） |
+| **Session** | SQLite + better-sqlite3，自訂 schema | 抽象 SessionService（InMemory / MikroORM） |
+| **Memory** | memory_summaries + facts 表 | 獨立 MemoryService（searchMemory 語意搜尋） |
+| **State 管理** | preferences 表 + groups JSON | State 類，`app:/user:/temp:` prefix 分層 |
+| **Event 系統** | EventBus（typed, ring buffer） | Event 系統 + OpenTelemetry tracing |
+| **安全策略** | tool metadata（readOnly, dangerLevel） | SecurityPlugin + PolicyEngine |
+| **Streaming** | 自建 streaming（500ms interval） | SSE / Bidirectional Live API |
+
+**核心差異**：ADK JS 是通用 Agent 框架，NanoGemClaw 是特定用途的 Telegram AI 助手。ADK 的抽象層更厚，但很多模式可以輕量化移植。
+
+---
+
+## 3. 值得參考的七大設計模式
+
+### 3.1 細粒度 Plugin Callback 攔截鏈
+
+**ADK 做法**
+
+ADK 的 `BasePlugin` 提供 10 個 callback hooks，形成完整的攔截鏈：
+
+```
+beforeAgentCallback → beforeModelCallback → [LLM Call] → afterModelCallback
+                      → beforeToolCallback → [Tool Exec] → afterToolCallback
+                      → afterAgentCallback
+```
+
+每個 hook 可以：
+- **短路**（return 非 undefined 值直接跳過後續）
+- **修改輸入**（mutations 會傳遞給下一個 plugin）
+- **鏈式組合**（多個 plugin 按註冊順序執行）
+
+Plugin 的優先級高於 Agent 級 callback，這確保了全域策略（如安全、日誌）無法被單一 agent 覆蓋。
+
+**NanoGemClaw 現狀**
+
+目前只有 3 個 message-level hooks：
+- `beforeMessage`：可跳過處理或修改訊息
+- `afterMessage`：fire-and-forget（日誌、分析）
+- `onMessageError`：提供 fallback 回覆
+
+**缺少的關鍵攔截點**：
+- `beforeToolCall` / `afterToolCall` — 無法在 plugin 層攔截或修改 function calling
+- `beforeModelCall` / `afterModelCall` — 無法在 plugin 層干預 LLM 請求/回應
+
+**為什麼重要**
+
+1. **安全審計**：無法在 plugin 層記錄或攔截危險的 tool call（如 `generate_image` 頻率限制）
+2. **Plugin 能力受限**：目前 plugin 只能在 message 層操作，無法介入 tool 執行流程
+3. **可組合性**：ADK 的模式允許一個 plugin 負責日誌、另一個負責安全、另一個負責計費，各司其職
+
+**導入方式**
+
+在 `packages/plugin-api/src/index.ts` 的 `HookContributions` 介面中新增 tool-level hooks：
+
+```typescript
+// 新增 hook 類型
+interface ToolCallHookContext {
+    toolName: string;
+    args: Record<string, unknown>;
+    groupFolder: string;
+    chatJid: string;
+}
+
+interface ToolResultHookContext extends ToolCallHookContext {
+    result: string;
+    durationMs: number;
+}
+
+interface HookContributions {
+    // 現有
+    beforeMessage?: BeforeMessageHook[];
+    afterMessage?: AfterMessageHook[];
+    onMessageError?: MessageErrorHook[];
+    // 新增
+    beforeToolCall?: ((ctx: ToolCallHookContext) => Promise<string | null | void>)[];
+    afterToolCall?: ((ctx: ToolResultHookContext) => Promise<string | null | void>)[];
+}
+```
+
+在 `packages/gemini/src/gemini-tools.ts` 的 `executeFunctionCall()` 中注入 hook 執行邏輯：
+
+```typescript
+// Before tool execution
+for (const hook of beforeToolCallHooks) {
+    const override = await hook({ toolName: name, args, groupFolder, chatJid });
+    if (override !== undefined && override !== null) {
+        return { result: override }; // 短路：plugin 攔截了 tool call
+    }
+}
+
+// Execute tool...
+const result = await actualExecution();
+
+// After tool execution
+for (const hook of afterToolCallHooks) {
+    await hook({ toolName: name, args, groupFolder, chatJid, result, durationMs });
+}
+```
+
+**預估工作量**：小（~2-3 天），影響範圍集中在 plugin-api 介面 + gemini-tools 執行器。
+
+---
+
+### 3.2 Tool Input Schema 驗證（Zod）
+
+**ADK 做法**
+
+ADK 的 `FunctionTool` 支援 Zod schema 定義工具參數：
+
+```typescript
+const weatherTool = new FunctionTool({
+    name: 'get_weather',
+    description: 'Get weather for a city',
+    inputSchema: z.object({
+        city: z.string().describe('City name'),
+        unit: z.enum(['celsius', 'fahrenheit']).default('celsius'),
+    }),
+    outputSchema: z.object({
+        temperature: z.number(),
+        condition: z.string(),
+    }),
+    handler: async ({ city, unit }) => { /* ... */ }
+});
+```
+
+Zod schema 同時用於：
+1. **生成 JSON Schema** 給 Gemini API 的 `functionDeclarations`
+2. **執行時驗證** — LLM 回傳的 args 在執行前通過 `schema.parse()`
+3. **TypeScript 型別推斷** — handler 的參數自動獲得正確型別
+
+**NanoGemClaw 現狀**
+
+`GeminiToolContribution.parameters` 是 `Record<string, unknown>`（原始 JSON Schema），無驗證：
+
+```typescript
+interface GeminiToolContribution {
+    parameters: Record<string, unknown>; // 直接傳給 Gemini API，不做驗證
+    execute(args: Record<string, any>, context: IpcContext): Promise<string>;
+}
+```
+
+LLM 回傳的 args 直接傳入 `execute()`，如果 LLM hallucinate 了不存在的參數或錯誤型別，只能靠 execute 內部處理。
+
+**為什麼重要**
+
+1. **防禦 LLM Hallucination**：Gemini 偶爾會傳回 schema 未定義的參數（如額外的 `format` 欄位），或型別錯誤（字串傳成數字）。沒有驗證層意味著這些錯誤會在 tool 執行時產生非預期行為
+2. **錯誤訊息改善**：Zod 的 parse error 可以回傳給 LLM，讓它自我修正並重試
+3. **Plugin 開發者體驗**：Plugin 作者需要在每個 `execute()` 中自行做參數檢查，增加樣板代碼
+4. **型別安全**：目前 `args: Record<string, any>` 完全沒有型別保護
+
+**導入方式**
+
+1. 在 `GeminiToolContribution` 介面中新增可選的 `inputSchema` 欄位：
+
+```typescript
+import type { ZodType } from 'zod';
+
+interface GeminiToolContribution {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>; // 保持向後相容
+    inputSchema?: ZodType;               // 新增：可選 Zod schema
+    permission: 'main' | 'any';
+    execute(args: Record<string, any>, context: IpcContext): Promise<string>;
+    metadata?: ToolMetadata;
+}
+```
+
+2. 在 `executeFunctionCall()` 中加入驗證層：
+
+```typescript
+if (tool.inputSchema) {
+    const parsed = tool.inputSchema.safeParse(args);
+    if (!parsed.success) {
+        return {
+            result: `Invalid arguments: ${parsed.error.issues.map(i => i.message).join(', ')}`,
+        };
+    }
+    args = parsed.data; // 使用驗證後的 args（含 default 值）
+}
+```
+
+3. 提供 `zodToJsonSchema` 工具函式，讓 plugin 作者可以從 Zod schema 自動生成 `parameters`：
+
+```typescript
+// packages/plugin-api/src/schema-utils.ts
+import { zodToJsonSchema } from 'zod-to-json-schema';
+
+export function defineToolSchema<T extends ZodType>(schema: T) {
+    return {
+        inputSchema: schema,
+        parameters: zodToJsonSchema(schema),
+    };
+}
+```
+
+**預估工作量**：小（~2 天），新增依賴 `zod` + `zod-to-json-schema`，修改 plugin-api 介面和 gemini-tools 執行器。完全向後相容。
+
+---
+
+### 3.3 Tool Safety PolicyEngine
+
+**ADK 做法**
+
+ADK 的 `SecurityPlugin` 實現了策略引擎模式：
+
+```typescript
+class SecurityPlugin extends BasePlugin {
+    constructor(private policyEngine: BasePolicyEngine) {}
+
+    async beforeToolCallback(callbackContext, toolName, args) {
+        const decision = await this.policyEngine.evaluate({
+            tool: toolName,
+            args: args,
+            agent: callbackContext.agentName,
+            user: callbackContext.session.userId,
+        });
+
+        switch (decision.action) {
+            case 'allow': return undefined;     // 繼續執行
+            case 'deny': return { error: decision.reason };
+            case 'confirm': /* 要求使用者確認 */
+        }
+    }
+}
+```
+
+`BasePolicyEngine` 是抽象介面，`InMemoryPolicyEngine` 是內建實作，支援：
+- 基於 tool name 的 allow/deny 規則
+- 基於 agent name 的權限限制
+- 基於 user 的存取控制
+- 可程式化動態規則
+
+**NanoGemClaw 現狀**
+
+工具安全靠 `GeminiToolContribution.metadata` 的靜態標記：
+
+```typescript
+metadata?: {
+    readOnly?: boolean;
+    requiresExplicitIntent?: boolean;
+    dangerLevel?: 'safe' | 'moderate' | 'destructive';
+};
+```
+
+加上 `permission: 'main' | 'any'` 做基本權限控制。但這些是靜態宣告，沒有統一的決策引擎來執行安全策略。
+
+**為什麼重要**
+
+1. **策略集中管理**：目前安全邏輯分散在各 tool 的 `execute()` 內部和 `permission` 欄位，無法全局管理
+2. **動態策略**：例如「在非工作時間禁用 destructive tool」或「同一 group 每小時最多 5 次 image generation」，目前無法在不修改各 tool 源碼的情況下實現
+3. **審計日誌**：集中的 PolicyEngine 可以統一記錄所有 tool call 的決策過程
+4. **Plugin 可擴展安全**：第三方 plugin 可以註冊自己的安全策略
+
+**導入方式**
+
+1. 定義 PolicyEngine 介面：
+
+```typescript
+// packages/plugin-api/src/policy.ts
+interface ToolCallPolicy {
+    toolName: string;
+    args: Record<string, unknown>;
+    groupFolder: string;
+    chatJid: string;
+    isMainGroup: boolean;
+}
+
+interface PolicyDecision {
+    action: 'allow' | 'deny';
+    reason?: string;
+}
+
+interface PolicyEngine {
+    evaluate(policy: ToolCallPolicy): Promise<PolicyDecision>;
+}
+```
+
+2. 內建一個 `DefaultPolicyEngine`，整合現有的 `metadata` 標記：
+
+```typescript
+class DefaultPolicyEngine implements PolicyEngine {
+    async evaluate(ctx: ToolCallPolicy): Promise<PolicyDecision> {
+        const tool = getToolByName(ctx.toolName);
+        // 現有邏輯：permission check
+        if (tool.permission === 'main' && !ctx.isMainGroup) {
+            return { action: 'deny', reason: 'Main group only' };
+        }
+        // 可擴展：rate limiting, time-based rules, etc.
+        return { action: 'allow' };
+    }
+}
+```
+
+3. 將 PolicyEngine 注入 `executeFunctionCall()` 流程，作為 `beforeToolCall` hook 的系統級 hook。
+
+**預估工作量**：中（~4-5 天），需要設計介面、實作 DefaultPolicyEngine、整合到 tool 執行流程。
+
+---
+
+### 3.4 MCP（Model Context Protocol）Toolset 整合
+
+**ADK 做法**
+
+ADK 通過 `McpToolset` 類實現 MCP 整合：
+
+```typescript
+const mcpToolset = new McpToolset({
+    connectionParams: {
+        transport: 'stdio',
+        command: 'npx',
+        args: ['-y', '@anthropic/mcp-server-filesystem', '/path/to/dir'],
+    }
+});
+
+const agent = new LlmAgent({
+    name: 'file_agent',
+    tools: [mcpToolset],
+});
+```
+
+`McpToolset` 封裝了：
+- 連線管理（stdio / SSE transport）
+- `McpSessionManager` 管理多個 MCP server 連線的生命週期
+- `McpTool` 將 MCP tool 自動轉換為 ADK 的 `BaseTool` 介面
+- Tool schema 自動轉換（MCP JSON Schema → Gemini FunctionDeclaration）
+- `ToolPredicate` 支援條件性工具可用性
+
+**NanoGemClaw 現狀**
+
+無 MCP 支援。外部工具只能透過 plugin 系統的 `GeminiToolContribution` 手動整合。
+
+**為什麼重要**
+
+1. **工具生態系統**：MCP 已成為 AI 工具標準協議，有大量現成 server（filesystem、GitHub、Slack、databases 等），直接整合可大幅擴展 NanoGemClaw 的能力
+2. **減少 Plugin 樣板**：許多 plugin（如 google-drive）本質上是在手動實作 MCP server 的功能，用 MCP 可以消除大量重複代碼
+3. **社區貢獻降門檻**：MCP server 是獨立進程，不需要理解 NanoGemClaw 內部架構就能開發工具
+4. **動態工具發現**：MCP 支援 runtime tool listing，可以在不重啟 bot 的情況下新增工具
+
+**導入方式**
+
+1. 新增 `packages/mcp/` package 或在 plugin-api 中加入 MCP support：
+
+```typescript
+// packages/plugin-api/src/mcp.ts
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+
+interface McpServerConfig {
+    id: string;
+    transport: 'stdio' | 'sse';
+    command?: string;
+    args?: string[];
+    url?: string;
+    permission: 'main' | 'any';
+}
+
+class McpToolBridge {
+    private client: Client;
+
+    async connect(config: McpServerConfig): Promise<void> { /* ... */ }
+
+    /** 將 MCP tools 轉換為 GeminiToolContribution[] */
+    async getTools(): Promise<GeminiToolContribution[]> {
+        const { tools } = await this.client.listTools();
+        return tools.map(tool => ({
+            name: `mcp_${this.config.id}_${tool.name}`,
+            description: tool.description ?? '',
+            parameters: tool.inputSchema ?? {},
+            permission: this.config.permission,
+            execute: async (args) => {
+                const result = await this.client.callTool({ name: tool.name, arguments: args });
+                return JSON.stringify(result.content);
+            },
+            metadata: { readOnly: false },
+        }));
+    }
+
+    async disconnect(): Promise<void> { /* ... */ }
+}
+```
+
+2. 在 `data/mcp-servers.json` 中配置 MCP servers：
+
+```json
+{
+    "servers": [
+        {
+            "id": "filesystem",
+            "transport": "stdio",
+            "command": "npx",
+            "args": ["-y", "@anthropic/mcp-server-filesystem", "/safe/path"],
+            "permission": "main"
+        }
+    ]
+}
+```
+
+3. 在 `app/src/plugin-loader.ts` 中於 plugin 初始化階段連接 MCP servers，將轉換後的 tools 注入 Gemini tool pool。
+
+**預估工作量**：中（~5-7 天），新增 `@modelcontextprotocol/sdk` 依賴，實作 bridge 層，配置管理，生命週期整合。
+
+---
+
+### 3.5 分層 State 管理（app/user/temp prefix）
+
+**ADK 做法**
+
+ADK 的 `State` 類用 prefix 區分 state 的生命週期和作用域：
+
+```typescript
+class State {
+    // app: prefix — 全 application 共享，跨 session 持久化
+    get(key: 'app:feature_flags'): unknown;
+
+    // user: prefix — per-user 持久化，跨 session
+    get(key: 'user:language'): unknown;
+
+    // temp: prefix — 單一 session 內有效，session 結束就消失
+    get(key: 'temp:current_step'): unknown;
+
+    // 無 prefix — session-level 持久化（預設）
+    get(key: 'counter'): unknown;
+}
+```
+
+這讓 agent 可以清楚區分：
+- 全局配置 vs 使用者偏好 vs 臨時狀態
+- 哪些 state 需要持久化、哪些不需要
+
+**NanoGemClaw 現狀**
+
+State 分散在多個地方：
+- `preferences` 表：per-group key-value（接近 ADK 的 `user:` prefix）
+- `registered_groups.json`：group 配置（接近 ADK 的 `app:` prefix）
+- `facts` 表：per-group 知識（無直接對應）
+- 無臨時 state 機制（對話中的中間狀態無處存放）
+
+**為什麼重要**
+
+1. **臨時狀態缺失**：多步驟 tool call（如 multi-turn 表單填寫）的中間狀態無處存放，只能依賴 LLM 的 conversation context
+2. **全局 vs Group state 混淆**：`preferences` 表是 per-group 的，但有些設定（如全域語言偏好）邏輯上應該是跨 group 的
+3. **Plugin state 沒有標準化方式**：Plugin 目前用 `dataDir` 存檔案或直接存 DB，缺乏統一的 state API
+
+**導入方式**
+
+不需要大規模重構，可以在現有 `preferences` 模組上加一層薄包裝：
+
+```typescript
+// packages/db/src/state.ts
+type StateScope = 'app' | 'group' | 'temp';
+
+interface StateService {
+    get(scope: StateScope, key: string, groupFolder?: string): Promise<unknown>;
+    set(scope: StateScope, key: string, value: unknown, groupFolder?: string): Promise<void>;
+    delete(scope: StateScope, key: string, groupFolder?: string): Promise<void>;
+    clearTemp(groupFolder?: string): Promise<void>;
+}
+
+class SqliteStateService implements StateService {
+    async get(scope: StateScope, key: string, groupFolder?: string) {
+        switch (scope) {
+            case 'app': return this.getAppState(key);          // 新表或 preferences 無 group
+            case 'group': return this.getPreference(groupFolder!, key); // 現有 preferences 表
+            case 'temp': return this.tempStore.get(key);       // in-memory Map
+        }
+    }
+}
+```
+
+**預估工作量**：中（~3-4 天），主要是介面設計和遷移現有 preferences 呼叫。
+
+---
+
+### 3.6 Agent-as-Tool 模式與多 Agent 編排
+
+**ADK 做法**
+
+ADK 支援將 agent 包裝成 tool，讓父 agent 可以委派任務給子 agent：
+
+```typescript
+const researchAgent = new LlmAgent({
+    name: 'researcher',
+    description: 'Researches topics in depth',
+    model: 'gemini-2.5-flash',
+    tools: [googleSearchTool],
+});
+
+const writerAgent = new LlmAgent({
+    name: 'writer',
+    description: 'Writes articles based on research',
+    model: 'gemini-2.5-pro',
+    tools: [new AgentTool(researchAgent)], // Agent 包裝成 Tool
+});
+```
+
+同時支援三種編排 pattern：
+- **SequentialAgent**：依序執行子 agent
+- **ParallelAgent**：並行執行子 agent
+- **LoopAgent**：重複執行直到 ExitLoopTool 被呼叫
+
+**NanoGemClaw 現狀**
+
+每個 group 是一個獨立的 LLM agent，沒有 agent 間協作機制。Container 系統（`container/agent-runner/`）提供了隔離執行環境，但不是 agent 編排。
+
+**為什麼重要**
+
+1. **複雜任務分解**：某些需求（如「搜尋新聞 → 摘要 → 翻譯 → 排版」）可以拆成專門的子 agent 串聯
+2. **模型混用**：不同子任務可以用不同模型（快速任務用 Flash，複雜推理用 Pro）
+3. **可測試性**：子 agent 可以獨立測試
+
+**為什麼暫不建議全面導入**
+
+NanoGemClaw 的核心場景是 Telegram 群組對話，大部分請求是單輪 Q&A 或簡單 tool call。Multi-agent 編排會增加延遲（每個 agent 都是一次 LLM call），不適合即時通訊場景。
+
+**輕量導入方式**
+
+僅導入 Agent-as-Tool 模式，不導入完整編排：
+
+```typescript
+// packages/gemini/src/agent-tool.ts
+interface AgentToolConfig {
+    name: string;
+    description: string;
+    agent: {
+        model?: string;
+        systemPrompt: string;
+        tools?: GeminiToolContribution[];
+    };
+    summarizeOutput?: boolean;
+}
+
+function createAgentTool(config: AgentToolConfig): GeminiToolContribution {
+    return {
+        name: config.name,
+        description: config.description,
+        parameters: { type: 'object', properties: { task: { type: 'string' } } },
+        permission: 'main',
+        execute: async (args, context) => {
+            // 建立子 conversation，用指定 model 和 system prompt 執行
+            const result = await runSubAgent(config.agent, args.task, context);
+            return config.summarizeOutput ? summarize(result) : result;
+        },
+    };
+}
+```
+
+**預估工作量**：中（~5 天），需要在 gemini 包中實作 sub-conversation 邏輯。可以先做 prototype 觀察效果。
+
+---
+
+### 3.7 LLM Request/Response Processor（前後處理鏈）
+
+**ADK 做法**
+
+ADK 提供 `BaseLlmRequestProcessor` 和 `BaseLlmResponseProcessor` 介面：
+
+```typescript
+abstract class BaseLlmRequestProcessor {
+    abstract processRequest(request: LlmRequest, context: InvocationContext): Promise<LlmRequest>;
+}
+
+abstract class BaseLlmResponseProcessor {
+    abstract processResponse(response: LlmResponse, context: InvocationContext): Promise<LlmResponse>;
+}
+```
+
+這允許在 LLM 呼叫前後注入處理邏輯，例如：
+- 自動注入 system instruction（safety preamble）
+- 自動把 output 裁切到 token 限制內
+- 注入 few-shot examples
+- 敏感資訊過濾（PII masking）
+- Token 用量預估和控制
+
+**NanoGemClaw 現狀**
+
+LLM 請求的前處理（system prompt 組裝、context 注入、knowledge base 整合）都在 `src/index.ts` 的消息處理流程中硬編碼。沒有可擴展的 pre/post-processing 機制。
+
+**為什麼重要**
+
+1. **Prompt 注入防禦**：可以在 processor 中統一加入 safety preamble，而不是在每個路徑中重複
+2. **Knowledge 注入標準化**：目前 knowledge docs 的注入邏輯是特定流程綁定的，processor 模式可以讓它成為可插拔的
+3. **PII 過濾**：group 對話可能包含敏感資訊，processor 可以在送入 LLM 前遮罩
+4. **Plugin 可擴展 prompt**：Plugin 可以註冊 processor 來注入自己的 system instruction
+
+**導入方式**
+
+```typescript
+// packages/gemini/src/processors.ts
+interface LlmRequestProcessor {
+    name: string;
+    priority: number; // 0-100, 越小越先執行
+    process(request: GeminiRequest, context: ProcessorContext): Promise<GeminiRequest>;
+}
+
+interface LlmResponseProcessor {
+    name: string;
+    priority: number;
+    process(response: GeminiResponse, context: ProcessorContext): Promise<GeminiResponse>;
+}
+
+// 在 plugin-api 中暴露
+interface NanoPlugin {
+    // ...現有欄位
+    requestProcessors?: LlmRequestProcessor[];
+    responseProcessors?: LlmResponseProcessor[];
+}
+```
+
+**預估工作量**：中（~4 天），需要重構 gemini 包的請求/回應流程，提取出 processor pipeline。
+
+---
+
+## 4. 導入改進計劃
+
+### Phase 1：Tool 層強化（1-2 週）
+
+**目標**：提升 tool 系統的安全性和可靠性。
+
+| 任務 | 修改範圍 | 風險 |
+|------|---------|------|
+| 新增 `beforeToolCall` / `afterToolCall` plugin hooks | `plugin-api`, `gemini-tools` | 低：純新增，不影響現有 hooks |
+| 新增可選 Zod schema 驗證 | `plugin-api`, `gemini-tools` | 低：可選欄位，完全向後相容 |
+| 新增 PolicyEngine 介面 + DefaultPolicyEngine | `plugin-api`, 新檔案 | 低：可逐步遷移 |
+
+**具體步驟**：
+
+1. `packages/plugin-api/src/index.ts`：
+   - 新增 `ToolCallHookContext`, `ToolResultHookContext` 型別
+   - `HookContributions` 加入 `beforeToolCall`, `afterToolCall`
+   - 新增 `PolicyEngine` 介面 export
+
+2. `packages/gemini/src/gemini-tools.ts`：
+   - `executeFunctionCall()` 加入 hook 呼叫點
+   - 加入 Zod `safeParse()` 驗證步驟（當 `inputSchema` 存在時）
+
+3. `packages/plugin-api/src/policy.ts`（新檔案）：
+   - 定義 `PolicyEngine` 介面
+   - 實作 `DefaultPolicyEngine`（遷移現有 permission 邏輯）
+
+4. 更新現有 plugin 範例（`examples/plugin-skeleton/`）展示新 hooks 用法
+
+5. 新增測試覆蓋新功能
+
+### Phase 2：MCP 整合（2-3 週）
+
+**目標**：支援 MCP 協議，開放外部工具生態。
+
+| 任務 | 修改範圍 | 風險 |
+|------|---------|------|
+| 新增 MCP bridge 模組 | 新 package 或 plugin-api 擴展 | 中：新依賴 `@modelcontextprotocol/sdk` |
+| MCP server 配置管理 | `data/mcp-servers.json` + 配置載入 | 低：獨立配置檔 |
+| 生命週期整合 | `app/src/plugin-loader.ts` | 中：需要在啟動/關閉流程中管理 MCP 連線 |
+| Dashboard MCP 管理頁面 | `packages/dashboard/` | 低：純 UI |
+
+**具體步驟**：
+
+1. 安裝依賴：`npm install @modelcontextprotocol/sdk`
+
+2. 新增 `packages/mcp/` package（或 `packages/gemini/src/mcp/`）：
+   - `McpBridge` 類：管理 MCP client 連線
+   - `mcpToGeminiTool()` 轉換函式
+   - `McpLifecycleManager`：多 server 連線池
+
+3. 配置層：
+   - `data/mcp-servers.json` schema 定義
+   - 在 `packages/core/src/config.ts` 加入 MCP 配置常量
+
+4. 整合層：
+   - `app/src/plugin-loader.ts` 在 plugin 初始化後連接 MCP servers
+   - 將 MCP tools 注入 Gemini tool pool
+   - 在 shutdown 時斷開所有 MCP 連線
+
+### Phase 3：State 與 Processor（2 週）
+
+**目標**：統一 state 管理，建立 LLM request/response pipeline。
+
+| 任務 | 修改範圍 | 風險 |
+|------|---------|------|
+| StateService 介面 + SqliteStateService | `packages/db/` | 中：需遷移現有 preferences 呼叫 |
+| LLM Request/Response Processor pipeline | `packages/gemini/` | 中：需重構請求流程 |
+| Plugin API 暴露 processor 註冊 | `packages/plugin-api/` | 低：純新增 |
+
+### Phase 4：探索性（按需）
+
+| 任務 | 時機 |
+|------|------|
+| Agent-as-Tool 模式 | 當有明確的 multi-step 使用場景時 |
+| Sequential/Parallel agent | 當單一 agent + tools 無法滿足需求時 |
+| A2A 協議 | 當需要多實例部署或跨服務 agent 協作時 |
+
+---
+
+## 5. 不建議導入的部分
+
+### 5.1 完整 Agent 類繼承體系
+
+**ADK 做法**：`BaseAgent` → `LlmAgent` / `SequentialAgent` / `ParallelAgent` / `LoopAgent`，每個 agent 都是類實例，有完整的狀態和生命週期。
+
+**為什麼不適合**：NanoGemClaw 的 agent 本質是「一個 Gemini conversation + 一組 tools」，不需要 class-based agent 抽象。引入會增加大量不必要的間接層，且與現有的函式式 + 配置式架構衝突。
+
+### 5.2 MikroORM Session 持久化
+
+**ADK 做法**：`DatabaseSessionService` 基於 MikroORM，支援多種 RDBMS。
+
+**為什麼不適合**：NanoGemClaw 已經有成熟的 better-sqlite3 + 自訂 migration 方案，引入 ORM 會增加 bundle size（MikroORM 很重），且 NanoGemClaw 是單機部署，SQLite 完全夠用。
+
+### 5.3 Bidirectional Streaming（Live API）
+
+**ADK 做法**：支援 Gemini Live API 的即時雙向音視訊串流。
+
+**為什麼不適合**：Telegram Bot API 不支援即時雙向串流。NanoGemClaw 的串流是 text chunking（500ms interval），已經夠用。
+
+### 5.4 OpenTelemetry 整合
+
+**ADK 做法**：透過 OpenTelemetry 提供 distributed tracing。
+
+**為什麼不適合**：NanoGemClaw 是單機單進程應用，現有的 `@nanogemclaw/core` logger + EventBus ring buffer 已經提供足夠的可觀測性。OpenTelemetry 的 setup 成本和 overhead 不值得。
+
+### 5.5 Google Cloud 深度整合
+
+**ADK 做法**：Vertex AI auth、GCS artifact storage、Cloud Trace。
+
+**為什麼不適合**：NanoGemClaw 設計為自架（self-hosted），使用 API key 驗證，不依賴 Google Cloud 基礎設施。
+
+---
+
+## 6. 優先級與路線圖
+
+```
+                          影響大
+                            │
+         ┌──────────────────┼──────────────────┐
+         │                  │                  │
+         │  P2: MCP 整合    │  P1: Tool hooks  │
+         │  P2: PolicyEngine│  P1: Zod 驗證    │
+         │                  │                  │
+工作量大 ─┼──────────────────┼──────────────────┼─ 工作量小
+         │                  │                  │
+         │  P4: Multi-agent │  P3: State 分層  │
+         │  P4: A2A 協議    │  P3: Processors  │
+         │                  │                  │
+         └──────────────────┼──────────────────┘
+                            │
+                          影響小
+```
+
+| 優先級 | 改進項目 | 預估工作量 | 影響範圍 | 前置依賴 |
+|--------|---------|-----------|---------|---------|
+| **P1** | Plugin `beforeToolCall` / `afterToolCall` hooks | 2-3 天 | plugin-api, gemini | 無 |
+| **P1** | Tool input Zod schema 驗證 | 2 天 | plugin-api, gemini | 無 |
+| **P2** | Tool safety PolicyEngine | 4-5 天 | plugin-api, gemini | P1 (tool hooks) |
+| **P2** | MCP Toolset 整合 | 5-7 天 | 新 package, plugin-loader | P1 (tool hooks) |
+| **P3** | 統一 StateService（app/group/temp 分層） | 3-4 天 | db, plugin-api | 無 |
+| **P3** | LLM Request/Response Processor pipeline | 4 天 | gemini, plugin-api | 無 |
+| **P4** | Agent-as-Tool 模式 | 5 天 | gemini | P1, P3 |
+| **P4** | Multi-agent 編排（Sequential/Parallel） | 10+ 天 | 架構級 | P4 Agent-as-Tool |
+
+---
+
+## 附錄：ADK JS 源碼參考路徑
+
+以下為 ADK JS 中最值得閱讀的源碼位置（基於 v0.4.0）：
+
+| 模組 | 源碼路徑 | 值得看的點 |
+|------|---------|-----------|
+| Plugin 系統 | `core/src/plugins/base_plugin.ts` | 10 個 callback hook 的設計 |
+| Security Plugin | `core/src/plugins/security_plugin.ts` | PolicyEngine 模式 |
+| FunctionTool | `core/src/tools/function_tool.ts` | Zod schema integration |
+| AgentTool | `core/src/tools/agent_tool.ts` | Agent-as-Tool 包裝 |
+| MCP Toolset | `core/src/tools/mcp_tool/` | MCP 整合實作 |
+| State 管理 | `core/src/sessions/state.ts` | Prefix-based scope |
+| Session Service | `core/src/sessions/` | 抽象 interface pattern |
+| LLM Agent | `core/src/agents/llm_agent/` | Callback chain 實作 |
+| Runner | `core/src/runner.ts` | AsyncGenerator event stream |
+| Gemini Model | `core/src/models/google_llm.ts` | LLM abstraction layer |
+
+---
+
+## 結論
+
+Google ADK JS 是一個設計精良的 Agent 框架，對 NanoGemClaw 最有價值的不是整體遷移，而是 **cherry-pick** 其中的設計模式：
+
+1. **立即可做**（P1）：tool-level plugin hooks + Zod schema 驗證，工作量小、收益高、完全向後相容
+2. **短期目標**（P2）：PolicyEngine 安全策略引擎 + MCP 標準工具協議，顯著擴展系統能力
+3. **中期改進**（P3）：統一 state 管理 + LLM processor pipeline，提升架構整潔度
+4. **未來備案**（P4）：multi-agent 編排，等有明確場景再做
+
+核心原則：**NanoGemClaw 是特定用途的 Telegram AI 助手，不是通用 Agent 框架**。每個導入決策都應該問「這對 Telegram 群組場景有幫助嗎？」而不是追求架構完整性。
