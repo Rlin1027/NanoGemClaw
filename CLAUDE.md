@@ -9,7 +9,7 @@ Personal AI assistant powered by Gemini, delivered via Telegram. TypeScript mono
 npm run dev              # Start with tsx (hot reload)
 npm run build            # tsc → dist/
 npm run typecheck        # tsc --noEmit
-npm test                 # vitest run (41 files, ~948 tests)
+npm test                 # vitest run
 npm run test:watch       # vitest (watch mode)
 npm run test:coverage    # vitest with coverage report
 npm run format:check     # prettier --check
@@ -52,7 +52,7 @@ src/                     # Backend business logic
 ├── routes/              # Express routers (8): auth, groups, tasks, knowledge, calendar, skills, config, analytics
 ├── ipc-handlers/        # IPC handlers (9): schedule, cancel, pause, resume, register-group, etc.
 ├── utils/               # safe-compare.ts (timingSafeEqual)
-└── __tests__/           # Vitest tests (27 files)
+└── __tests__/           # Vitest tests
 
 container/               # Agent execution environment
 ├── Dockerfile           # Container image definition
@@ -60,17 +60,9 @@ container/               # Agent execution environment
 ├── agent-runner/        # Agent runtime inside container
 └── skills/              # Container-side skill definitions
 
-docs/                    # Project documentation
-├── GUIDE.md             # User guide
-├── ADMIN-CHAT-TEST-PLAN.md  # Admin chat test plan
-├── MANUAL-TEST-PLAN.md      # Manual test plan
-├── SECURITY.md          # Security model documentation
-├── SPEC.md              # Technical specification
-├── REQUIREMENTS.md      # Requirements document
-└── learning/            # Learning resources
-
+docs/                    # Specs, security, test plans, guides
 examples/plugin-skeleton/ # Plugin template with package.json + src/index.ts
-plugins/                  # Plugin packages (discord-reporter, google-auth, google-drive, etc.)
+plugins/                  # Plugin packages (see directory for list)
 store/                    # Runtime data (gitignored): messages.db, registered_groups.json
 groups/                   # Per-group folders with conversation context
 ```
