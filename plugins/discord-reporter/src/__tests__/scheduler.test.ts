@@ -33,6 +33,12 @@ import {
   debounced,
   startScheduler,
   stopScheduler,
+  heartbeat,
+  triggerReport,
+  getSchedulerConfig,
+  updateSchedulerConfig,
+  loadConfig,
+  saveConfig,
 } from '../scheduler.js';
 import { createMockPluginApi } from '../../../__tests__/helpers/plugin-api-mock.js';
 import type { DiscordPayload } from '../embed-formatter.js';
@@ -349,5 +355,284 @@ describe('startScheduler — scheduler does not trigger when disabled', () => {
 
     // enabled=false means the tick is a no-op
     expect(generateDailyReport).not.toHaveBeenCalled();
+  });
+});
+
+// ============================================================================
+// 3a. Weekly trigger
+// ============================================================================
+
+describe('startScheduler / tick — weekly trigger', () => {
+  // Monday 2026-03-02 at 08:59 local time — weeklyDay=1 (Monday), weeklyTime="09:00"
+  const ENABLED_CONFIG = JSON.stringify({
+    webhookUrl: VALID_WEBHOOK,
+    dailyTime: '08:00',   // different from test clock so daily does NOT fire
+    weeklyDay: 1,
+    weeklyTime: '09:00',
+    enabled: true,
+  });
+
+  function makeWeeklyReport() {
+    const now = new Date();
+    return {
+      period: { start: new Date(now.getTime() - 7 * 86_400_000).toISOString(), end: now.toISOString() },
+      totalRequests: 100,
+      totalTokens: 5000,
+      avgDailyRequests: 14,
+      peakDay: 'Monday',
+      peakDayRequests: 30,
+      errorRate: 0,
+      topGroups: [],
+    };
+  }
+
+  beforeEach(() => {
+    mockFsReadFileSync.mockReturnValue(ENABLED_CONFIG);
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', mockFetchOk());
+  });
+
+  afterEach(() => {
+    stopScheduler();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+    mockFsReadFileSync.mockImplementation(() => { throw new Error('ENOENT'); });
+  });
+
+  it('fires the weekly report on the configured weekday at HH:MM', async () => {
+    // 2026-03-02 is a Monday. Set clock to 08:59 local time.
+    vi.setSystemTime(new Date('2026-03-02T08:59:00'));
+
+    const api = createMockPluginApi();
+    const generateDailyReport = vi.fn().mockReturnValue({
+      generated_at: new Date().toISOString(),
+      period: { start: '2026-03-01T00:00:00Z', end: '2026-03-01T23:59:59Z' },
+      usage: { total_requests: 0, avg_duration_ms: 0, total_tokens: 0 },
+      errors: { groups_with_errors: 0, total_failures: 0 },
+      top_groups: [],
+    });
+    const generateWeeklyData = vi.fn().mockReturnValue(makeWeeklyReport());
+
+    startScheduler(api, '/tmp', generateDailyReport, generateWeeklyData);
+
+    // Advance 60s so tick fires at 09:00 Monday
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(generateWeeklyData).toHaveBeenCalled();
+  });
+
+  it('does not fire the weekly report twice for the same week', async () => {
+    vi.setSystemTime(new Date('2026-03-02T08:59:00'));
+
+    const api = createMockPluginApi();
+    const generateDailyReport = vi.fn().mockReturnValue({
+      generated_at: new Date().toISOString(),
+      period: { start: '2026-03-01T00:00:00Z', end: '2026-03-01T23:59:59Z' },
+      usage: { total_requests: 0, avg_duration_ms: 0, total_tokens: 0 },
+      errors: { groups_with_errors: 0, total_failures: 0 },
+      top_groups: [],
+    });
+    const generateWeeklyData = vi.fn().mockReturnValue(makeWeeklyReport());
+
+    startScheduler(api, '/tmp', generateDailyReport, generateWeeklyData);
+
+    // First tick at 09:00
+    await vi.advanceTimersByTimeAsync(60_000);
+    const firstCount = generateWeeklyData.mock.calls.length;
+
+    // Second tick at 09:01 — same week, should NOT fire again
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(generateWeeklyData.mock.calls.length).toBe(firstCount);
+  });
+});
+
+// ============================================================================
+// 3b. heartbeat
+// ============================================================================
+
+describe('heartbeat', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('returns true when fetch returns ok', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+    const result = await heartbeat(VALID_WEBHOOK);
+    expect(result).toBe(true);
+  });
+
+  it('returns false when fetch returns not ok', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
+    const result = await heartbeat(VALID_WEBHOOK);
+    expect(result).toBe(false);
+  });
+
+  it('returns false for an invalid URL without calling fetch', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    const result = await heartbeat('not-a-valid-url');
+    expect(result).toBe(false);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ============================================================================
+// 3c. triggerReport
+// ============================================================================
+
+describe('triggerReport', () => {
+  const DAILY_REPORT = {
+    generated_at: new Date().toISOString(),
+    period: { start: '2026-03-01T00:00:00Z', end: '2026-03-01T23:59:59Z' },
+    usage: { total_requests: 42, avg_duration_ms: 300, total_tokens: 2000 },
+    errors: { groups_with_errors: 0, total_failures: 0 },
+    top_groups: [],
+  };
+
+  beforeEach(() => {
+    vi.stubGlobal('fetch', mockFetchOk());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('triggerReport("daily") calls sendToDiscord via fetch', async () => {
+    const api = createMockPluginApi();
+    const generateDailyReport = vi.fn().mockReturnValue(DAILY_REPORT);
+
+    await triggerReport('daily', VALID_WEBHOOK, api, generateDailyReport);
+
+    expect(generateDailyReport).toHaveBeenCalled();
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    expect(fetchMock).toHaveBeenCalledWith(
+      VALID_WEBHOOK,
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('triggerReport("weekly") calls sendToDiscord with weekly embed via fetch', async () => {
+    const api = createMockPluginApi();
+    const generateDailyReport = vi.fn().mockReturnValue(DAILY_REPORT);
+
+    await triggerReport('weekly', VALID_WEBHOOK, api, generateDailyReport);
+
+    // generateDailyReport should NOT be called for weekly
+    expect(generateDailyReport).not.toHaveBeenCalled();
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    expect(fetchMock).toHaveBeenCalledWith(
+      VALID_WEBHOOK,
+      expect.objectContaining({ method: 'POST' }),
+    );
+    // Verify the body is a weekly embed (has "Weekly Report" in title)
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.embeds[0].title).toContain('Weekly');
+  });
+});
+
+// ============================================================================
+// 3d. Config accessors
+// ============================================================================
+
+describe('getSchedulerConfig / updateSchedulerConfig', () => {
+  afterEach(() => {
+    stopScheduler();
+    mockFsReadFileSync.mockImplementation(() => { throw new Error('ENOENT'); });
+  });
+
+  it('getSchedulerConfig returns null before startScheduler is called', () => {
+    // Ensure no running scheduler
+    stopScheduler();
+    expect(getSchedulerConfig()).toBeNull();
+  });
+
+  it('getSchedulerConfig returns a copy of config after startScheduler', () => {
+    const ENABLED_CONFIG = JSON.stringify({
+      webhookUrl: VALID_WEBHOOK,
+      dailyTime: '09:00',
+      weeklyDay: 1,
+      weeklyTime: '09:00',
+      enabled: true,
+    });
+    mockFsReadFileSync.mockReturnValue(ENABLED_CONFIG);
+    vi.useFakeTimers();
+
+    const api = createMockPluginApi();
+    const generateDailyReport = vi.fn();
+    startScheduler(api, '/tmp', generateDailyReport);
+
+    const cfg = getSchedulerConfig();
+    expect(cfg).not.toBeNull();
+    expect(cfg!.enabled).toBe(true);
+    expect(cfg!.webhookUrl).toBe(VALID_WEBHOOK);
+
+    vi.useRealTimers();
+  });
+
+  it('updateSchedulerConfig merges updates and calls saveConfig (fs write)', () => {
+    mockFsReadFileSync.mockReturnValue(JSON.stringify({
+      webhookUrl: VALID_WEBHOOK,
+      dailyTime: '09:00',
+      weeklyDay: 1,
+      weeklyTime: '09:00',
+      enabled: false,
+    }));
+
+    const updated = updateSchedulerConfig('/tmp', { enabled: true, dailyTime: '10:00' });
+
+    expect(updated.enabled).toBe(true);
+    expect(updated.dailyTime).toBe('10:00');
+    expect(updated.webhookUrl).toBe(VALID_WEBHOOK);
+    // saveConfig should have called mkdirSync + writeFileSync
+    expect(mockFsMkdirSync).toHaveBeenCalled();
+    expect(mockFsWriteFileSync).toHaveBeenCalled();
+  });
+});
+
+// ============================================================================
+// 3e. loadConfig / saveConfig direct tests
+// ============================================================================
+
+describe('loadConfig / saveConfig', () => {
+  beforeEach(() => {
+    mockFsReadFileSync.mockImplementation(() => { throw new Error('ENOENT'); });
+    mockFsWriteFileSync.mockReset();
+    mockFsMkdirSync.mockReset();
+  });
+
+  it('loadConfig returns parsed config when file contains valid JSON', () => {
+    const stored = {
+      webhookUrl: VALID_WEBHOOK,
+      dailyTime: '08:30',
+      weeklyDay: 5,
+      weeklyTime: '10:00',
+      enabled: true,
+    };
+    mockFsReadFileSync.mockReturnValue(JSON.stringify(stored));
+
+    const cfg = loadConfig('/some/data/dir');
+    expect(cfg.webhookUrl).toBe(VALID_WEBHOOK);
+    expect(cfg.dailyTime).toBe('08:30');
+    expect(cfg.weeklyDay).toBe(5);
+    expect(cfg.enabled).toBe(true);
+  });
+
+  it('saveConfig creates the directory and writes JSON to disk', () => {
+    const cfg = {
+      webhookUrl: VALID_WEBHOOK,
+      dailyTime: '09:00',
+      weeklyDay: 1,
+      weeklyTime: '09:00',
+      enabled: true,
+    };
+
+    saveConfig('/some/data/dir', cfg);
+
+    expect(mockFsMkdirSync).toHaveBeenCalledWith('/some/data/dir', { recursive: true });
+    expect(mockFsWriteFileSync).toHaveBeenCalledWith(
+      expect.stringContaining('discord-config.json'),
+      expect.stringContaining('"enabled": true'),
+      'utf-8',
+    );
   });
 });

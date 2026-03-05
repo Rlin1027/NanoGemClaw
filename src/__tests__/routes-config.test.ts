@@ -25,6 +25,21 @@ vi.mock('../gemini-client.js', () => ({
 vi.mock('../config.js', () => ({
   FAST_PATH: { ENABLED: true },
   GROUPS_DIR: '/test/groups',
+  SCHEDULER: {
+    CONCURRENCY: 2,
+    getRecommendedConcurrency: vi.fn(() => 4),
+  },
+  getDefaultModel: vi.fn(() => 'gemini-3-flash-preview'),
+}));
+
+vi.mock('@nanogemclaw/gemini', () => ({
+  getAvailableModels: vi.fn(() => ['gemini-3-flash-preview']),
+  setExternalModels: vi.fn(),
+}));
+
+vi.mock('../auth.js', () => ({
+  resolveAuth: vi.fn(() => Promise.resolve(null)),
+  discoverVertexModels: vi.fn(() => Promise.resolve([])),
 }));
 
 import request from 'supertest';
@@ -174,6 +189,93 @@ describe('routes/config', () => {
       res.body.data.forEach((s: { key: string; configured: boolean }) => {
         expect(typeof s.configured).toBe('boolean');
       });
+    });
+  });
+
+  describe('GET /api/config/scheduler', () => {
+    it('returns 200 with concurrency, recommended, cpuCores, totalMemoryGB', async () => {
+      const app = makeApp();
+      const res = await request(app).get('/api/config/scheduler');
+      expect(res.status).toBe(200);
+      const { data } = res.body;
+      expect(data.concurrency).toBe(2);
+      expect(data.recommended).toBe(4);
+      expect(typeof data.cpuCores).toBe('number');
+      expect(data.cpuCores).toBeGreaterThan(0);
+      expect(typeof data.totalMemoryGB).toBe('number');
+    });
+
+    it('returns 500 when config import fails', async () => {
+      const { SCHEDULER } = await import('../config.js');
+      vi.mocked(SCHEDULER.getRecommendedConcurrency).mockImplementationOnce(
+        () => {
+          throw new Error('config error');
+        },
+      );
+      const app = makeApp();
+      const res = await request(app).get('/api/config/scheduler');
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({ error: 'Failed to fetch scheduler info' });
+    });
+  });
+
+  describe('GET /api/config/models', () => {
+    it('returns 200 with base models when no OAuth auth', async () => {
+      const app = makeApp();
+      const res = await request(app).get('/api/config/models');
+      expect(res.status).toBe(200);
+      const { data } = res.body;
+      expect(data.models).toEqual(['gemini-3-flash-preview']);
+      expect(data.defaultModel).toBe('gemini-3-flash-preview');
+    });
+
+    it('calls setExternalModels when OAuth returns vertex models', async () => {
+      const { resolveAuth, discoverVertexModels } = await import('../auth.js');
+      const { setExternalModels } = await import('@nanogemclaw/gemini');
+      vi.mocked(resolveAuth).mockResolvedValueOnce({
+        type: 'oauth',
+        token: 'tok',
+        project: 'proj',
+      } as never);
+      vi.mocked(discoverVertexModels).mockResolvedValueOnce([
+        'gemini-vertex-pro',
+      ] as never);
+
+      const app = makeApp();
+      const res = await request(app).get('/api/config/models');
+      expect(res.status).toBe(200);
+      expect(vi.mocked(setExternalModels)).toHaveBeenCalledWith([
+        'gemini-vertex-pro',
+      ]);
+      expect(res.body.data.models).toEqual(['gemini-vertex-pro']);
+    });
+
+    it('keeps base models when OAuth vertex returns empty list', async () => {
+      const { resolveAuth, discoverVertexModels } = await import('../auth.js');
+      const { setExternalModels } = await import('@nanogemclaw/gemini');
+      vi.mocked(resolveAuth).mockResolvedValueOnce({
+        type: 'oauth',
+        token: 'tok',
+        project: 'proj',
+      } as never);
+      vi.mocked(discoverVertexModels).mockResolvedValueOnce([] as never);
+
+      const app = makeApp();
+      const res = await request(app).get('/api/config/models');
+      expect(res.status).toBe(200);
+      expect(vi.mocked(setExternalModels)).not.toHaveBeenCalled();
+      expect(res.body.data.models).toEqual(['gemini-3-flash-preview']);
+    });
+
+    it('returns 500 when getAvailableModels throws', async () => {
+      const { getAvailableModels } = await import('@nanogemclaw/gemini');
+      vi.mocked(getAvailableModels).mockImplementationOnce(() => {
+        throw new Error('gemini error');
+      });
+      const app = makeApp();
+      const res = await request(app).get('/api/config/models');
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({ error: 'Failed to fetch available models' });
     });
   });
 });

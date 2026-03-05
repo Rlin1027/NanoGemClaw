@@ -367,6 +367,182 @@ describe('MemorizationService', () => {
     });
   });
 
+  // ── Event-driven triggers ───────────────────────────────────
+
+  describe('event-driven triggers', () => {
+    function setupEventBus() {
+      const callbacks: Record<string, Array<(payload: { chatId: string; groupFolder: string }) => void>> = {};
+      const mockEventBus = {
+        on: vi.fn((event: string, cb: (payload: { chatId: string; groupFolder: string }) => void) => {
+          if (!callbacks[event]) callbacks[event] = [];
+          callbacks[event].push(cb);
+          return vi.fn(); // unsubscribe
+        }),
+        emit: vi.fn(),
+      } as unknown as import('@nanogemclaw/event-bus').EventBus;
+      return { mockEventBus, callbacks };
+    }
+
+    it('should trigger summarization when threshold is reached via events', async () => {
+      const { mockEventBus, callbacks } = setupEventBus();
+      service.subscribeToEvents(mockEventBus);
+
+      insertMessages(db, '12345', 25);
+      mockSummarize.mockResolvedValue({ summary: 'ok', messagesProcessed: 25, charsProcessed: 250 });
+
+      // Fire message:received 20 times to hit default threshold (20)
+      for (let i = 0; i < 20; i++) {
+        callbacks['message:received'][0]({ chatId: '12345', groupFolder: 'test-group' });
+      }
+
+      // Allow async summarization to complete
+      await vi.advanceTimersByTimeAsync(100);
+
+      expect(mockSummarize).toHaveBeenCalled();
+    });
+
+    it('should reset pending count after threshold trigger', async () => {
+      const { mockEventBus, callbacks } = setupEventBus();
+      service.subscribeToEvents(mockEventBus);
+
+      insertMessages(db, '12345', 25);
+      mockSummarize.mockResolvedValue({ summary: 'ok', messagesProcessed: 25, charsProcessed: 250 });
+
+      // Trigger first summarization via threshold
+      for (let i = 0; i < 20; i++) {
+        callbacks['message:received'][0]({ chatId: '12345', groupFolder: 'test-group' });
+      }
+      await vi.advanceTimersByTimeAsync(100);
+
+      const firstCallCount = mockSummarize.mock.calls.length;
+
+      // Fire fewer messages than threshold — should NOT trigger again immediately
+      for (let i = 0; i < 5; i++) {
+        callbacks['message:received'][0]({ chatId: '12345', groupFolder: 'test-group' });
+      }
+      await vi.advanceTimersByTimeAsync(100);
+
+      // Still same call count since 5 < 20 threshold
+      expect(mockSummarize.mock.calls.length).toBe(firstCallCount);
+    });
+
+    it('should trigger summarization after debounce timer fires', async () => {
+      const { mockEventBus, callbacks } = setupEventBus();
+      service.subscribeToEvents(mockEventBus);
+
+      insertMessages(db, '12345', 25);
+      mockSummarize.mockResolvedValue({ summary: 'ok', messagesProcessed: 25, charsProcessed: 250 });
+
+      // Fire only 5 messages (below threshold of 20)
+      for (let i = 0; i < 5; i++) {
+        callbacks['message:received'][0]({ chatId: '12345', groupFolder: 'test-group' });
+      }
+
+      // No summarization yet
+      expect(mockSummarize).not.toHaveBeenCalled();
+
+      // Advance time past default debounceMs (3600000ms = 1hr)
+      await vi.advanceTimersByTimeAsync(3600000 + 100);
+
+      expect(mockSummarize).toHaveBeenCalled();
+    });
+
+    it('should not trigger debounce when pending count is 0', async () => {
+      const { mockEventBus, callbacks } = setupEventBus();
+      service.subscribeToEvents(mockEventBus);
+
+      insertMessages(db, '12345', 25);
+      mockSummarize.mockResolvedValue({ summary: 'ok', messagesProcessed: 25, charsProcessed: 250 });
+
+      // Fire 20 messages to trigger threshold (resets count to 0)
+      for (let i = 0; i < 20; i++) {
+        callbacks['message:received'][0]({ chatId: '12345', groupFolder: 'test-group' });
+      }
+      await vi.advanceTimersByTimeAsync(100);
+      const firstCallCount = mockSummarize.mock.calls.length;
+
+      // Advance debounce timer — count is 0 so debounce should NOT trigger again
+      await vi.advanceTimersByTimeAsync(3600000 + 100);
+
+      expect(mockSummarize.mock.calls.length).toBe(firstCallCount);
+    });
+
+    it('should handle group not found in registry gracefully', async () => {
+      const { mockEventBus, callbacks } = setupEventBus();
+
+      // Override getGroups to return empty
+      const emptyGroupApi = {
+        ...api,
+        getGroups: vi.fn(() => ({})),
+      };
+      const unknownService = new MemorizationService(emptyGroupApi, { summarize: mockSummarize });
+      unknownService.initTable();
+      unknownService.subscribeToEvents(mockEventBus);
+
+      insertMessages(db, '12345', 25);
+
+      // Fire enough to hit threshold
+      for (let i = 0; i < 20; i++) {
+        callbacks['message:received'][0]({ chatId: '12345', groupFolder: 'unknown-folder' });
+      }
+      await vi.advanceTimersByTimeAsync(100);
+
+      // summarize should NOT be called — group not found
+      expect(mockSummarize).not.toHaveBeenCalled();
+
+      // Task should be marked failed with "Group not found"
+      const tasks = db
+        .prepare("SELECT * FROM memorization_tasks WHERE status = 'failed'")
+        .all() as Array<{ error: string }>;
+      expect(tasks.length).toBeGreaterThanOrEqual(1);
+      expect(tasks[0].error).toContain('Group not found');
+
+      await unknownService.stop();
+    });
+
+    it('should respect maxConcurrent guard via event triggers', async () => {
+      const { mockEventBus, callbacks } = setupEventBus();
+
+      const limitedService = new MemorizationService(api, {
+        summarize: mockSummarize,
+        config: { maxConcurrent: 1 },
+      });
+      limitedService.initTable();
+      limitedService.subscribeToEvents(mockEventBus);
+
+      insertMessages(db, '12345', 25);
+
+      let resolveFirst!: () => void;
+      mockSummarize.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = () =>
+              resolve({ summary: 'done', messagesProcessed: 25, charsProcessed: 250 });
+          }),
+      );
+      mockSummarize.mockResolvedValue({ summary: 'done2', messagesProcessed: 25, charsProcessed: 250 });
+
+      // First threshold trigger starts a pending summarization
+      for (let i = 0; i < 20; i++) {
+        callbacks['message:received'][0]({ chatId: '12345', groupFolder: 'test-group' });
+      }
+      await vi.advanceTimersByTimeAsync(10);
+
+      // Second threshold trigger should be skipped (maxConcurrent=1, already processing)
+      for (let i = 0; i < 20; i++) {
+        callbacks['message:received'][0]({ chatId: '12345', groupFolder: 'test-group' });
+      }
+      await vi.advanceTimersByTimeAsync(10);
+
+      // Only 1 call despite two threshold crossings (second skipped due to isProcessing lock)
+      expect(mockSummarize).toHaveBeenCalledTimes(1);
+
+      resolveFirst();
+      await vi.advanceTimersByTimeAsync(100);
+      await limitedService.stop();
+    });
+  });
+
   // ── Event Bus integration ───────────────────────────────────
 
   describe('event bus integration', () => {
