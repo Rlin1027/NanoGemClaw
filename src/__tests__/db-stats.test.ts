@@ -39,6 +39,8 @@ import {
   markAlertSent,
   getAllErrorStates,
   checkRateLimit,
+  getRateLimitStatus,
+  clearRateLimits,
 } from '../db.js';
 import { resetDatabase, cleanupTestDir } from './helpers/db-test-setup.js';
 
@@ -229,43 +231,88 @@ describe('db/stats', () => {
   });
 
   describe('Rate Limiting', () => {
-    // NOTE: Rate limiting tests are skipped due to incompatibility with beforeEach database reset.
-    // The in-memory rateLimitWindows Map gets out of sync when the database is recreated.
-    // These tests would need either:
-    // 1. An exported function in db.ts to clear the rateLimitWindows Map, OR
-    // 2. A fix to the cleanup logic in checkRateLimit (lines 680-682) that currently
-    //    deletes keys and returns early without adding timestamps
+    beforeEach(() => clearRateLimits());
 
-    it.skip('should allow requests within limit', () => {
-      const result = checkRateLimit('user1_test', 5, 60000);
+    it('should allow requests within limit', () => {
+      const result = checkRateLimit('user1', 5, 60000);
       expect(result.allowed).toBe(true);
+      expect(result.remaining).toBe(4);
     });
 
-    it.skip('should block requests exceeding limit', () => {
-      expect(true).toBe(true);
+    it('should block requests exceeding limit', () => {
+      for (let i = 0; i < 3; i++) {
+        checkRateLimit('user2', 3, 60000);
+      }
+      const result = checkRateLimit('user2', 3, 60000);
+      expect(result.allowed).toBe(false);
+      expect(result.remaining).toBe(0);
     });
 
-    it.skip('should provide reset time when blocked', () => {
-      expect(true).toBe(true);
+    it('should provide reset time when blocked', () => {
+      for (let i = 0; i < 3; i++) {
+        checkRateLimit('user3', 3, 60000);
+      }
+      const result = checkRateLimit('user3', 3, 60000);
+      expect(result.allowed).toBe(false);
+      expect(result.resetInMs).toBeGreaterThan(0);
+      expect(result.resetInMs).toBeLessThanOrEqual(60000);
     });
 
-    it.skip('should get rate limit status without incrementing', () => {
-      expect(true).toBe(true);
+    it('should get rate limit status without incrementing', () => {
+      checkRateLimit('user4', 5, 60000);
+      checkRateLimit('user4', 5, 60000);
+
+      const status = getRateLimitStatus('user4', 5, 60000);
+      expect(status.count).toBe(2);
+      expect(status.remaining).toBe(3);
+
+      // Calling again should not change count
+      const status2 = getRateLimitStatus('user4', 5, 60000);
+      expect(status2.count).toBe(2);
     });
 
-    it.skip('should reset after window expires', async () => {
-      expect(true).toBe(true);
+    it('should reset after window expires', () => {
+      vi.useFakeTimers();
+      try {
+        checkRateLimit('user5', 2, 1000);
+        checkRateLimit('user5', 2, 1000);
+
+        const blocked = checkRateLimit('user5', 2, 1000);
+        expect(blocked.allowed).toBe(false);
+
+        // Advance past window
+        vi.advanceTimersByTime(1001);
+
+        const allowed = checkRateLimit('user5', 2, 1000);
+        expect(allowed.allowed).toBe(true);
+        expect(allowed.remaining).toBe(1);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
-    it.skip('should handle multiple keys independently', () => {
-      expect(true).toBe(true);
+    it('should handle multiple keys independently', () => {
+      checkRateLimit('keyA', 2, 60000);
+      checkRateLimit('keyA', 2, 60000);
+
+      const blockedA = checkRateLimit('keyA', 2, 60000);
+      expect(blockedA.allowed).toBe(false);
+
+      // keyB should still be allowed
+      const allowedB = checkRateLimit('keyB', 2, 60000);
+      expect(allowedB.allowed).toBe(true);
+      expect(allowedB.remaining).toBe(1);
     });
 
-    it('should clean up inactive keys', () => {
-      const result = checkRateLimit('inactive_user', 5, 60000);
-      expect(result.allowed).toBe(true);
-      // First call with no prior history returns full limit (cleanup at line 680-682 of db.ts)
-      expect(result.remaining).toBe(5);
+    it('should track remaining count correctly', () => {
+      const r1 = checkRateLimit('user6', 3, 60000);
+      expect(r1.remaining).toBe(2);
+
+      const r2 = checkRateLimit('user6', 3, 60000);
+      expect(r2.remaining).toBe(1);
+
+      const r3 = checkRateLimit('user6', 3, 60000);
+      expect(r3.remaining).toBe(0);
     });
   });
 });

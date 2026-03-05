@@ -375,12 +375,6 @@ export function checkRateLimit(
   // Remove timestamps outside the window
   window.timestamps = window.timestamps.filter((ts) => ts > windowStart);
 
-  // Clean up inactive keys with no recent timestamps
-  if (window.timestamps.length === 0) {
-    rateLimitWindows.delete(key);
-    return { allowed: true, remaining: maxRequests, resetInMs: 0 };
-  }
-
   // Check if limit exceeded
   if (window.timestamps.length >= maxRequests) {
     const oldestInWindow = window.timestamps[0];
@@ -399,6 +393,13 @@ export function checkRateLimit(
     remaining: maxRequests - window.timestamps.length,
     resetInMs: windowMs,
   };
+}
+
+/**
+ * Clear all rate limit windows (for testing)
+ */
+export function clearRateLimits(): void {
+  rateLimitWindows.clear();
 }
 
 /**
