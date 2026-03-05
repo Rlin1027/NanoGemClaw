@@ -14,6 +14,8 @@ import type { ToolResponse } from '@nanogemclaw/core';
 import { logger } from './logger.js';
 import { resolvePreferredPath } from './fast-path.js';
 import { SAFE_FOLDER_RE } from '@nanogemclaw/core';
+import { validateToolInput } from './zod-tools.js';
+import type { ParseableSchema } from './zod-tools.js';
 
 // TODO: consolidate FunctionCallResult types across packages/gemini and src/gemini-tools.ts
 
@@ -88,6 +90,26 @@ export function clearDeclarationCache(): void {
   cachedMainDeclarations = null;
   cachedNonMainDeclarations = null;
   cachedAdminDeclarations = null;
+}
+
+// ============================================================================
+// Input Schema Registry
+// ============================================================================
+
+/** Registry mapping tool names to their input schemas for validation */
+const inputSchemaRegistry = new Map<string, ParseableSchema>();
+
+/** Register an input schema for a tool. Called during plugin tool registration. */
+export function registerInputSchema(
+  toolName: string,
+  schema: ParseableSchema,
+): void {
+  inputSchemaRegistry.set(toolName, schema);
+}
+
+/** Clear all registered input schemas. Called alongside clearDeclarationCache(). */
+export function clearInputSchemaRegistry(): void {
+  inputSchemaRegistry.clear();
 }
 
 /** Plugin tool declarations injected after plugin init */
@@ -635,6 +657,25 @@ export async function executeFunctionCall(
           error: `Tool call blocked: ${blockResult.reason}`,
         },
       };
+    }
+  }
+
+  // Validate tool input if a schema is registered
+  {
+    const inputSchema = inputSchemaRegistry.get(name);
+    if (inputSchema) {
+      const validation = validateToolInput(inputSchema, args as Record<string, unknown>);
+      if (!validation.valid) {
+        return {
+          name,
+          response: {
+            success: false,
+            error: `Validation failed: ${validation.error}`,
+          },
+        };
+      }
+      // Use parsed/transformed data (enables Zod transforms)
+      args = (validation.data ?? args) as Record<string, any>;
     }
   }
 

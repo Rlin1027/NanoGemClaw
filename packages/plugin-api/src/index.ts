@@ -86,6 +86,16 @@ export interface GeminiToolContribution {
     /** Safety classification (default: 'moderate') */
     dangerLevel?: 'safe' | 'moderate' | 'destructive';
   };
+  /**
+   * Optional schema for input validation.
+   * When provided:
+   * 1. Args are validated before execute() — invalid args return error without calling execute()
+   * 2. If `parameters` is empty/missing, JSON Schema is auto-generated from this schema
+   *
+   * Accepts any object with a `.parse()` method (Zod schemas, Arktype, custom validators).
+   * Structural typing — no Zod import required in plugin-api.
+   */
+  inputSchema?: { parse(data: unknown): unknown };
 }
 
 export interface ToolExecutionContext {

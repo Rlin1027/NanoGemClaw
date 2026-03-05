@@ -9,6 +9,7 @@ export default defineConfig({
       'tests/**/*.test.ts',
       'packages/!(dashboard)/src/**/*.test.ts',
       'plugins/*/src/**/*.test.ts',
+      'app/src/**/*.test.ts',
     ],
     coverage: {
       provider: 'v8',

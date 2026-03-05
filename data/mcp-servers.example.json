@@ -1,0 +1,25 @@
+{
+  "servers": [
+    {
+      "id": "filesystem",
+      "name": "Filesystem Access",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/allowed/path"],
+      "permission": "main",
+      "enabled": false,
+      "timeout": 10000,
+      "autoReconnect": true
+    },
+    {
+      "id": "weather",
+      "name": "Weather API",
+      "transport": "sse",
+      "url": "http://localhost:8080/sse",
+      "permission": "any",
+      "enabled": false,
+      "timeout": 10000,
+      "autoReconnect": true
+    }
+  ]
+}

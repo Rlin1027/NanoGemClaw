@@ -178,6 +178,15 @@ export async function discoverAndLoadPlugins(
   options?: DiscoverAndLoadOptions,
 ): Promise<void> {
   moduleEventBus = deps.eventBus;
+
+  // Register MCP bridge plugin (only when plugins are actually being loaded)
+  try {
+    const { createMcpPlugin } = await import('./mcp/index.js');
+    registerInternalPlugin(createMcpPlugin(deps.dataDir));
+  } catch (err) {
+    logger.warn({ err }, 'Failed to register MCP bridge plugin');
+  }
+
   // 1. Read manifest (tolerant of missing file)
   let manifest: PluginManifest = { plugins: [] };
   if (fs.existsSync(manifestPath)) {
@@ -352,11 +361,29 @@ export function getLoadedPlugins(): LoadedPlugin[] {
 
 /**
  * Get all Gemini tool contributions from all enabled plugins.
+ * Also populates the inputSchemaRegistry for tools that declare inputSchema.
  */
 export function getPluginGeminiTools(): Array<
   import('@nanogemclaw/plugin-api').GeminiToolContribution
 > {
-  return getLoadedPlugins().flatMap((p) => p.plugin.geminiTools ?? []);
+  const tools = getLoadedPlugins().flatMap((p) => p.plugin.geminiTools ?? []);
+
+  // Populate inputSchemaRegistry for tools that declare inputSchema.
+  // Dynamic import avoids pulling config.ts into test environments at module-load time.
+  void import('../../src/gemini-tools.js')
+    .then(({ registerInputSchema, clearInputSchemaRegistry }) => {
+      clearInputSchemaRegistry();
+      for (const tool of tools) {
+        if (tool.inputSchema && typeof tool.inputSchema.parse === 'function') {
+          registerInputSchema(tool.name, tool.inputSchema as { parse(data: unknown): unknown });
+        }
+      }
+    })
+    .catch((err: unknown) => {
+      logger.warn({ err }, 'Failed to populate inputSchemaRegistry');
+    });
+
+  return tools;
 }
 
 /**
