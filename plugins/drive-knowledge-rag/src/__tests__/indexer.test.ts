@@ -363,19 +363,22 @@ describe('drive-knowledge-rag/indexer', () => {
         it('produces one oversized chunk for long text with no blank lines (hard-split guard only activates on truly empty output)', async () => {
             const api = createMockPluginApi();
             // chunkText splits on \n{2,} — a single long paragraph with no blank lines
-            // ends up as one chunk (the single-paragraph else-branch runs, current becomes
-            // the full text, then it is pushed at the end). The hard-split path only
-            // fires when chunks.length === 0 (unreachable for non-empty single-line text).
+            // is force-split by the oversized-chunk safety guard into maxChars-sized pieces.
             const longText = 'X'.repeat(2500);
             mockExtractContent.mockResolvedValueOnce({
                 content: longText,
                 mimeType: 'text/plain',
                 truncated: false,
             });
+            // 2500 chars / 1000 maxChars = 3 chunks after safety split
             mockEmbedContent.mockResolvedValueOnce({ embeddings: [{ values: [0.1] }] });
+            mockEmbedContent.mockResolvedValueOnce({ embeddings: [{ values: [0.2] }] });
+            mockEmbedContent.mockResolvedValueOnce({ embeddings: [{ values: [0.3] }] });
             const result = await indexFile(makeDriveFile(), 1000, api.logger);
-            expect(result!.chunks).toHaveLength(1);
-            expect(result!.chunks[0].text).toBe(longText);
+            expect(result!.chunks).toHaveLength(3);
+            expect(result!.chunks[0].text).toBe('X'.repeat(1000));
+            expect(result!.chunks[1].text).toBe('X'.repeat(1000));
+            expect(result!.chunks[2].text).toBe('X'.repeat(500));
         });
     });
 

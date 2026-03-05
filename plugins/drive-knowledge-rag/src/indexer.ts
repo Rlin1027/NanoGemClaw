@@ -88,7 +88,10 @@ function chunkText(
   text: string,
   maxChars = 1000,
 ): Array<{ text: string; startOffset: number }> {
-  const paragraphs = text
+  // Normalize line endings: \r\n → \n, stray \r → \n
+  const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+  const paragraphs = normalized
     .split(/\n{2,}/)
     .map((p) => p.trim())
     .filter(Boolean);
@@ -122,7 +125,22 @@ function chunkText(
     }
   }
 
-  return chunks;
+  // Safety: force-split any oversized chunks
+  const result: Array<{ text: string; startOffset: number }> = [];
+  for (const chunk of chunks) {
+    if (chunk.text.length <= maxChars * 2) {
+      result.push(chunk);
+    } else {
+      for (let i = 0; i < chunk.text.length; i += maxChars) {
+        result.push({
+          text: chunk.text.slice(i, i + maxChars),
+          startOffset: chunk.startOffset + i,
+        });
+      }
+    }
+  }
+
+  return result;
 }
 
 // ---------------------------------------------------------------------------

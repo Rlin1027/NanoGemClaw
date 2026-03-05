@@ -2,6 +2,7 @@
  * Agent Executor - Agent execution with retry logic and container/fast-path routing.
  */
 import TelegramBot from 'node-telegram-bot-api';
+import fs from 'fs';
 import path from 'path';
 
 import {
@@ -142,6 +143,15 @@ export async function runAgent(
   // Import message consolidator and mark streaming as active
   const { messageConsolidator } = await import('./message-consolidator.js');
   messageConsolidator.setStreaming(chatId, true, messageThreadId);
+
+  // RAG temp file path (declared outside try so finally can clean up)
+  const ragFilePath = path.join(
+    process.cwd(),
+    'groups',
+    group.folder,
+    'knowledge',
+    'Google_Drive_知識庫搜尋結果.md',
+  );
 
   try {
     // Get memory context from conversation summaries
@@ -306,10 +316,11 @@ export async function runAgent(
       new Set(Object.keys(registeredGroups)),
     );
 
-    // RAG pre-injection: fetch knowledge context for groups with ragFolderIds
+    // RAG pre-injection: fetch knowledge context and write as physical file
+    // so the container agent can read it from /workspace/group/knowledge/
     let knowledgeContext: string | undefined;
     if (group.ragFolderIds?.length) {
-      logger.info({ group: group.name, ragFolderIds: group.ragFolderIds }, 'RAG pre-injection: starting');
+      logger.info({ group: group.name }, 'RAG pre-injection: starting');
       try {
         const pluginLoaderPath = '../app/src/plugin-loader.js';
         const { dispatchPluginToolCall } = await import(pluginLoaderPath);
@@ -322,13 +333,24 @@ export async function runAgent(
           },
         });
         if (result && typeof result === 'string' && result.length > 0) {
-          knowledgeContext = result.slice(0, 4000);
-          logger.info({ group: group.name, contextLength: knowledgeContext.length }, 'RAG pre-injection: context injected');
+          knowledgeContext = result.slice(0, 8000);
+          // Write RAG results as a physical file in the knowledge folder
+          const knowledgeDir = path.dirname(ragFilePath);
+          fs.mkdirSync(knowledgeDir, { recursive: true });
+          fs.writeFileSync(
+            ragFilePath,
+            `# Google Drive Knowledge Base Search Results\n\n` +
+              `> IMPORTANT: This file contains authoritative data from the user's Google Drive.\n` +
+              `> Always prioritize these facts over web search results.\n\n` +
+              knowledgeContext,
+            'utf-8',
+          );
+          logger.info({ group: group.name, contextLength: knowledgeContext.length }, 'RAG pre-injection: written to knowledge folder');
         } else {
-          logger.info({ group: group.name, result: typeof result === 'string' ? result.slice(0, 100) : String(result) }, 'RAG pre-injection: no relevant results');
+          logger.debug({ group: group.name }, 'RAG pre-injection: no relevant results');
         }
       } catch (err) {
-        logger.warn({ group: group.name, err }, 'RAG pre-injection failed, proceeding without knowledge');
+        logger.warn({ group: group.name, err: err instanceof Error ? err.message : String(err) }, 'RAG pre-injection failed, proceeding without knowledge');
       }
     }
 
@@ -455,6 +477,10 @@ export async function runAgent(
     logger.error({ group: group.name, err }, 'Agent error');
     return null;
   } finally {
+    // Clean up temporary RAG file
+    try {
+      if (fs.existsSync(ragFilePath)) fs.unlinkSync(ragFilePath);
+    } catch { /* ignore cleanup errors */ }
     // Clear streaming state
     messageConsolidator.setStreaming(chatId, false, messageThreadId);
   }

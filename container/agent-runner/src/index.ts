@@ -108,7 +108,7 @@ async function runGeminiAgent(input: ContainerInput): Promise<ContainerOutput> {
 
   // Inject knowledge context from Drive RAG
   if (input.knowledgeContext) {
-    prompt = `[GOOGLE DRIVE KNOWLEDGE BASE SEARCH RESULTS]\nThe following are search results from the user's Google Drive knowledge base (RAG). Use this information to answer the user's question. Do NOT attempt to search for files or Drive functionality yourself — the search has already been performed for you.\n\n${input.knowledgeContext}\n[END GOOGLE DRIVE KNOWLEDGE BASE SEARCH RESULTS]\n\n${prompt}`;
+    prompt = `[GOOGLE DRIVE KNOWLEDGE BASE — PRIORITY CONTEXT]\nIMPORTANT: The following are search results retrieved from the user's private Google Drive knowledge base. These results contain authoritative, user-curated information.\n- ALWAYS prioritize this knowledge base data over web search results or your training data when answering.\n- If the knowledge base contains specific facts (numbers, names, dates), use those exact values.\n- Do NOT attempt to search for files or Drive functionality yourself — the search has already been performed for you.\n\n${input.knowledgeContext}\n[END GOOGLE DRIVE KNOWLEDGE BASE]\n\n${prompt}`;
   }
 
   // Inject memory context from conversation summaries

@@ -71,6 +71,7 @@ function searchIndex(
   index: KnowledgeIndex,
   maxResults: number,
   allowedFolderIds?: string[],
+  queryText?: string,
 ): SearchResult[] {
   const scored: Array<{
     fileId: string;
@@ -81,27 +82,43 @@ function searchIndex(
 
   const allowedSet = allowedFolderIds ? new Set(allowedFolderIds) : null;
 
+  // Extract meaningful keywords from query for hybrid scoring
+  const keywords = (queryText || '')
+    .split(/[\s,，。？！、]+/)
+    .filter((w) => w.length >= 2)
+    .map((w) => w.toLowerCase());
+
   for (const doc of Object.values(index.documents)) {
     // Filter by allowed folder IDs if specified
     if (allowedSet && (!doc.sourceFolderId || !allowedSet.has(doc.sourceFolderId))) {
       continue;
     }
-    let bestScore = -1;
-    let bestSnippet = '';
-
+    // Score all chunks: cosine similarity + keyword boost (hybrid search)
+    const chunkScores: Array<{ score: number; text: string }> = [];
     for (const chunk of doc.chunks) {
       const sim = cosineSimilarity(queryEmbedding, chunk.embedding);
-      if (sim > bestScore) {
-        bestScore = sim;
-        bestSnippet = chunk.text.slice(0, 400);
+      // Keyword boost: +0.05 per keyword found in chunk (max +0.15)
+      let keywordBoost = 0;
+      if (keywords.length > 0) {
+        const lowerText = chunk.text.toLowerCase();
+        for (const kw of keywords) {
+          if (lowerText.includes(kw)) keywordBoost += 0.05;
+        }
+        keywordBoost = Math.min(keywordBoost, 0.15);
       }
+      chunkScores.push({ score: sim + keywordBoost, text: chunk.text });
     }
+    chunkScores.sort((a, b) => b.score - a.score);
+    const bestScore = chunkScores[0]?.score ?? -1;
+    const topChunks = chunkScores.slice(0, 5);
+    // Keep full text; truncation happens later based on ranking
+    const snippet = topChunks.map((c) => c.text).join('\n\n---\n\n');
 
     if (bestScore >= 0) {
       scored.push({
         fileId: doc.fileId,
         fileName: doc.name,
-        snippet: bestSnippet,
+        snippet,
         score: bestScore,
       });
     }
@@ -110,7 +127,12 @@ function searchIndex(
   scored.sort((a, b) => b.score - a.score);
   return scored
     .slice(0, maxResults)
-    .map((r) => ({ ...r, source: 'index' as const }));
+    .map((r, i) => {
+      // Top result gets more context; others are trimmed shorter
+      const limit = i === 0 ? 6000 : 2000;
+      const snippet = r.snippet.length > limit ? r.snippet.slice(0, limit) : r.snippet;
+      return { ...r, snippet, source: 'index' as const };
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -175,7 +197,7 @@ async function searchLive(
       return {
         fileId: file.id,
         fileName: file.name,
-        snippet: extracted.content.slice(0, 400),
+        snippet: extracted.content.slice(0, 1200),
         score: 1.0 as number,
         source: 'live' as const,
       };
@@ -234,7 +256,7 @@ export async function searchKnowledge(
   }
 
   // Layer 1
-  const indexResults = searchIndex(queryEmbedding, index, maxResults, allowedFolderIds);
+  const indexResults = searchIndex(queryEmbedding, index, maxResults, allowedFolderIds, query);
   const topScore = indexResults[0]?.score ?? 0;
 
   let combined = [...indexResults];
