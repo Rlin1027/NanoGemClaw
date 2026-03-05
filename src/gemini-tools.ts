@@ -20,6 +20,26 @@ import type { ParseableSchema } from './zod-tools.js';
 // TODO: consolidate FunctionCallResult types across packages/gemini and src/gemini-tools.ts
 
 // ============================================================================
+// Tool Call Audit Helpers
+// ============================================================================
+
+const SENSITIVE_KEY_RE = /^(?:api[_-]?key|token|password|secret|auth|bearer|access[_-]?key)$/i;
+
+function sanitizeArgs(args: Record<string, any>, maxLen: number): string {
+  try {
+    const redacted = JSON.stringify(args, (_key, value) => {
+      if (typeof _key === 'string' && SENSITIVE_KEY_RE.test(_key)) {
+        return '[REDACTED]';
+      }
+      return value;
+    });
+    return redacted.length > maxLen ? redacted.slice(0, maxLen) + '…' : redacted;
+  } catch {
+    return '[unserializable]';
+  }
+}
+
+// ============================================================================
 // Input Validation Helpers
 // ============================================================================
 
@@ -637,6 +657,8 @@ export async function executeFunctionCall(
     'Executing Gemini function call',
   );
 
+  const _auditStartTime = Date.now();
+
   // Run beforeToolCall hooks
   const hookCtx = {
     toolName: name,
@@ -650,6 +672,22 @@ export async function executeFunctionCall(
     const { runBeforeToolCallHooks } = await import(pluginLoaderPath);
     const blockResult = await runBeforeToolCallHooks(hookCtx);
     if (blockResult) {
+      try {
+        const { insertToolCallLog } = await import('./db.js');
+        insertToolCallLog({
+          group_folder: groupFolder,
+          chat_jid: chatJid,
+          tool_name: name,
+          args_summary: sanitizeArgs(args, 200),
+          result_status: 'blocked',
+          duration_ms: Date.now() - _auditStartTime,
+          injection_detected: 0,
+          injection_patterns: null,
+          created_at: new Date().toISOString(),
+        });
+      } catch (auditErr) {
+        logger.warn({ err: auditErr }, 'Failed to write tool call audit log (blocked)');
+      }
       return {
         name,
         response: {
@@ -1262,6 +1300,25 @@ export async function executeFunctionCall(
   };
 
   const result = await executeSwitch();
+
+  // Audit: log success/error result
+  try {
+    const { insertToolCallLog } = await import('./db.js');
+    const isSuccess = result.response && (result.response as Record<string, unknown>).success !== false;
+    insertToolCallLog({
+      group_folder: groupFolder,
+      chat_jid: chatJid,
+      tool_name: name,
+      args_summary: sanitizeArgs(args, 200),
+      result_status: isSuccess ? 'success' : 'error',
+      duration_ms: Date.now() - _auditStartTime,
+      injection_detected: 0,
+      injection_patterns: null,
+      created_at: new Date().toISOString(),
+    });
+  } catch (auditErr) {
+    logger.warn({ err: auditErr }, 'Failed to write tool call audit log');
+  }
 
   // Run afterToolCall hooks (skipped if beforeToolCall blocked above)
   {

@@ -210,8 +210,37 @@ export function initDatabase(): void {
     }
   }
 
+  if (currentVersion < 5) {
+    db.exec('BEGIN');
+    try {
+      // Migration v5: Tool call audit logs
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS tool_call_logs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          group_folder TEXT NOT NULL,
+          chat_jid TEXT NOT NULL,
+          tool_name TEXT NOT NULL,
+          args_summary TEXT,
+          result_status TEXT NOT NULL,
+          duration_ms INTEGER,
+          injection_detected INTEGER DEFAULT 0,
+          injection_patterns TEXT,
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_tool_calls_group ON tool_call_logs(group_folder);
+        CREATE INDEX IF NOT EXISTS idx_tool_calls_created ON tool_call_logs(created_at);
+        CREATE INDEX IF NOT EXISTS idx_tool_calls_injection ON tool_call_logs(injection_detected) WHERE injection_detected = 1;
+      `);
+      db.exec('PRAGMA user_version = 5');
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+  }
+
   // Future migrations go here:
-  // if (currentVersion < 5) { ... db.exec('PRAGMA user_version = 5'); }
+  // if (currentVersion < 6) { ... db.exec('PRAGMA user_version = 6'); }
 }
 
 /**

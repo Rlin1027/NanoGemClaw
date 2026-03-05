@@ -306,6 +306,32 @@ export async function runAgent(
       new Set(Object.keys(registeredGroups)),
     );
 
+    // RAG pre-injection: fetch knowledge context for groups with ragFolderIds
+    let knowledgeContext: string | undefined;
+    if (group.ragFolderIds?.length) {
+      logger.info({ group: group.name, ragFolderIds: group.ragFolderIds }, 'RAG pre-injection: starting');
+      try {
+        const pluginLoaderPath = '../app/src/plugin-loader.js';
+        const { dispatchPluginToolCall } = await import(pluginLoaderPath);
+        const result = await dispatchPluginToolCall('search_knowledge', { query: prompt }, {
+          groupFolder: group.folder,
+          chatJid: chatId,
+          isMain,
+          sendMessage: async (jid: string, text: string) => {
+            await sendMessage(jid, text, messageThreadId);
+          },
+        });
+        if (result && typeof result === 'string' && result.length > 0) {
+          knowledgeContext = result.slice(0, 4000);
+          logger.info({ group: group.name, contextLength: knowledgeContext.length }, 'RAG pre-injection: context injected');
+        } else {
+          logger.info({ group: group.name, result: typeof result === 'string' ? result.slice(0, 100) : String(result) }, 'RAG pre-injection: no relevant results');
+        }
+      } catch (err) {
+        logger.warn({ group: group.name, err }, 'RAG pre-injection failed, proceeding without knowledge');
+      }
+    }
+
     // Helper to run container agent once
     const runOnce = async (useSessionId?: string) => {
       return await runContainerAgent(
@@ -323,6 +349,7 @@ export async function runAgent(
             ? `/workspace/group/media/${path.basename(mediaPath)}`
             : undefined,
           memoryContext: memoryContext ?? undefined,
+          knowledgeContext,
         },
         onProgress,
       );

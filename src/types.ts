@@ -53,6 +53,8 @@ export interface RegisteredGroup {
   geminiModel?: string;
   /** Preferred execution path: 'fast' (API, paid) or 'container' (OAuth, free). Default: 'fast' */
   preferredPath?: 'fast' | 'container';
+  /** Google Drive folder IDs for per-group RAG knowledge base */
+  ragFolderIds?: string[];
 }
 
 export interface Session {

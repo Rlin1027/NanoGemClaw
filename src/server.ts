@@ -22,6 +22,8 @@ import { createCalendarRouter } from './routes/calendar.js';
 import { createSkillsRouter } from './routes/skills.js';
 import { createConfigRouter } from './routes/config.js';
 import { createAnalyticsRouter } from './routes/analytics.js';
+import { createMcpRouter } from './routes/mcp.js';
+import { createToolCallsRouter } from './routes/tool-calls.js';
 
 /** API-layer group representation (subset of RegisteredGroup for dashboard responses) */
 export interface DashboardGroup {
@@ -58,6 +60,13 @@ let groupUpdater:
   | null = null;
 let groupUnregistrar: ((folder: string) => boolean) | null = null;
 let chatJidResolver: ((folder: string) => string | null) | null = null;
+
+// MCP DI providers (set from app/src/index.ts via setters)
+let mcpRouterDeps: import('./routes/mcp.js').McpRouterDeps | null = null;
+
+export function setMcpRouterDeps(deps: import('./routes/mcp.js').McpRouterDeps) {
+  mcpRouterDeps = deps;
+}
 
 /**
  * Detect LAN IP for 0.0.0.0 binds
@@ -258,6 +267,13 @@ export function startDashboardServer() {
   app.use('/api', createSkillsRouter());
 
   app.use('/api', createAnalyticsRouter());
+
+  // MCP router — deps injected via setMcpRouterDeps() from app/src/index.ts
+  if (mcpRouterDeps) {
+    app.use('/api', createMcpRouter(mcpRouterDeps));
+  }
+
+  app.use('/api', createToolCallsRouter());
 
   // ================================================================
   // Static file serving (production dashboard)

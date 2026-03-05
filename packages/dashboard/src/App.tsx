@@ -13,6 +13,8 @@ import { DrivePage } from './pages/DrivePage';
 import { CalendarPage } from './pages/CalendarPage';
 import { ActivityLogsPage } from './pages/ActivityLogsPage';
 import { SchedulePage } from './pages/SchedulePage';
+import { McpPage } from './pages/McpPage';
+import { ToolCallsPage } from './pages/ToolCallsPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastContainer } from './components/ToastContainer';
 import { SearchOverlay } from './components/SearchOverlay';
@@ -233,6 +235,12 @@ function App() {
 
             {/* SCHEDULE TAB */}
             {activeTab === 'schedule' && <SchedulePage />}
+
+            {/* MCP TAB */}
+            {activeTab === 'mcp' && <McpPage />}
+
+            {/* TOOL CALLS TAB */}
+            {activeTab === 'tool-calls' && <ToolCallsPage />}
 
                 </ErrorBoundary>
             </DashboardLayout>

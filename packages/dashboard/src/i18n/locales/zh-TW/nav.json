@@ -15,5 +15,7 @@
     "dashboard": "儀表板",
     "realTimeCommandCenter": "即時命令中心",
     "activityLogs": "活動日誌",
-    "schedule": "排程表"
+    "schedule": "排程表",
+    "mcp": "MCP 伺服器",
+    "toolCalls": "工具呼叫"
 }

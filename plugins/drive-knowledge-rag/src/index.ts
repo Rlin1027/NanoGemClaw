@@ -69,6 +69,22 @@ let scanInProgress = false;
 // Background indexer service
 // ---------------------------------------------------------------------------
 
+/**
+ * Collect all unique folder IDs to scan: plugin-level config + per-group ragFolderIds.
+ */
+function collectAllFolderIds(): string[] {
+  const ids = new Set(ragConfig.knowledgeFolderIds);
+  if (pluginApi) {
+    const groups = pluginApi.getGroups();
+    for (const g of Object.values(groups)) {
+      for (const id of (g as any).ragFolderIds ?? []) {
+        ids.add(id);
+      }
+    }
+  }
+  return Array.from(ids);
+}
+
 async function runScan(): Promise<void> {
   if (scanInProgress) return;
   if (!isAuthenticated()) {
@@ -79,10 +95,18 @@ async function runScan(): Promise<void> {
   }
   if (!pluginApi) return;
 
+  const folderIds = collectAllFolderIds();
+  if (folderIds.length === 0) {
+    pluginApi.logger.debug(
+      'drive-knowledge-rag: no folder IDs configured, skipping scan',
+    );
+    return;
+  }
+
   scanInProgress = true;
   try {
     await scanAndIndex(
-      ragConfig.knowledgeFolderIds,
+      folderIds,
       knowledgeIndex,
       ragConfig.maxChunkChars,
       pluginApi,
@@ -101,8 +125,12 @@ const indexerService = {
     pluginApi = api;
     const intervalMs = ragConfig.scanIntervalMinutes * 60 * 1000;
 
-    // Run initial scan immediately (non-blocking)
+    // Run initial scan immediately (non-blocking).
+    // Also schedule a delayed scan after 10s to catch cases where
+    // google-auth restores credentials after this plugin starts,
+    // or new ragFolderIds were added since last index persist.
     void runScan();
+    setTimeout(() => void runScan(), 10_000);
 
     scanTimer = setInterval(() => {
       void runScan();
@@ -247,6 +275,29 @@ function createRouter(): Router {
     res.json({ data: { message: 'Re-index started' } });
   });
 
+  // GET /folders — list Drive folders for the folder browser
+  router.get('/folders', async (req, res) => {
+    if (!isAuthenticated()) {
+      res.status(401).json({ error: 'Google account not authenticated' });
+      return;
+    }
+    try {
+      const { listFolderContents } = await import('nanogemclaw-plugin-google-drive');
+      const parentId = typeof req.query.parentId === 'string' ? req.query.parentId : 'root';
+      const files = await listFolderContents(parentId);
+      const folders = files.filter((f: any) => f.mimeType === 'application/vnd.google-apps.folder');
+      res.json({
+        data: folders.map((f: any) => ({
+          id: f.id,
+          name: f.name,
+          mimeType: f.mimeType,
+        })),
+      });
+    } catch {
+      res.status(500).json({ error: 'Failed to list Drive folders' });
+    }
+  });
+
   // DELETE /index — wipe the index
   router.delete('/index', async (_req, res) => {
     if (!pluginApi) {
@@ -320,6 +371,10 @@ const plugin: NanoPlugin = {
     api.logger.info('drive-knowledge-rag: initialized');
   },
 
+  async start(api: PluginApi): Promise<void> {
+    await indexerService.start(api);
+  },
+
   async stop(): Promise<void> {
     await indexerService.stop();
   },
@@ -347,7 +402,7 @@ const plugin: NanoPlugin = {
       },
       permission: 'any',
 
-      async execute(args, _context): Promise<string> {
+      async execute(args, context): Promise<string> {
         const query = args['query'];
         if (typeof query !== 'string' || query.trim().length === 0) {
           return 'Error: query must be a non-empty string.';
@@ -362,18 +417,34 @@ const plugin: NanoPlugin = {
           return 'Google account is not authenticated. Please connect via the dashboard Settings.';
         }
 
+        // Get per-group ragFolderIds if available
+        let allowedFolderIds: string[] | undefined;
+        if (pluginApi && context.groupFolder) {
+          const groups = pluginApi.getGroups();
+          const groupEntry = Object.values(groups).find(
+            (g) => g.folder === context.groupFolder,
+          );
+          if (groupEntry?.ragFolderIds && groupEntry.ragFolderIds.length > 0) {
+            allowedFolderIds = groupEntry.ragFolderIds;
+          }
+        }
+
         let results;
         try {
           results = await searchKnowledge(query, knowledgeIndex, {
             maxResults,
             similarityThreshold: ragConfig.similarityThreshold,
+            allowedFolderIds,
           });
         } catch (err) {
           return `Search failed: ${err instanceof Error ? err.message : String(err)}`;
         }
 
         if (results.length === 0) {
-          return 'No relevant documents found for that query.';
+          return 'No relevant documents found for that query. ' +
+            'The knowledge base does not contain documents about this topic. ' +
+            'Inform the user that no matching documents were found in their knowledge base. ' +
+            'Do NOT retry this search — the result will be the same.';
         }
 
         const formatted = results

@@ -1,4 +1,4 @@
-import { LayoutDashboard, TerminalSquare, Settings, Database, Plus, CalendarClock, BarChart3, BookOpen, Calendar, Search, ScrollText, CalendarRange, HardDrive } from "lucide-react";
+import { LayoutDashboard, TerminalSquare, Settings, Database, Plus, CalendarClock, BarChart3, BookOpen, Calendar, Search, ScrollText, CalendarRange, HardDrive, Server, Activity } from "lucide-react";
 import { useTranslation } from 'react-i18next';
 import { cn } from "@/lib/utils";
 import { LanguageSwitcher } from './LanguageSwitcher';
@@ -99,6 +99,23 @@ export function DashboardLayout({ children, activeTab = 'overview', onTabChange,
                             label={t('activityLogs')}
                             active={activeTab === 'activity-logs'}
                             onClick={() => onTabChange?.('activity-logs')}
+                        />
+                        <NavItem
+                            icon={<Activity size={20} />}
+                            label={t('toolCalls')}
+                            active={activeTab === 'tool-calls'}
+                            onClick={() => onTabChange?.('tool-calls')}
+                        />
+                    </div>
+
+                    {/* Integrations */}
+                    <NavGroupLabel label="Integrations" />
+                    <div className="space-y-1 mb-3">
+                        <NavItem
+                            icon={<Server size={20} />}
+                            label={t('mcp')}
+                            active={activeTab === 'mcp'}
+                            onClick={() => onTabChange?.('mcp')}
                         />
                     </div>
 

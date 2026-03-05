@@ -15,5 +15,7 @@
     "dashboard": "Dashboard",
     "realTimeCommandCenter": "Real-time Command Center",
     "activityLogs": "Activity Logs",
-    "schedule": "Schedule"
+    "schedule": "Schedule",
+    "mcp": "MCP Servers",
+    "toolCalls": "Tool Calls"
 }

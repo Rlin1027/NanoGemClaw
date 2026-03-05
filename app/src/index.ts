@@ -218,6 +218,32 @@ async function main(): Promise<void> {
 
   server.start();
 
+  // Wire MCP router deps (must happen after plugin start so bridges are populated)
+  {
+    const { setMcpRouterDeps } = await import('../../src/server.js');
+    const { getBridges, addServer, removeServer, toggleServer, loadMcpConfig, saveMcpConfig, McpBridge } =
+      await import('./mcp/index.js');
+    setMcpRouterDeps({
+      getBridges: () => getBridges() as Map<string, any>,
+      addServer: (config: unknown) => addServer(config as any, DATA_DIR),
+      removeServer: (id: string) => removeServer(id, DATA_DIR),
+      toggleServer: (id: string, enabled: boolean) => toggleServer(id, enabled, DATA_DIR),
+      reconnectServer: async (id: string) => {
+        const config = loadMcpConfig(DATA_DIR);
+        const serverConfig = config.servers.find((s) => s.id === id);
+        if (!serverConfig) return;
+        const bridgeMap = getBridges();
+        const old = bridgeMap.get(id);
+        if (old) { await old.disconnect(); bridgeMap.delete(id); }
+        const nb = new McpBridge(serverConfig);
+        bridgeMap.set(id, nb);
+        await nb.connect();
+      },
+      loadConfig: () => loadMcpConfig(DATA_DIR) as any,
+      saveConfig: (config: any) => saveMcpConfig(DATA_DIR, config),
+    });
+  }
+
   // Wire container-runner → server dashboard event bridge
   const { setDashboardEventEmitter } = await import('../../src/container-runner.js');
   setDashboardEventEmitter(server.emitDashboardEvent);

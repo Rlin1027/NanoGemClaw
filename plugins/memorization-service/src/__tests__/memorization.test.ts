@@ -188,43 +188,36 @@ describe('MemorizationService', () => {
   // ── Crash recovery ─────────────────────────────────────────────
 
   describe('crash recovery', () => {
-    it('should re-process pending tasks on start', async () => {
+    it('should mark pending tasks as failed on start', async () => {
       const now = new Date().toISOString();
       db.prepare(
         `INSERT INTO memorization_tasks (group_folder, chat_jid, status, created_at, updated_at, message_count)
          VALUES (?, ?, 'pending', ?, ?, ?)`,
       ).run('test-group', '12345', now, now, 10);
 
-      insertMessages(db, '12345', 5);
-      mockSummarize.mockResolvedValue({
-        summary: 'Recovered',
-        messagesProcessed: 5,
-        charsProcessed: 50,
-      });
-
       await service.start();
 
-      expect(mockSummarize).toHaveBeenCalled();
-      const completed = db
+      // Crashed tasks are marked failed, not re-executed (to avoid blocking startup)
+      expect(mockSummarize).not.toHaveBeenCalled();
+      const failed = db
         .prepare(
-          "SELECT * FROM memorization_tasks WHERE status = 'completed'",
+          "SELECT * FROM memorization_tasks WHERE status = 'failed'",
         )
         .all() as Array<{ id: number }>;
-      expect(completed.length).toBeGreaterThanOrEqual(1);
+      expect(failed.length).toBeGreaterThanOrEqual(1);
     });
 
-    it('should re-process stuck processing tasks', async () => {
+    it('should mark stuck processing tasks as failed', async () => {
       const now = new Date().toISOString();
       db.prepare(
         `INSERT INTO memorization_tasks (group_folder, chat_jid, status, created_at, updated_at, message_count)
          VALUES (?, ?, 'processing', ?, ?, ?)`,
       ).run('test-group', '12345', now, now, 15);
 
-      mockSummarize.mockResolvedValue(null);
       await service.start();
 
       expect(api.logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Recovering'),
+        expect.stringContaining('Marking'),
       );
     });
   });

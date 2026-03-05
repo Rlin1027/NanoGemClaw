@@ -293,6 +293,7 @@ async function main(): Promise<void> {
           enableWebSearch: group.enableWebSearch,
           preferredPath: group.preferredPath,
           geminiModel: group.geminiModel,
+          ragFolderIds: group.ragFolderIds,
           folder: group.folder,
         };
       });
@@ -336,6 +337,8 @@ async function main(): Promise<void> {
       updated.geminiModel = updates.geminiModel;
     if (updates.preferredPath !== undefined)
       updated.preferredPath = updates.preferredPath;
+    if (updates.ragFolderIds !== undefined)
+      updated.ragFolderIds = updates.ragFolderIds;
 
     // Invalidate context cache if relevant settings changed
     if (

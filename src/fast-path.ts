@@ -393,9 +393,20 @@ You are in direct conversation mode. IMPORTANT RULES:
     }
 
     // Build tools — each tool_type must be a separate entry (proto oneof constraint)
-    const fnDeclarations = input.disableFunctionCalling
+    let fnDeclarations = input.disableFunctionCalling
       ? []
       : buildFunctionDeclarations(input.isMain, input.isAdmin);
+
+    // When group has ragFolderIds, search_knowledge already provides folder-scoped
+    // Drive search (both indexed + live). Remove search_drive to prevent the model
+    // from calling the unscoped Drive search tool repeatedly.
+    if (group.ragFolderIds?.length) {
+      const hasSearchKnowledge = fnDeclarations.some((d: any) => d.name === 'search_knowledge');
+      if (hasSearchKnowledge) {
+        fnDeclarations = fnDeclarations.filter((d: any) => d.name !== 'search_drive');
+      }
+    }
+
     const tools: any[] = [];
 
     if (fnDeclarations.length > 0) {
@@ -496,6 +507,11 @@ You are in direct conversation mode. IMPORTANT RULES:
     // (e.g., list_tasks → cancel_task requires 2 rounds)
     if (pendingFunctionCalls.length > 0) {
       const allFunctionResults: FunctionCallResult[] = [];
+      // Track tool calls per round to detect repeated identical calls.
+      // Seed with initial calls so dedup triggers after just 1 repeat.
+      const previousToolCalls = new Set<string>(
+        pendingFunctionCalls.map((fc) => fc.name),
+      );
 
       for (let round = 1; round <= FAST_PATH.MAX_TOOL_ROUNDS; round++) {
         // 1. Execute pending function calls
@@ -660,6 +676,67 @@ You are in direct conversation mode. IMPORTANT RULES:
 
         // 4. Got text or no more function calls → done
         if (fullText || pendingFunctionCalls.length === 0) break;
+
+        // 5. Detect repeated tool names — if all pending tools were already
+        //    called in a previous round, the model is looping. Break early
+        //    and force a text-only follow-up so the model synthesizes an answer.
+        const pendingNames = pendingFunctionCalls.map((fc) => fc.name);
+        const allRepeated = pendingNames.every((n) => previousToolCalls.has(n));
+        if (allRepeated) {
+          logger.warn(
+            { group: group.name, round, tools: pendingNames },
+            'Fast path: breaking tool loop — repeated tool calls detected',
+          );
+          // Reject the repeated calls with a hint to generate text
+          const rejectParts = pendingFunctionCalls.map((fc) => ({
+            functionResponse: {
+              name: fc.name,
+              response: {
+                success: false,
+                error:
+                  'You already called this tool. Use the results you already have ' +
+                  'to answer the user in text. Do NOT call any more tools.',
+              },
+            },
+          }));
+          const rejectModelParts =
+            rawFunctionCallParts.length > 0
+              ? rawFunctionCallParts.slice()
+              : pendingFunctionCalls.map((fc) => ({
+                  functionCall: { name: fc.name, args: fc.args },
+                }));
+          contents.push(
+            { role: 'model' as const, parts: rejectModelParts },
+            { role: 'user' as const, parts: rejectParts },
+          );
+          pendingFunctionCalls.length = 0;
+          rawFunctionCallParts.length = 0;
+
+          // Force text-only follow-up (no tools)
+          const forceTextOptions = {
+            model,
+            systemInstruction: cachedContent ? undefined : systemInstruction,
+            contents,
+            tools: undefined,
+            cachedContent: cachedContent || undefined,
+          };
+          for await (const chunk of streamGenerate(forceTextOptions)) {
+            if (chunk.text) {
+              textParts.push(chunk.text);
+              fullText = textParts.join('');
+            }
+            if (chunk.usageMetadata) {
+              promptTokens =
+                (promptTokens || 0) +
+                (chunk.usageMetadata.promptTokenCount || 0);
+              responseTokens =
+                (responseTokens || 0) +
+                (chunk.usageMetadata.candidatesTokenCount || 0);
+            }
+          }
+          break;
+        }
+        for (const n of pendingNames) previousToolCalls.add(n);
 
         logger.info(
           {

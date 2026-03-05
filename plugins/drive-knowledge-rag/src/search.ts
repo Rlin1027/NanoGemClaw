@@ -20,6 +20,7 @@ export interface SearchResult {
 export interface SearchOptions {
   maxResults?: number;
   similarityThreshold?: number;
+  allowedFolderIds?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -69,6 +70,7 @@ function searchIndex(
   queryEmbedding: number[],
   index: KnowledgeIndex,
   maxResults: number,
+  allowedFolderIds?: string[],
 ): SearchResult[] {
   const scored: Array<{
     fileId: string;
@@ -77,7 +79,13 @@ function searchIndex(
     score: number;
   }> = [];
 
+  const allowedSet = allowedFolderIds ? new Set(allowedFolderIds) : null;
+
   for (const doc of Object.values(index.documents)) {
+    // Filter by allowed folder IDs if specified
+    if (allowedSet && (!doc.sourceFolderId || !allowedSet.has(doc.sourceFolderId))) {
+      continue;
+    }
     let bestScore = -1;
     let bestSnippet = '';
 
@@ -130,11 +138,28 @@ async function extractWithTimeout(
 async function searchLive(
   query: string,
   maxResults: number,
+  allowedFolderIds?: string[],
 ): Promise<SearchResult[]> {
   let files: DriveFile[];
   try {
-    const result = await searchFiles(query, { maxResults: maxResults * 2 });
-    files = result.files;
+    if (allowedFolderIds && allowedFolderIds.length > 0) {
+      // Scope live search to allowed folders only
+      const allFiles: DriveFile[] = [];
+      for (const folderId of allowedFolderIds) {
+        const result = await searchFiles(query, { maxResults, folderId });
+        allFiles.push(...result.files);
+      }
+      // Deduplicate by file ID
+      const seen = new Set<string>();
+      files = allFiles.filter((f) => {
+        if (seen.has(f.id)) return false;
+        seen.add(f.id);
+        return true;
+      });
+    } else {
+      const result = await searchFiles(query, { maxResults: maxResults * 2 });
+      files = result.files;
+    }
   } catch (err) {
     // Drive search unavailable — return empty rather than crashing
     void err;
@@ -196,6 +221,7 @@ export async function searchKnowledge(
 ): Promise<SearchResult[]> {
   const maxResults = options.maxResults ?? 5;
   const threshold = options.similarityThreshold ?? 0.7;
+  const allowedFolderIds = options.allowedFolderIds;
 
   // Generate query embedding
   let queryEmbedding: number[];
@@ -208,14 +234,14 @@ export async function searchKnowledge(
   }
 
   // Layer 1
-  const indexResults = searchIndex(queryEmbedding, index, maxResults);
+  const indexResults = searchIndex(queryEmbedding, index, maxResults, allowedFolderIds);
   const topScore = indexResults[0]?.score ?? 0;
 
   let combined = [...indexResults];
 
   // Layer 2 — only when Layer 1 confidence is low
   if (topScore < threshold) {
-    const liveResults = await searchLive(query, maxResults);
+    const liveResults = await searchLive(query, maxResults, allowedFolderIds);
     combined = deduplicate([...indexResults, ...liveResults]);
   }
 

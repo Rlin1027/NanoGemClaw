@@ -59,6 +59,8 @@ export interface ContainerInput {
   mediaPath?: string;
   /** Memory context from conversation summaries */
   memoryContext?: string;
+  /** Knowledge context from Drive RAG pre-injection */
+  knowledgeContext?: string;
 }
 
 export interface ContainerOutput {

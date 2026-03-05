@@ -17,7 +17,7 @@ const McpServerConfigSchema = z.object({
     transport: z.enum(['stdio', 'sse']),
     command: z.string().optional(),
     args: z.array(z.string()).optional(),
-    env: z.record(z.string()).optional(),
+    env: z.record(z.string(), z.string()).optional(),
     url: z.string().url().optional(),
     permission: z.enum(['main', 'any']),
     enabled: z.boolean(),
@@ -62,6 +62,14 @@ export function loadMcpConfig(dataDir: string): McpServersConfig {
     }
 
     return validateMcpConfig(raw);
+}
+
+export function saveMcpConfig(dataDir: string, config: McpServersConfig): void {
+    const configPath = path.join(dataDir, 'mcp-servers.json');
+    const tmpPath = `${configPath}.tmp`;
+    const content = JSON.stringify(config, null, 2);
+    fs.writeFileSync(tmpPath, content, 'utf-8');
+    fs.renameSync(tmpPath, configPath);
 }
 
 export function validateMcpConfig(raw: unknown): McpServersConfig {

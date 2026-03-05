@@ -61,6 +61,8 @@ export interface RegisteredGroup {
   geminiModel?: string;
   /** Use direct Gemini API (fast path) instead of container for simple queries (default: true) */
   enableFastPath?: boolean;
+  /** Google Drive folder IDs for per-group RAG knowledge search */
+  ragFolderIds?: string[];
 }
 
 export interface Session {

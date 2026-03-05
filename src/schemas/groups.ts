@@ -38,6 +38,7 @@ export const updateGroupBody = z.object({
   name: z.string().optional(),
   geminiModel: z.string().optional(),
   preferredPath: z.enum(['fast', 'container']).optional(),
+  ragFolderIds: z.array(z.string().min(1)).optional(),
 });
 
 /** POST /api/personas body */

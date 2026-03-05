@@ -99,6 +99,7 @@ function makeIndex(docs: Array<{
   fileId: string;
   name: string;
   score: number; // desired cosine similarity with [1, 0]
+  sourceFolderId?: string;
 }>): KnowledgeIndex {
   const documents: KnowledgeIndex['documents'] = {};
   for (const doc of docs) {
@@ -109,6 +110,7 @@ function makeIndex(docs: Array<{
       name: doc.name,
       mimeType: 'text/plain',
       modifiedTime: '2026-01-01T00:00:00Z',
+      sourceFolderId: doc.sourceFolderId,
       chunks: [
         {
           text: `Sample text for ${doc.name}`,
@@ -231,5 +233,43 @@ describe('searchKnowledge', () => {
     if (results.length > 0) {
       expect(results[0].source).toBe('live');
     }
+  });
+
+  it('filters index results by allowedFolderIds', async () => {
+    const index = makeIndex([
+      { fileId: 'f1', name: 'FolderA-Doc', score: 0.95, sourceFolderId: 'folderA' },
+      { fileId: 'f2', name: 'FolderB-Doc', score: 0.90, sourceFolderId: 'folderB' },
+      { fileId: 'f3', name: 'FolderA-Doc2', score: 0.85, sourceFolderId: 'folderA' },
+    ]);
+    const results = await searchKnowledge('query', index, {
+      similarityThreshold: 0.4,
+      allowedFolderIds: ['folderA'],
+    });
+    expect(results).toHaveLength(2);
+    expect(results.every((r) => r.fileId !== 'f2')).toBe(true);
+  });
+
+  it('excludes documents without sourceFolderId when allowedFolderIds is set', async () => {
+    const index = makeIndex([
+      { fileId: 'f1', name: 'WithFolder', score: 0.95, sourceFolderId: 'folderA' },
+      { fileId: 'f2', name: 'NoFolder', score: 0.90 },
+    ]);
+    const results = await searchKnowledge('query', index, {
+      similarityThreshold: 0.4,
+      allowedFolderIds: ['folderA'],
+    });
+    expect(results).toHaveLength(1);
+    expect(results[0].fileId).toBe('f1');
+  });
+
+  it('returns all documents when allowedFolderIds is not set', async () => {
+    const index = makeIndex([
+      { fileId: 'f1', name: 'Doc1', score: 0.95, sourceFolderId: 'folderA' },
+      { fileId: 'f2', name: 'Doc2', score: 0.90, sourceFolderId: 'folderB' },
+    ]);
+    const results = await searchKnowledge('query', index, {
+      similarityThreshold: 0.4,
+    });
+    expect(results).toHaveLength(2);
   });
 });

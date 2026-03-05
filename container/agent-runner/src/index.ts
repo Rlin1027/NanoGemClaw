@@ -29,6 +29,8 @@ interface ContainerInput {
   mediaPath?: string;
   /** Memory context from conversation summaries */
   memoryContext?: string;
+  /** Knowledge context from Drive RAG pre-injection */
+  knowledgeContext?: string;
 }
 
 interface ContainerOutput {
@@ -102,6 +104,11 @@ async function runGeminiAgent(input: ContainerInput): Promise<ContainerOutput> {
   // Inject custom system prompt if provided
   if (input.systemPrompt) {
     prompt = `[SYSTEM INSTRUCTIONS]\n${input.systemPrompt}\n[END SYSTEM INSTRUCTIONS]\n\n${prompt}`;
+  }
+
+  // Inject knowledge context from Drive RAG
+  if (input.knowledgeContext) {
+    prompt = `[GOOGLE DRIVE KNOWLEDGE BASE SEARCH RESULTS]\nThe following are search results from the user's Google Drive knowledge base (RAG). Use this information to answer the user's question. Do NOT attempt to search for files or Drive functionality yourself — the search has already been performed for you.\n\n${input.knowledgeContext}\n[END GOOGLE DRIVE KNOWLEDGE BASE SEARCH RESULTS]\n\n${prompt}`;
   }
 
   // Inject memory context from conversation summaries

@@ -118,7 +118,11 @@ export class MemorizationService {
 
   async start(): Promise<void> {
     this.api.logger.info('Memorization service starting');
-    await this.recoverCrashedTasks();
+    // Fire-and-forget crash recovery — must not block startup
+    // (summarization can timeout, which would block the entire plugin chain)
+    this.recoverCrashedTasks().catch((err) =>
+      this.api.logger.error(`Crash recovery failed: ${err}`),
+    );
     this.startPolling();
     this.api.logger.info('Memorization service started');
   }
@@ -312,14 +316,14 @@ export class MemorizationService {
     if (crashed.length === 0) return;
 
     this.api.logger.warn(
-      `Recovering ${crashed.length} crashed memorization task(s)`,
+      `Marking ${crashed.length} crashed memorization task(s) as failed`,
     );
 
     for (const task of crashed) {
       this.api.logger.warn(
-        `Recovering task ${task.id} for ${task.group_folder} (was ${task.status})`,
+        `Marking crashed task ${task.id} for ${task.group_folder} as failed (was ${task.status})`,
       );
-      await this.triggerSummarization(task.group_folder, task.chat_jid);
+      this.updateTaskFailed(task.id, `Crashed during previous run (was ${task.status})`);
     }
   }
 

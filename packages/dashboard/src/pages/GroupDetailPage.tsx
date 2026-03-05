@@ -1,4 +1,4 @@
-import { ArrowLeft, Loader2, Trash2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Trash2, FolderOpen } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGroupDetail } from '../hooks/useGroupDetail';
@@ -15,7 +15,130 @@ import { PreferencesPanel } from '../components/PreferencesPanel';
 import { ExportButton } from '../components/ExportButton';
 import { useLocale } from '../hooks/useLocale';
 import { useAvailableModels } from '../hooks/useAvailableModels';
-import { apiFetch } from '../hooks/useApi';
+import { apiFetch, useApiQuery } from '../hooks/useApi';
+
+interface DriveFolder {
+    id: string;
+    name: string;
+}
+
+function RagFolderPanel({ groupFolder, currentRagFolderIds }: {
+    groupFolder: string;
+    currentRagFolderIds: string[];
+}) {
+    const { data: folders, isLoading, error } = useApiQuery<DriveFolder[]>(
+        '/api/plugins/drive-knowledge-rag/folders',
+    );
+    const [selected, setSelected] = useState<Set<string>>(new Set(currentRagFolderIds));
+    const [saving, setSaving] = useState(false);
+
+    const toggle = (id: string) => {
+        setSelected(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            await apiFetch(`/api/groups/${groupFolder}`, {
+                method: 'PUT',
+                body: JSON.stringify({ ragFolderIds: Array.from(selected) }),
+            });
+            showToast('RAG folders saved', 'success');
+        } catch {
+            showToast('Failed to save RAG folders');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (isLoading) {
+        return <div className="text-sm text-slate-500">Loading folders...</div>;
+    }
+
+    // Distinguish error states: 401 = not authenticated, 404 = plugin not loaded
+    if (error) {
+        const msg = error.message || '';
+        if (msg.includes('Unauthorized') || msg.includes('401')) {
+            return (
+                <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                    <div className="text-sm text-yellow-300 font-medium mb-1">Google account not connected</div>
+                    <div className="text-xs text-slate-400">
+                        Connect your Google account in the <span className="text-blue-400">Settings</span> page (Google Auth plugin) to browse Drive folders.
+                    </div>
+                </div>
+            );
+        }
+        if (msg.includes('Not Found') || msg.includes('404')) {
+            return (
+                <div className="p-3 bg-slate-800/50 border border-slate-700/50 rounded-lg">
+                    <div className="text-sm text-slate-400">Drive Knowledge RAG plugin is not installed or not loaded.</div>
+                </div>
+            );
+        }
+        return (
+            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                <div className="text-sm text-red-400">Failed to load Drive folders: {msg}</div>
+            </div>
+        );
+    }
+
+    const folderList = folders ?? [];
+
+    if (folderList.length === 0) {
+        return (
+            <div className="p-3 bg-slate-800/50 border border-slate-700/50 rounded-lg">
+                <div className="text-sm text-slate-400">No folders found in Drive root.</div>
+                <div className="text-xs text-slate-500 mt-1">
+                    Make sure your Google Drive has folders, or check that the Google Auth plugin is properly configured.
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {folderList.map(folder => {
+                    const checked = selected.has(folder.id);
+                    return (
+                        <label
+                            key={folder.id}
+                            className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                                checked
+                                    ? 'bg-blue-500/10 border-blue-500/30'
+                                    : 'bg-slate-800/50 border-slate-700/50 hover:border-slate-600'
+                            }`}
+                        >
+                            <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggle(folder.id)}
+                                className="w-4 h-4 accent-blue-500"
+                            />
+                            <FolderOpen size={16} className={checked ? 'text-blue-400' : 'text-slate-500'} />
+                            <div className="flex-1 min-w-0">
+                                <div className="text-sm font-medium text-slate-200 truncate">{folder.name}</div>
+                            </div>
+                        </label>
+                    );
+                })}
+            </div>
+            <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
+            >
+                {saving && <Loader2 size={14} className="animate-spin" />}
+                Save RAG Folders
+            </button>
+        </div>
+    );
+}
 
 function ModelSelector({ value, onChange, disabled }: {
     value: string;
@@ -267,6 +390,15 @@ export function GroupDetailPage({ groupFolder, onBack }: GroupDetailPageProps) {
             <div className="space-y-2">
                 <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider">{t('skills')}</h3>
                 <SkillsPanel groupFolder={groupFolder} />
+            </div>
+
+            {/* Drive Knowledge (RAG) */}
+            <div className="space-y-2">
+                <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider">Drive Knowledge (RAG)</h3>
+                <RagFolderPanel
+                    groupFolder={groupFolder}
+                    currentRagFolderIds={(group as any).ragFolderIds ?? []}
+                />
             </div>
 
             {/* Preferences */}

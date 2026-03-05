@@ -161,7 +161,7 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
         return;
       }
 
-      const { persona, enableWebSearch, requireTrigger, name, geminiModel, preferredPath } =
+      const { persona, enableWebSearch, requireTrigger, name, geminiModel, preferredPath, ragFolderIds } =
         req.body as z.infer<typeof updateGroupBody>;
 
       // Validate persona if provided (dynamic DB lookup stays in handler)
@@ -194,6 +194,7 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
       if (name !== undefined) updates.name = name;
       if (geminiModel !== undefined) updates.geminiModel = geminiModel;
       if (preferredPath !== undefined) updates.preferredPath = preferredPath;
+      if (ragFolderIds !== undefined) updates.ragFolderIds = ragFolderIds;
 
       try {
         const result = deps.groupUpdater(folder, updates);
@@ -205,6 +206,19 @@ export function createGroupsRouter(deps: GroupsRouterDeps): Router {
         // Broadcast update to all dashboard clients
         deps.emitDashboardEvent('groups:update', deps.groupsProvider());
         res.json({ data: result });
+
+        // When ragFolderIds changes, trigger plugin reindex so new folders get scanned
+        if (ragFolderIds !== undefined) {
+          import('../logger.js').then(({ logger }) => {
+            logger.info({ folder, ragFolderIds }, 'ragFolderIds updated, triggering reindex');
+          }).catch(() => {});
+          // Fire-and-forget: call plugin reindex endpoint via internal HTTP
+          const port = process.env.DASHBOARD_PORT || '3000';
+          fetch(`http://127.0.0.1:${port}/api/plugins/drive-knowledge-rag/reindex`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          }).catch(() => {});
+        }
       } catch {
         res.status(500).json({ error: 'Failed to update group' });
       }

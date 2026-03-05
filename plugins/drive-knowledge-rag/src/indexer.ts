@@ -31,6 +31,7 @@ export interface IndexedDocument {
   name: string;
   mimeType: string;
   modifiedTime: string;
+  sourceFolderId?: string;
   chunks: IndexedChunk[];
 }
 
@@ -268,8 +269,9 @@ export async function scanAndIndex(
     return stats;
   }
 
-  // Collect all files across all configured folders
+  // Collect all files across all configured folders, tracking source folder
   const allFiles = new Map<string, DriveFile>();
+  const fileFolderMap = new Map<string, string>();
 
   for (const folderId of folderIds) {
     let files: DriveFile[];
@@ -283,6 +285,9 @@ export async function scanAndIndex(
     }
     for (const file of files) {
       allFiles.set(file.id, file);
+      if (!fileFolderMap.has(file.id)) {
+        fileFolderMap.set(file.id, folderId);
+      }
     }
   }
 
@@ -306,6 +311,7 @@ export async function scanAndIndex(
 
     const doc = await indexFile(file, maxChunkChars, logger);
     if (doc) {
+      doc.sourceFolderId = fileFolderMap.get(file.id);
       const isNew = !existing;
       index.documents[file.id] = doc;
       if (isNew) {

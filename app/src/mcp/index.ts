@@ -12,11 +12,80 @@ import { loadMcpConfig } from './mcp-config.js';
 import type { McpServerConfig } from './mcp-types.js';
 
 export { McpBridge } from './mcp-bridge.js';
-export { loadMcpConfig, validateMcpConfig } from './mcp-config.js';
+export { loadMcpConfig, validateMcpConfig, saveMcpConfig } from './mcp-config.js';
 export type { McpServerConfig, McpServersConfig, McpConnectionState } from './mcp-types.js';
 
 /** Active bridges keyed by server ID */
 const bridges = new Map<string, McpBridge>();
+
+/**
+ * Get all active bridges for status inspection.
+ */
+export function getBridges(): Map<string, McpBridge> {
+    return bridges;
+}
+
+/**
+ * Add a new server config and connect a bridge for it.
+ */
+export async function addServer(config: McpServerConfig, dataDir: string): Promise<void> {
+    const { saveMcpConfig: save, loadMcpConfig: load } = await import('./mcp-config.js');
+    const current = load(dataDir);
+    current.servers.push(config);
+    save(dataDir, current);
+
+    if (config.enabled) {
+        const bridge = new McpBridge(config);
+        bridges.set(config.id, bridge);
+        await bridge.connect();
+    }
+}
+
+/**
+ * Remove a server by ID — disconnect bridge and update config.
+ */
+export async function removeServer(id: string, dataDir: string): Promise<boolean> {
+    const { saveMcpConfig: save, loadMcpConfig: load } = await import('./mcp-config.js');
+    const current = load(dataDir);
+    const idx = current.servers.findIndex((s) => s.id === id);
+    if (idx === -1) return false;
+
+    current.servers.splice(idx, 1);
+    save(dataDir, current);
+
+    const bridge = bridges.get(id);
+    if (bridge) {
+        await bridge.disconnect();
+        bridges.delete(id);
+    }
+    return true;
+}
+
+/**
+ * Toggle enabled state for a server and connect/disconnect accordingly.
+ */
+export async function toggleServer(id: string, enabled: boolean, dataDir: string): Promise<boolean> {
+    const { saveMcpConfig: save, loadMcpConfig: load } = await import('./mcp-config.js');
+    const current = load(dataDir);
+    const server = current.servers.find((s) => s.id === id);
+    if (!server) return false;
+
+    server.enabled = enabled;
+    save(dataDir, current);
+
+    if (enabled) {
+        const bridge = new McpBridge(server);
+        bridges.set(id, bridge);
+        await bridge.connect();
+    } else {
+        const bridge = bridges.get(id);
+        if (bridge) {
+            await bridge.disconnect();
+            bridges.delete(id);
+        }
+    }
+    return true;
+}
 
 /**
  * Get all tool declarations from all connected MCP bridges.
