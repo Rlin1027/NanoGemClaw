@@ -63,9 +63,11 @@ let chatJidResolver: ((folder: string) => string | null) | null = null;
 
 // MCP DI providers (set from app/src/index.ts via setters)
 let mcpRouterDeps: import('./routes/mcp.js').McpRouterDeps | null = null;
+let mcpRouter: import('express').Router | null = null;
 
 export function setMcpRouterDeps(deps: import('./routes/mcp.js').McpRouterDeps) {
   mcpRouterDeps = deps;
+  mcpRouter = null; // force re-create on next request
 }
 
 /**
@@ -268,10 +270,26 @@ export function startDashboardServer() {
 
   app.use('/api', createAnalyticsRouter());
 
-  // MCP router — deps injected via setMcpRouterDeps() from app/src/index.ts
-  if (mcpRouterDeps) {
-    app.use('/api', createMcpRouter(mcpRouterDeps));
-  }
+  // MCP router — deps injected lazily via setMcpRouterDeps() from app/src/index.ts
+  app.use('/api', (req, res, next) => {
+    if (!req.path.startsWith('/mcp/')) {
+      next();
+      return;
+    }
+    if (!mcpRouterDeps) {
+      // Not yet initialized — return empty state so dashboard renders gracefully
+      if (req.path === '/mcp/servers' && req.method === 'GET') {
+        res.json({ data: [] });
+        return;
+      }
+      res.status(503).json({ error: 'MCP subsystem not yet initialized' });
+      return;
+    }
+    if (!mcpRouter) {
+      mcpRouter = createMcpRouter(mcpRouterDeps);
+    }
+    mcpRouter(req, res, next);
+  });
 
   app.use('/api', createToolCallsRouter());
 

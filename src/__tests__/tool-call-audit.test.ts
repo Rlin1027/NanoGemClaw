@@ -171,8 +171,8 @@ describe('tool call audit', () => {
 
       const res = await request(app).get('/api/tool-calls?page=1&limit=50');
       expect(res.status).toBe(200);
-      expect(res.body.data).toHaveLength(1);
-      expect(res.body.pagination.total).toBe(1);
+      expect(res.body.data.records).toHaveLength(1);
+      expect(res.body.data.total).toBe(1);
     });
 
     it('filters by group param', async () => {

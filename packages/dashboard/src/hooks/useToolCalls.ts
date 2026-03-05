@@ -36,13 +36,10 @@ export interface ToolCallsResult {
 
 function buildQuery(filters: ToolCallFilters): string {
     const params = new URLSearchParams();
-    if (filters.groupFolder) params.set('groupFolder', filters.groupFolder);
-    if (filters.toolName) params.set('toolName', filters.toolName);
-    if (filters.injectionOnly) params.set('injectionOnly', 'true');
-    if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
-    if (filters.dateTo) params.set('dateTo', filters.dateTo);
+    if (filters.groupFolder) params.set('group', filters.groupFolder);
+    if (filters.injectionOnly) params.set('injection', 'true');
     params.set('page', String(filters.page ?? 1));
-    params.set('pageSize', String(filters.pageSize ?? 50));
+    params.set('limit', String(filters.pageSize ?? 50));
     const qs = params.toString();
     return qs ? `?${qs}` : '';
 }
@@ -64,10 +61,29 @@ export function useToolCalls(filters: ToolCallFilters) {
     };
 }
 
-export function useToolCallStats() {
-    const { data, isLoading, error, refetch } = useApiQuery<ToolCallStats>('/api/tool-calls/stats');
+interface ToolCallStatsRaw {
+    total_calls: number;
+    unique_tools: number;
+    avg_duration_ms: number | null;
+    injection_count: number;
+    by_status: Array<{ result_status: string; count: number }>;
+    by_tool: Array<{ tool_name: string; count: number }>;
+}
+
+function mapStats(raw: ToolCallStatsRaw | null): ToolCallStats {
+    if (!raw) return { totalCalls: 0, successRate: 0, injectionAlerts: 0 };
+    const successCount = raw.by_status.find(s => s.result_status === 'success')?.count ?? 0;
     return {
-        stats: data ?? { totalCalls: 0, successRate: 0, injectionAlerts: 0 },
+        totalCalls: raw.total_calls,
+        successRate: raw.total_calls > 0 ? successCount / raw.total_calls : 0,
+        injectionAlerts: raw.injection_count,
+    };
+}
+
+export function useToolCallStats() {
+    const { data, isLoading, error, refetch } = useApiQuery<ToolCallStatsRaw>('/api/tool-calls/stats');
+    return {
+        stats: mapStats(data ?? null),
         isLoading,
         error,
         refetch,

@@ -48,13 +48,23 @@ export function createToolCallsRouter(): Router {
         const { getToolCallLogs } = await import('../db.js');
         const { rows, total } = getToolCallLogs(limit, offset, group, injection);
 
+        const records = rows.map((r) => ({
+          id: r.id,
+          timestamp: r.created_at,
+          groupFolder: r.group_folder,
+          toolName: r.tool_name,
+          status: r.result_status,
+          durationMs: r.duration_ms ?? 0,
+          injectionDetected: r.injection_detected === 1,
+          errorMessage: r.result_status === 'error' ? r.args_summary : undefined,
+        }));
+
         res.json({
-          data: rows,
-          pagination: {
+          data: {
+            records,
             total,
             page,
-            limit,
-            pages: Math.ceil(total / limit),
+            pageSize: limit,
           },
         });
       } catch {
