@@ -347,11 +347,20 @@ You are in direct conversation mode. IMPORTANT RULES:
       return true;
     });
 
+    // Truncate long model replies in history to control context size
+    const MAX_REPLY_CHARS = 1000;
+    const trimmedHistory = cleanedHistory.map((msg) => {
+      if (msg.role === 'model' && msg.text.length > MAX_REPLY_CHARS) {
+        return { ...msg, text: msg.text.slice(0, MAX_REPLY_CHARS) + '\n[...truncated]' };
+      }
+      return msg;
+    });
+
     // Build content messages with conversation history for multi-turn context
     const contents: Content[] = [];
 
-    if (cleanedHistory.length > 0) {
-      for (const msg of cleanedHistory) {
+    if (trimmedHistory.length > 0) {
+      for (const msg of trimmedHistory) {
         contents.push({
           role: msg.role as 'user' | 'model',
           parts: [{ text: msg.text }],

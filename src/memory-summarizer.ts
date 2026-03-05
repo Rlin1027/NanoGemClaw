@@ -57,7 +57,8 @@ async function generateSummary(
       const safeSenderName = m.sender_name
         .replace(/[\n\r\0\x08]/g, '')
         .slice(0, 50);
-      return `[${safeSenderName}]: ${m.content}`;
+      const safeContent = m.content.replace(/\0/g, '');
+      return `[${safeSenderName}]: ${safeContent}`;
     })
     .join('\n');
 
@@ -101,7 +102,7 @@ Summary:`;
       settled = true;
       gemini.kill('SIGKILL');
       reject(new Error('Summary generation timed out'));
-    }, 60000);
+    }, 180000);
 
     gemini.stdout.on('data', (data) => {
       stdout += data.toString();

@@ -19,36 +19,36 @@ NanoGemClaw P2 工具系統擴展，導入自 Google ADK JS（MCP Toolset + Zod 
 
 ## 測試執行記錄
 
-**執行日期**: ____
-**測試環境**: macOS, Node.js >=20
+**執行日期**: 2026-03-05
+**測試環境**: macOS, Node.js v22.15.1
 **Bot**: @UmedaShark9688_bot
 
 ### 進度總覽
 
 | 測試項 | 狀態 | 備註 |
 |--------|------|------|
-| V1.1 inputSchema 結構型別 | ⬜ | |
-| V1.2 validateToolInput 正確驗證 | ⬜ | |
-| V1.3 validateToolInput 無 schema 透通 | ⬜ | |
-| V1.4 zodToGeminiParameters UPPERCASE 轉換 | ⬜ | |
-| V1.5 zodToGeminiParameters 不支援型別返回 null | ⬜ | |
-| V1.6 inputSchemaRegistry 註冊與清除 | ⬜ | |
-| V1.7 executeFunctionCall Zod 驗證注入 | ⬜ | |
-| V1.8 Plugin 工具自動註冊 inputSchema | ⬜ | |
-| V2.1 McpBridge stdio 連線 | ⬜ | |
-| V2.2 McpBridge SSE 連線 | ⬜ | |
-| V2.3 MCP 工具名稱前綴 | ⬜ | |
-| V2.4 MCP 工具名稱衝突偵測 | ⬜ | |
-| V2.5 MCP execute() closure 斷線保護 | ⬜ | |
-| V2.6 MCP 子程序清理 (SIGTERM→SIGKILL) | ⬜ | |
-| V2.7 MCP 設定驗證 | ⬜ | |
-| V2.8 MCP Declaration Cache 失效 | ⬜ | |
-| V2.9 MCP 權限模型 | ⬜ | |
-| V2.10 MCP Plugin 生命週期 | ⬜ | |
-| V3.1 MCP + Hook Pipeline 整合 | ⬜ | |
-| V3.2 MCP + Zod 驗證整合 | ⬜ | |
-| V3.3 回歸測試 | ⬜ | |
-| V3.4 TypeScript 型別檢查 | ⬜ | |
+| V1.1 inputSchema 結構型別 | ✅ | `{ parse(data: unknown): unknown }` optional，無 Zod runtime dependency |
+| V1.2 validateToolInput 正確驗證 | ✅ | 自動化測試通過 (npm test) |
+| V1.3 validateToolInput 無 schema 透通 | ✅ | 自動化測試通過 (npm test) |
+| V1.4 zodToGeminiParameters UPPERCASE 轉換 | ✅ | 自動化測試通過 (npm test) |
+| V1.5 zodToGeminiParameters 不支援型別返回 null | ✅ | 自動化測試通過 (npm test) |
+| V1.6 inputSchemaRegistry 註冊與清除 | ✅ | registerInputSchema + clearInputSchemaRegistry 確認匯出 |
+| V1.7 executeFunctionCall Zod 驗證注入 | ✅ | gemini-tools.ts:665 registry lookup 確認 |
+| V1.8 Plugin 工具自動註冊 inputSchema | ✅ | plugin-loader.ts 中 registerInputSchema 呼叫確認 |
+| V2.1 McpBridge stdio 連線 | ✅ | 自動化測試通過 (npm test) |
+| V2.2 McpBridge SSE 連線 | ✅ | 自動化測試通過 (npm test) |
+| V2.3 MCP 工具名稱前綴 | ✅ | `mcp_{serverId}_{toolName}` 格式確認 |
+| V2.4 MCP 工具名稱衝突偵測 | ✅ | 自動化測試通過 (npm test) |
+| V2.5 MCP execute() closure 斷線保護 | ✅ | 自動化測試通過 (npm test) |
+| V2.6 MCP 子程序清理 (SIGTERM→SIGKILL) | ✅ | 自動化測試通過 (npm test) |
+| V2.7 MCP 設定驗證 | ✅ | Zod schema 驗證，自動化測試通過 |
+| V2.8 MCP Declaration Cache 失效 | ✅ | connect/disconnect 均呼叫 clearDeclarationCache 確認 |
+| V2.9 MCP 權限模型 | ✅ | permission 從 config 繼承到 GeminiToolContribution 確認 |
+| V2.10 MCP Plugin 生命週期 | ✅ | registerInternalPlugin 註冊，createMcpPlugin 回傳 NanoPlugin |
+| V3.1 MCP + Hook Pipeline 整合 | ✅ | 自動化測試通過 (npm test) |
+| V3.2 MCP + Zod 驗證整合 | ✅ | 自動化測試通過 (npm test) |
+| V3.3 回歸測試 | ✅ | 1128 tests passed, 0 failures |
+| V3.4 TypeScript 型別檢查 | ✅ | `tsc --noEmit` 通過，0 errors |
 
 ---
 

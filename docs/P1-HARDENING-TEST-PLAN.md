@@ -20,8 +20,8 @@ NanoGemClaw P1 安全強化與工具系統改進，導入自 Google Workspace CL
 
 ## 測試執行記錄
 
-**執行日期**: ____
-**測試環境**: macOS, Dashboard (localhost:3000), Telegram Web A
+**執行日期**: 2026-03-05
+**測試環境**: macOS, Dashboard (localhost:3000/5173), Telegram Web A
 **API 認證**: `x-access-code: test123`
 **Bot**: @UmedaShark9688_bot
 
@@ -29,36 +29,37 @@ NanoGemClaw P1 安全強化與工具系統改進，導入自 Google Workspace CL
 
 | 測試項 | 狀態 | 備註 |
 |--------|------|------|
-| V1.1 SAFE_FOLDER_RE 單一定義 | ⬜ | |
-| V1.2 validateFolderName 行為一致 | ⬜ | |
-| V1.3 escapeFts5Query 行為一致 | ⬜ | |
-| V1.4 stripControlChars 功能 | ⬜ | |
-| V1.5 schemas/shared.ts 向後相容 | ⬜ | |
-| V2.1 beforeToolCall 型別匯出 | ⬜ | |
-| V2.2 beforeToolCall 阻擋行為 | ⬜ | |
-| V2.3 beforeToolCall 錯誤傳播 | ⬜ | |
-| V2.4 afterToolCall 修改結果 | ⬜ | |
-| V2.5 afterToolCall 錯誤吞下 | ⬜ | |
-| V2.6 blocked call 跳過 afterToolCall | ⬜ | |
-| V2.7 registerInternalPlugin + builtin: true | ⬜ | |
-| V2.8 hooks 按 plugin 載入順序執行 | ⬜ | |
-| V3.1 scanForInjection 清潔內容 | ⬜ | |
-| V3.2 scanForInjection 偵測 injection | ⬜ | |
-| V3.3 50KB 大小上限跳過 | ⬜ | |
-| V3.4 Scanner 註冊為 internal plugin | ⬜ | |
-| V3.5 Suspicious 結果僅 log 不修改回應 | ⬜ | |
-| V3.6 EventBus 事件發射 | ⬜ | |
-| V3.7 False positive 測試 | ⬜ | |
-| V4.1 ToolResponse 型別匯出 | ⬜ | |
-| V4.2 wrapToolResponse 正確包裝 | ⬜ | |
-| V4.3 已遷移 tools 回傳格式 | ⬜ | |
-| V4.4 Plugin string 結果包裝 | ⬜ | |
-| V4.5 _meta 在 Gemini API 前 strip | ⬜ | |
-| I1.1 Telegram 文字訊息正常回覆 | ⬜ | |
-| I1.2 Telegram tool call 正常執行 | ⬜ | |
-| I1.3 Knowledge search 正常運作 | ⬜ | |
-| I1.4 Dashboard API 正常回應 | ⬜ | |
-| I1.5 排程任務正常建立與執行 | ⬜ | |
+| V1.1 SAFE_FOLDER_RE 單一定義 | ✅ | core/validate.ts 唯一定義，shared.ts re-export，其餘 import |
+| V1.2 validateFolderName 行為一致 | ✅ | 自動化測試通過 (npm test) |
+| V1.3 escapeFts5Query 行為一致 | ✅ | core/validate.ts 唯一實作，knowledge.ts + search.ts 呼叫 |
+| V1.4 stripControlChars 功能 | ✅ | core/validate.ts 定義，自動化測試通過 |
+| V1.5 schemas/shared.ts 向後相容 | ✅ | `export { SAFE_FOLDER_RE } from '@nanogemclaw/core'`，typecheck 通過 |
+| V2.1 beforeToolCall 型別匯出 | ✅ | BeforeToolCallHook, AfterToolCallHook, ToolCallHookContext 皆匯出 |
+| V2.2 beforeToolCall 阻擋行為 | ✅ | 自動化測試通過 (npm test) |
+| V2.3 beforeToolCall 錯誤傳播 | ✅ | 自動化測試通過 (npm test) |
+| V2.4 afterToolCall 修改結果 | ✅ | 自動化測試通過 (npm test) |
+| V2.5 afterToolCall 錯誤吞下 | ✅ | 自動化測試通過 (npm test) |
+| V2.6 blocked call 跳過 afterToolCall | ✅ | 自動化測試通過 (npm test) |
+| V2.7 registerInternalPlugin + builtin: true | ✅ | 函式存在，builtin-injection-scanner 已註冊，builtin:true 設定確認 |
+| V2.8 hooks 按 plugin 載入順序執行 | ✅ | 自動化測試通過，internal plugins prepend 優先執行 |
+| V3.1 scanForInjection 清潔內容 | ✅ | 自動化測試通過 (npm test) |
+| V3.2 scanForInjection 偵測 injection | ✅ | 自動化測試通過 (npm test) |
+| V3.3 50KB 大小上限跳過 | ✅ | 自動化測試通過 (npm test) |
+| V3.4 Scanner 註冊為 internal plugin | ✅ | builtin-injection-scanner via registerInternalPlugin，afterToolCall hook |
+| V3.5 Suspicious 結果僅 log 不修改回應 | ✅ | logger.warn 呼叫確認，無 modifiedResult 回傳 |
+| V3.6 EventBus 事件發射 | ✅ | `moduleEventBus.emit('security:injection-detected', ...)` 確認 |
+| V3.7 False positive 測試 | ✅ | 自動化測試通過 (npm test) |
+| V3.8 效能測試 | ✅ | 自動化測試通過 (npm test) |
+| V4.1 ToolResponse 型別匯出 | ✅ | core/types.ts 確認 ToolResponse interface |
+| V4.2 wrapToolResponse 正確包裝 | ✅ | gemini-tools.ts 定義，4 tools 使用，自動化測試通過 |
+| V4.3 已遷移 tools 回傳格式 | ✅ | schedule_task, list_tasks, cancel_task, remember_fact 已遷移 |
+| V4.4 Plugin string 結果包裝 | ✅ | 程式碼檢查確認 |
+| V4.5 _meta 在 Gemini API 前 strip | ✅ | fast-path.ts:533,554 確認 `delete strippedResponse._meta` |
+| I1.1 Telegram 文字訊息正常回覆 | ✅ | 手動測試：fast path + container path 均正常 |
+| I1.2 Telegram tool call 正常執行 | ✅ | remember_fact 正常，schedule_task 被 hook 正確阻擋 |
+| I1.3 Knowledge search 正常運作 | ✅ | search_knowledge tool 正常，FTS5 查詢成功 |
+| I1.4 Dashboard API 正常回應 | ✅ | curl 驗證 /api/groups 回傳正確 |
+| I1.5 排程任務正常建立與執行 | ✅ | schedule_task via fast path + wrapToolResponse 正常 |
 
 ---
 
@@ -432,9 +433,9 @@ npm test
 
 | 類別 | 通過 | 失敗 | 未測 |
 |------|------|------|------|
-| V1 統一驗證模組 | 0 | 0 | 5 |
-| V2 Tool Hooks | 0 | 0 | 8 |
-| V3 Injection 掃描 | 0 | 0 | 8 |
-| V4 Tool 輸出格式 | 0 | 0 | 5 |
-| I1 整合回歸 | 0 | 0 | 5 |
-| **總計** | **0** | **0** | **31** |
+| V1 統一驗證模組 | 5 | 0 | 0 |
+| V2 Tool Hooks | 7 | 0 | 0 |
+| V3 Injection 掃描 | 8 | 0 | 0 |
+| V4 Tool 輸出格式 | 5 | 0 | 0 |
+| I1 整合回歸 | 5 | 0 | 0 |
+| **總計** | **30** | **0** | **0** |

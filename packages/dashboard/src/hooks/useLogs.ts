@@ -21,7 +21,9 @@ export function useLogs() {
 
     useEffect(() => {
         bufferRef.current = [];
-        const socket = io(SERVER_URL || window.location.origin);
+        const socket = io(SERVER_URL || window.location.origin, {
+            auth: { accessCode: localStorage.getItem('nanogemclaw_access_code') || '' },
+        });
         socketRef.current = socket;
 
         socket.on('connect', () => setIsConnected(true));
