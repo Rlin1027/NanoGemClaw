@@ -732,3 +732,82 @@ gws CLI 與 NanoGemClaw 的定位不同（CLI 工具 vs Telegram bot），但有
 - **⚠️ 白做工風險**：`tools.allowed/blocked` 的功能已經由 `buildFunctionDeclarations()` 的 permission 系統覆蓋。每個 group 已經根據 `isMain` / `isAdmin` 控制可用 tools
 - **真正有用的 frontmatter 場景**：per-group 限制特定 plugin tools（如「A 群組禁用 image generation」），目前只能靠 admin 在 group settings 中設定
 - **結論**：降為 P3，等有明確的 per-group tool customization 需求再做
+
+---
+
+## 附錄 D：跨文件交叉驗證 — 與 ADK JS 分析合併路線圖（2026-03-05）
+
+本附錄將本文件（gws CLI 分析）的建議與 [ADK JS 分析](./GOOGLE-ADK-JS-ANALYSIS.md) 的建議進行交叉比對，產出最終合併的優先級路線圖。
+
+### D.1 兩份分析的互補關係
+
+| 面向 | gws 分析貢獻 | ADK 分析貢獻 |
+|------|-------------|-------------|
+| **安全防禦** | 統一驗證模組、prompt injection 掃描、OS keyring | PolicyEngine（降級為 P3） |
+| **工具系統** | 統一 Tool JSON 輸出 | beforeToolCall/afterToolCall hooks、Zod 驗證 |
+| **生態擴展** | gws 作為首個 MCP server 目標 | MCP client bridge 架構 |
+| **配置系統** | YAML frontmatter（降級為 P3） | State 分層（已移除） |
+
+### D.2 白做工風險彙總
+
+| 風險等級 | 項目 | 來源 | 原因 |
+|---------|------|------|------|
+| **最高** | Discovery-driven 動態生成 | gws §3.4 | NanoGemClaw 只用 ~20 個 API 方法，`googleapis` npm 已提供 typed 存取 |
+| **最高** | 完整 gws 替代現有 plugin | gws §5.3 | 會丟失 google-tasks sync service、hook-based completion、drive-knowledge-rag embedding 等所有業務邏輯 |
+| **高** | State 分層 | ADK §3.5 | 現有 preferences + facts + memory_summaries 已覆蓋所有場景，強行抽象破壞 allowlist 保護和型別安全 |
+| **高** | LLM Processors | ADK §3.7 | 會破壞 context caching（SHA256 hash invalidation）和增加 prompt injection 攻擊面 |
+| **中** | Persona Bundles | gws §5.4 | GEMINI.md per-group system prompt 已覆蓋 |
+| **中** | YAML Frontmatter | gws §3.7 | `tools.allowed/blocked` 功能已由 permission 系統覆蓋 |
+| **低** | Zod 驗證（單獨做） | ADK §3.2 | Plugin 生態規模有限，單獨做 ROI 低；搭配 MCP 一起做 ROI 倍增 |
+
+### D.3 架構衝突彙總
+
+| 衝突 | 嚴重度 | 說明 | 解法 |
+|------|--------|------|------|
+| Tool hooks 注入位置 | 低 | ADK 分析建議注入 `packages/gemini/`，但 tool 執行有兩條路徑（app-level + plugin dispatch），應注入 `src/gemini-tools.ts` | 修正注入位置即可 |
+| OS Keyring native 依賴 | 中 | `keytar` 需要 `libsecret-1-dev`（Linux），Docker 環境可能缺失 | 使用隨機金鑰 + `0o600` 檔案 fallback |
+| MCP tool 命名衝突 | 低 | `mcp_${serverId}_${toolName}` 可能與 built-in/plugin tools 重名 | 在 `registerPluginTools()` 加 duplicate detection |
+| Zod `parameters` 語意衝突 | 低 | ADK 用 `parameters` 接受 Zod schema；NanoGemClaw 用 `parameters` 存 JSON Schema | 新增獨立 `inputSchema` 欄位（ADK 附錄 C.2 方案 A） |
+
+### D.4 合併後最終路線圖
+
+```
+P1（立即做，1-2 週）：
+├── 統一輸入驗證模組         ← gws §3.2（零風險，2天）
+├── beforeToolCall / afterToolCall hooks ← ADK §3.1（2-3天）
+├── Prompt injection 本地掃描 ← gws §3.3（用 afterToolCall hook，2天）
+└── 統一 Tool 輸出 JSON      ← gws §3.5（逐步遷移，2天）
+
+P2（短期，2-3 週）：
+├── MCP client bridge        ← ADK §3.4 + gws §3.6 合併（5-7天）
+└── Zod schema 驗證          ← ADK §3.2（搭配 MCP 一起做，2天）
+
+P3（按需）：
+├── OS Keyring               ← gws §3.1（有 native 依賴考量）
+├── Per-tool rate limiting   ← ADK §3.3 簡化版
+├── API Schema Introspection ← gws §3.4
+└── YAML Frontmatter         ← gws §3.7
+
+P4（未來備案）：
+└── Agent-as-Tool            ← ADK §3.6
+
+不做：
+├── Discovery-driven 動態生成 ← 白做工最高
+├── State 分層               ← 現有系統已覆蓋
+├── LLM Processors           ← 會破壞 context caching
+├── 完整 gws 替代現有 plugin  ← 會丟失業務邏輯
+├── Persona Bundles          ← GEMINI.md per-group 已覆蓋
+├── Multi-agent 編排         ← 延遲和成本與 Telegram 場景衝突
+└── Rust 重寫               ← 無必要
+```
+
+### D.5 核心結論
+
+兩份分析文件的建議**高度互補，無矛盾**：
+
+- **gws 分析**主要貢獻在**安全防禦模式**（統一驗證、injection 掃描、keyring）
+- **ADK 分析**主要貢獻在**工具系統擴展**（hooks、Zod、MCP）
+
+最高 ROI 的組合是：**Tool hooks（ADK）+ Prompt injection 掃描（gws）**——hook 提供注入點，掃描提供安全能力，兩者結合形成完整的 tool-level 安全攔截鏈。
+
+最大的白做工陷阱是追求「通用化」：Discovery-driven 動態生成、State 分層、LLM Processor pipeline 都是通用 Agent 框架的模式，但 NanoGemClaw 是**特定用途的 Telegram AI 助手**——每個導入決策都應問「這對 Telegram 群組場景有幫助嗎？」而不是追求架構完整性。
