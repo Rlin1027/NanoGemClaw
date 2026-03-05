@@ -258,7 +258,8 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
           logger.error({ err, chatId }, 'Voice transcription failed');
           return;
         }
-        content = `[Voice message transcription: "${transcription}"]\n[Audio file: ${containerMediaPath}]\n${content}`;
+        content = `[Voice message transcription: "${transcription}"]\n${content}`;
+        mediaPath = null; // Transcription captured; audio file no longer needed for routing
       } else {
         content = `[Media: ${mediaInfo.type} at ${containerMediaPath}]\n${content}`;
       }
