@@ -1,6 +1,6 @@
 {
   "name": "nanogemclaw",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Personal AI assistant powered by Gemini CLI. Lightweight, secure, customizable.",
   "type": "module",
   "main": "dist/index.js",
