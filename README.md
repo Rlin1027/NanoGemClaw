@@ -3,6 +3,12 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/Rlin1027/NanoGemClaw/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT"></a>
+  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen" alt="Node >=20"></a>
+  <a href="https://github.com/Rlin1027/NanoGemClaw"><img src="https://img.shields.io/github/stars/Rlin1027/NanoGemClaw?style=social" alt="GitHub Stars"></a>
+</p>
+
+<p align="center">
   Personal AI assistant powered by <strong>Gemini</strong> with deep <strong>Google ecosystem</strong> integration. Runs securely in containers. Lightweight and built to be understood, customized, and extended.
 </p>
 
@@ -25,51 +31,56 @@
 
 ## Why NanoGemClaw?
 
-**NanoGemClaw** is a lightweight, secure, and extensible AI assistant that runs **Gemini** in isolated containers — delivered via Telegram.
+**NanoGemClaw** is a lightweight, secure, and extensible AI assistant that runs **Gemini** in isolated containers — delivered via Telegram with intelligent fast-path routing, native function calling, and deep Google ecosystem integration.
 
 | Feature              | NanoClaw             | NanoGemClaw                                                           |
 | -------------------- | -------------------- | --------------------------------------------------------------------- |
-| **Agent Runtime**    | Claude Agent SDK     | Gemini CLI + Direct API                                               |
+| **Agent Runtime**    | Claude Agent SDK     | Gemini + MCP Client Bridge with per-tool whitelist                    |
+| **Bot Framework**    | node-telegram-bot-api| grammY (type-safe, event-driven)                                      |
 | **Messaging**        | WhatsApp (Baileys)   | Telegram Bot API                                                      |
 | **Cost**             | Claude Max ($100/mo) | Free tier (60 req/min)                                                |
 | **Architecture**     | Monolith             | Modular monorepo (8 packages + 7 plugins)                             |
 | **Extensibility**    | Hardcoded            | Plugin system with lifecycle hooks                                    |
 | **Google Ecosystem** | -                    | Drive, Calendar, Tasks, Knowledge RAG                                 |
 | **Notifications**    | -                    | Discord daily/weekly reports                                          |
-| **Media Support**    | Text only            | Photo, Voice, Audio, Video, Document                                  |
+| **Media Support**    | Text only            | Photo, Voice (fast path), Audio, Video, Document                      |
 | **Web Browsing**     | Search only          | Full `agent-browser` (Playwright)                                     |
 | **Knowledge Base**   | -                    | FTS5 full-text search per group                                       |
 | **Scheduling**       | -                    | Natural language + cron, iCal calendar                                |
 | **Dashboard**        | -                    | 12-module real-time management SPA                                    |
 | **Advanced Tools**   | -                    | STT, Image Gen, Personas, Skills, Multi-model                         |
-| **Fast Path**        | -                    | Direct Gemini API streaming, context caching, native function calling |
+| **Fast Path**        | -                    | Smart routing with context caching (75–90% token savings)             |
 
 ---
 
 ## Key Features
 
 - **Modular Monorepo** - 8 npm workspace packages. Use individual packages in your own projects or deploy the full stack.
-- **Plugin System** - Extend with custom Gemini tools, message hooks, API routes, and background services without modifying core code.
+- **grammY Bot Framework** - Migrated from node-telegram-bot-api to grammY for type-safe, event-driven Telegram integration with rate limiting and message consolidation.
+- **MCP Client Bridge** - Per-tool whitelist for Model Context Protocol, with unified Zod schema validation across all tool inputs.
+- **Smart Message Routing** - `preferredPath` intelligent routing selects between fast path (direct Gemini API) and container execution based on query type, with seamless fallback.
+- **Plugin System** - Extend with custom Gemini tools, message hooks, API routes, background services, IPC handlers, and dashboard extensions without modifying core code.
 - **Multi-modal I/O** - Send photos, voice messages, videos, or documents. Gemini processes them natively.
-- **Fast Path (Direct API)** - Simple text queries bypass container startup, streaming responses in real-time via the `@google/genai` SDK. Falls back to containers for code execution.
-- **Context Caching** - Static content cached via the Gemini caching API, reducing input token costs by 75-90%.
-- **Native Function Calling** - Tool operations use Gemini's native function calling instead of file-based IPC polling.
+- **Fast Path (Direct API)** - Simple text queries bypass container startup, streaming responses in real-time via the `@google/genai` SDK with native function calling. Voice messages automatically transcribe and use the fast path. Falls back to containers for code execution.
+- **Context Caching** - Static content cached via the Gemini caching API, reducing input token costs by 75–90%.
+- **Native Function Calling** - Tool operations use Gemini's native function calling with per-tool permission control (main/any), replacing file-based IPC polling.
 - **Speech-to-Text** - Voice messages are automatically transcribed using Gemini multimodal (default, no FFmpeg needed) or Google Cloud Speech.
 - **Image Generation** - Create images using **Imagen 3** via natural language.
-- **Browser Automation** - Agents use `agent-browser` for complex web tasks.
-- **Knowledge Base** - Per-group document store with SQLite FTS5 full-text search.
+- **Browser Automation** - Agents use `agent-browser` (Playwright) for complex web tasks.
+- **Knowledge Base** - Per-group document store with SQLite FTS5 full-text search and injection scanning for security.
+- **Hybrid Drive RAG** - Two-layer retrieval: pre-indexed embeddings via physical file approach for instant lookup + live Drive search for broader coverage. Share the same knowledge folder with NotebookLM.
 - **Scheduled Tasks** - Natural language scheduling ("every day at 8am") with cron, interval, and one-time support.
 - **Google Calendar (Read/Write)** - Create, update, delete events and check availability via Google Calendar API. Falls back to iCal for read-only access.
 - **Google Tasks** - Full CRUD operations with bidirectional sync between NanoGemClaw scheduled tasks and Google Tasks.
 - **Google Drive** - Search files, read content, and summarize documents. Supports Docs, Sheets, PDF, and plain text.
-- **Drive Knowledge RAG** - Two-layer retrieval: pre-indexed embeddings for instant lookup + live Drive search for broader coverage. Share the same knowledge folder with NotebookLM.
 - **Discord Reports** - Automated daily and weekly progress reports pushed to Discord via webhooks, with color-coded embeds and dashboard links.
-- **Skills System** - Assign Markdown-based skill files to groups for specialized capabilities.
+- **Skills System** - Assign Markdown-based skill files to groups for specialized capabilities with injection protection.
 - **Personas** - Pre-defined personalities or create custom personas per group.
 - **Multi-model Support** - Choose Gemini model per group (`gemini-3-flash-preview`, `gemini-3-pro-preview`, etc.).
-- **Container Isolation** - Every group runs in its own sandbox (Apple Container or Docker).
-- **Web Dashboard** - 12-module real-time command center with log streaming, memory editor, analytics, Google account management, Drive browser, and Discord settings.
-- **i18n** - Full interface support for 8 languages: English, Traditional Chinese, Simplified Chinese, Japanese, Korean, Spanish, Portuguese, and Russian.
+- **Container Isolation** - Every group runs in its own sandbox (Apple Container or Docker) with timeout and output size limits.
+- **Web Dashboard** - 12-module real-time command center with log streaming, memory editor, analytics, Google account management, Drive browser, Discord settings, and MCP management.
+- **i18n (100% Coverage)** - Full interface support for 8 languages: English, Traditional Chinese, Simplified Chinese, Japanese, Korean, Spanish, Portuguese, and Russian.
+- **Test Coverage** - 92% statement coverage, 84% branch coverage (35+ test files, ~950 tests) with Vitest and comprehensive integration testing.
 
 ---
 
@@ -80,8 +91,8 @@ nanogemclaw/
 ├── packages/
 │   ├── core/          # @nanogemclaw/core      — types, config, logger, utilities
 │   ├── db/            # @nanogemclaw/db        — SQLite persistence (better-sqlite3)
-│   ├── gemini/        # @nanogemclaw/gemini    — Gemini API client, context cache, tools
-│   ├── telegram/      # @nanogemclaw/telegram  — Bot helpers, rate limiter, consolidator
+│   ├── gemini/        # @nanogemclaw/gemini    — Gemini API client, context cache, MCP tools
+│   ├── telegram/      # @nanogemclaw/telegram  — grammY bot helpers, rate limiter, consolidator
 │   ├── server/        # @nanogemclaw/server    — Express + Socket.IO dashboard API
 │   ├── plugin-api/    # @nanogemclaw/plugin-api — Plugin interface & lifecycle types
 │   ├── event-bus/     # @nanogemclaw/event-bus  — Typed pub/sub event system
@@ -108,8 +119,8 @@ nanogemclaw/
 | ------------------------- | -------------------------------------------------------- | ----------- |
 | `@nanogemclaw/core`       | Shared types, config factory, logger, utilities          | Medium      |
 | `@nanogemclaw/db`         | SQLite database layer with FTS5 search                   | Medium      |
-| `@nanogemclaw/gemini`     | Gemini API client, context caching, function calling     | **High**    |
-| `@nanogemclaw/telegram`   | Telegram bot helpers, rate limiter, message consolidator | Medium      |
+| `@nanogemclaw/gemini`     | Gemini API client, context caching, MCP function calling | **High**    |
+| `@nanogemclaw/telegram`   | grammY bot helpers, rate limiter, message consolidator   | Medium      |
 | `@nanogemclaw/server`     | Express dashboard server + Socket.IO real-time events    | Medium      |
 | `@nanogemclaw/plugin-api` | Plugin interface definitions and lifecycle types         | **High**    |
 | `@nanogemclaw/event-bus`  | Typed pub/sub event system for inter-plugin communication | Medium      |
@@ -192,8 +203,8 @@ For a detailed step-by-step guide, see [docs/GUIDE.md](docs/GUIDE.md).
 
 NanoGemClaw supports plugins that extend functionality without modifying core code. Plugins can provide:
 
-- **Gemini Tools** — Custom function calling tools available to the AI
-- **Message Hooks** — Intercept messages before/after processing
+- **Gemini Tools** — Custom function calling tools with permission levels (main/any) and per-tool whitelisting
+- **Message Hooks** — Intercept messages before/after processing with injection scanning
 - **API Routes** — Custom dashboard API endpoints
 - **Background Services** — Long-running background tasks
 - **IPC Handlers** — Custom inter-process communication handlers
@@ -396,18 +407,21 @@ Send these commands directly to the bot:
 
 ```mermaid
 graph LR
-    TG[Telegram] --> Bot[Node.js Host]
+    TG[Telegram] --> GramMY[grammY Bot Framework]
+    GramMY --> Bot[Node.js Host]
     Bot --> DB[(SQLite + FTS5)]
     Bot --> STT[Gemini STT]
     Bot --> FP[Fast Path<br/>Direct Gemini API]
     FP --> Cache[Context Cache]
-    FP --> FC[Function Calling]
+    FP --> FC[Native Function Calling]
+    Bot --> MCP[MCP Client Bridge<br/>Per-Tool Whitelist]
+    MCP --> Tools[Gemini Tools]
     Bot --> IPC[IPC Handlers]
     IPC --> Container[Gemini Agent Container]
     Container --> Browser[agent-browser]
     Container --> Skills[Skills]
     Bot --> Dashboard[Web Dashboard]
-    Dashboard --> WS[Socket.IO]
+    Dashboard --> WS[Socket.IO<br/>Real-Time Events]
     Bot --> Scheduler[Task Scheduler]
     Bot --> Knowledge[Knowledge Base]
     Bot --> Plugins[Plugin System]
@@ -415,10 +429,11 @@ graph LR
     GAuth --> GDrive[Google Drive]
     GAuth --> GCal[Google Calendar]
     GAuth --> GTasks[Google Tasks]
-    GDrive --> RAG[Drive Knowledge RAG]
+    GDrive --> RAG[Hybrid Drive RAG]
     Plugins --> Discord[Discord Reporter]
     Plugins --> Memo[Memorization Service]
     Bot --> EB[Event Bus]
+    EB -.-> Plugins
 ```
 
 ### Backend Packages
@@ -427,8 +442,8 @@ graph LR
 | ------------------------- | -------------------------------------------------------------------------------------------- |
 | `@nanogemclaw/core`       | `config.ts`, `types.ts`, `logger.ts`, `utils.ts`, `safe-compare.ts`                          |
 | `@nanogemclaw/db`         | `connection.ts`, `messages.ts`, `tasks.ts`, `stats.ts`, `preferences.ts`                     |
-| `@nanogemclaw/gemini`     | `gemini-client.ts`, `context-cache.ts`, `gemini-tools.ts`                                    |
-| `@nanogemclaw/telegram`   | `telegram-helpers.ts`, `telegram-rate-limiter.ts`, `message-consolidator.ts`                 |
+| `@nanogemclaw/gemini`     | `gemini-client.ts`, `context-cache.ts`, `mcp-client-bridge.ts`, `gemini-tools.ts`           |
+| `@nanogemclaw/telegram`   | `grammY-helpers.ts`, `telegram-rate-limiter.ts`, `message-consolidator.ts`                   |
 | `@nanogemclaw/server`     | `server.ts`, `routes/` (auth, groups, tasks, knowledge, calendar, skills, config, analytics) |
 | `@nanogemclaw/plugin-api` | `NanoPlugin`, `PluginApi`, `GeminiToolContribution`, `HookContributions`                     |
 | `@nanogemclaw/event-bus`  | `EventBus`, `NanoEventMap`, typed pub/sub singleton                                          |
@@ -439,10 +454,10 @@ graph LR
 | --------------------- | -------------------------------------------------------- |
 | `index.ts`            | Telegram bot entry, state management, IPC dispatch       |
 | `message-handler.ts`  | Message processing, fast path routing, multi-modal input |
-| `fast-path.ts`        | Direct Gemini API execution with streaming               |
+| `fast-path.ts`        | Direct Gemini API execution with streaming and caching   |
 | `container-runner.ts` | Container lifecycle and streaming output                 |
 | `task-scheduler.ts`   | Cron/interval/one-time task execution                    |
-| `knowledge.ts`        | FTS5 knowledge base engine                               |
+| `knowledge.ts`        | FTS5 knowledge base engine with injection scanning       |
 | `personas.ts`         | Persona definitions and custom persona management        |
 | `natural-schedule.ts` | Natural language to cron parser (EN/ZH)                  |
 
@@ -463,7 +478,7 @@ React + Vite + TailwindCSS SPA with 12 modules:
 | **Knowledge**       | Document upload, FTS5 search, per-group document management                     |
 | **Drive**           | Google Drive file browser and document viewer                                   |
 | **Calendar**        | iCal feed subscription and upcoming event viewer                                |
-| **Settings**        | Maintenance mode, debug logging, secrets status, Google account, Discord config |
+| **Settings**        | Maintenance mode, debug logging, secrets status, Google account, Discord config, MCP management |
 
 ### Persistence
 
@@ -519,9 +534,9 @@ Supports `Cmd+K` / `Ctrl+K` global search overlay.
 ```bash
 npm run dev               # Start with tsx (hot reload)
 npm run typecheck         # TypeScript type check (backend)
-npm test                  # Run all tests (Vitest, 41 files, ~950 tests)
+npm test                  # Run all tests (Vitest, 35 files, ~950 tests)
 npm run test:watch        # Watch mode
-npm run test:coverage     # Coverage report
+npm run test:coverage     # Coverage report (92% statements, 84% branches)
 npm run format:check      # Prettier check
 ```
 
@@ -546,12 +561,13 @@ npx tsc --noEmit          # Type check frontend
 - **Container EROFS error?** Apple Container doesn't support nested overlapping bind mounts.
 - **Container XPC error?** Run `container system start` first. Apple Container's system service must be running before builds.
 - **`Cannot GET /` on localhost:3000?** In dev mode, port 3000 is API-only. Start the dashboard separately: `cd packages/dashboard && npm run dev` (serves on port 5173).
-- **Fast path not working?** Ensure `GEMINI_API_KEY` is set. OAuth-only setups fall back to container path.
-- **Want to disable fast path?** Set `FAST_PATH_ENABLED=false` globally, or toggle per group in the dashboard.
+- **Fast path not working?** Ensure `GEMINI_API_KEY` is set. Check `FAST_PATH_ENABLED=true`. Per-group setting in dashboard may override globally.
 - **Rate limited?** Adjust `RATE_LIMIT_MAX` and `RATE_LIMIT_WINDOW` in `.env`.
 - **Google OAuth not working?** Ensure `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set. Use "Desktop App" type in Google Cloud Console.
 - **Drive/Calendar/Tasks not responding?** Complete the OAuth flow from Dashboard Settings → Google Account first.
 - **Discord reports not sending?** Check `DISCORD_WEBHOOK_URL` is valid. Test with the "Send Test" button in Dashboard Settings.
+- **MCP tools not executing?** Verify per-tool whitelist in Dashboard Settings → MCP. Check tool permission level (main vs any).
+- **Voice messages not using fast path?** Ensure STT completes successfully. Check logs for transcription errors.
 
 ---
 

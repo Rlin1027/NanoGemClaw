@@ -249,12 +249,10 @@ export function createMcpRouter(deps: McpRouterDeps): Router {
       .object({ allowedTools: z.array(z.string()) })
       .safeParse(req.body);
     if (!bodyParsed.success) {
-      res
-        .status(400)
-        .json({
-          error: 'Invalid request body',
-          details: bodyParsed.error.issues,
-        });
+      res.status(400).json({
+        error: 'Invalid request body',
+        details: bodyParsed.error.issues,
+      });
       return;
     }
 
