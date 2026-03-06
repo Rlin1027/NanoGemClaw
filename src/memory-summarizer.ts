@@ -206,11 +206,10 @@ export async function summarizeConversation(
       charsProcessed: charsToArchive,
     };
   } catch (err) {
-    logger.error(
-      {
-        group: group.name,
-        err: err instanceof Error ? err.message : String(err),
-      },
+    const errMsg = err instanceof Error ? err.message : String(err);
+    const level = errMsg.includes('timed out') ? 'warn' : 'error';
+    logger[level](
+      { group: group.name, err: errMsg },
       'Failed to summarize conversation',
     );
     return null;

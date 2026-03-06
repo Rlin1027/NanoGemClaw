@@ -113,6 +113,13 @@ Required for image gen: `GEMINI_API_KEY`
 Dashboard: `DASHBOARD_API_KEY`, `DASHBOARD_HOST` (default 127.0.0.1), `DASHBOARD_ORIGINS`
 Optional: `GEMINI_MODEL` (default gemini-3-flash-preview), `CONTAINER_TIMEOUT`, `WEBHOOK_URL`, `STT_PROVIDER`, `TZ`
 
+## Workflow Rules
+
+- **先討論再動手**：多檔案變更或架構決策前，先簡述方案（改哪些檔案、改什麼、順序），等確認後再編輯
+- **commit 前必檢查**：變更後先跑 `npm run format:check` 和 `npm test`，全過才能 commit。有失敗測試不要 commit（除非明確指示）
+- **不要刪除 session 中的 cache 或 hook 路徑**：這些變更會破壞當前 session，標記留到下次處理
+- **錯誤修復要一次到位**：self-review 後再宣告完成，避免需要二次修復
+
 ## Agent Workflow
 
 **遵循「規劃 → 執行 → 驗證」循環**，避免直接跳入實作。

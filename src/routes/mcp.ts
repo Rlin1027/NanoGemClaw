@@ -16,6 +16,7 @@ const McpServerConfigSchema = z
     enabled: z.boolean(),
     timeout: z.number().positive().optional(),
     autoReconnect: z.boolean().optional(),
+    allowedTools: z.array(z.string()).optional(),
   })
   .superRefine((data, ctx) => {
     if (data.transport === 'stdio' && !data.command) {
@@ -40,7 +41,7 @@ interface McpServerInfo {
   name: string;
   transport: string;
   connectionState: string;
-  tools: { name: string; description: string }[];
+  tools: { name: string; description?: string; enabled: boolean }[];
   [key: string]: unknown;
 }
 
@@ -51,6 +52,7 @@ export interface McpRouterDeps {
     {
       getState(): string;
       getToolDeclarations(): { name: string; description: string }[];
+      getRawTools(): { name: string; description?: string }[];
     }
   >;
   addServer: (config: unknown) => Promise<void>;
@@ -59,6 +61,11 @@ export interface McpRouterDeps {
   reconnectServer: (id: string) => Promise<void>;
   loadConfig: () => { servers: Record<string, unknown>[] };
   saveConfig: (config: { servers: Record<string, unknown>[] }) => void;
+  updateAllowedTools: (
+    serverId: string,
+    allowedTools: string[],
+  ) => Promise<void>;
+  getRawTools: (serverId: string) => { name: string; description?: string }[];
 }
 
 function serializeServer(
@@ -66,15 +73,20 @@ function serializeServer(
   bridge:
     | {
         getState(): string;
-        getToolDeclarations(): { name: string; description: string }[];
+        getRawTools(): { name: string; description?: string }[];
       }
     | undefined,
 ): McpServerInfo {
   const state = bridge ? bridge.getState() : 'disconnected';
+  const allowedTools = new Set(
+    (config as { allowedTools?: string[] }).allowedTools ?? [],
+  );
   const tools = bridge
-    ? bridge
-        .getToolDeclarations()
-        .map((t) => ({ name: t.name, description: t.description }))
+    ? bridge.getRawTools().map((t) => ({
+        name: t.name,
+        description: t.description,
+        enabled: allowedTools.has(t.name),
+      }))
     : [];
   return {
     ...(config as object),
@@ -184,6 +196,80 @@ export function createMcpRouter(deps: McpRouterDeps): Router {
       res.json({ data: { success: true } });
     } catch {
       res.status(500).json({ error: 'Failed to remove MCP server' });
+    }
+  });
+
+  // GET /api/mcp/servers/:id/tools
+  router.get('/mcp/servers/:id/tools', (req, res) => {
+    const { id } = req.params;
+    if (!SERVER_ID_RE.test(id)) {
+      res.status(400).json({ error: 'Invalid server ID' });
+      return;
+    }
+
+    const config = deps.loadConfig();
+    const serverConfig = config.servers.find((s: any) => s.id === id);
+    if (!serverConfig) {
+      res.status(404).json({ error: 'MCP server not found' });
+      return;
+    }
+
+    try {
+      const rawTools = deps.getRawTools(id);
+      const allowedTools = new Set(
+        ((serverConfig as any).allowedTools ?? []) as string[],
+      );
+      const data = rawTools.map((t) => ({
+        name: t.name,
+        description: t.description,
+        enabled: allowedTools.has(t.name),
+      }));
+      res.json({ data });
+    } catch {
+      res.status(500).json({ error: 'Failed to list tools' });
+    }
+  });
+
+  // PATCH /api/mcp/servers/:id/tools
+  router.patch('/mcp/servers/:id/tools', async (req, res) => {
+    const { id } = req.params;
+    if (!SERVER_ID_RE.test(id)) {
+      res.status(400).json({ error: 'Invalid server ID' });
+      return;
+    }
+
+    const config = deps.loadConfig();
+    const serverConfig = config.servers.find((s: any) => s.id === id);
+    if (!serverConfig) {
+      res.status(404).json({ error: 'MCP server not found' });
+      return;
+    }
+
+    const bodyParsed = z
+      .object({ allowedTools: z.array(z.string()) })
+      .safeParse(req.body);
+    if (!bodyParsed.success) {
+      res
+        .status(400)
+        .json({
+          error: 'Invalid request body',
+          details: bodyParsed.error.issues,
+        });
+      return;
+    }
+
+    try {
+      await deps.updateAllowedTools(id, bodyParsed.data.allowedTools);
+      const rawTools = deps.getRawTools(id);
+      const allowedSet = new Set(bodyParsed.data.allowedTools);
+      const data = rawTools.map((t) => ({
+        name: t.name,
+        description: t.description,
+        enabled: allowedSet.has(t.name),
+      }));
+      res.json({ data });
+    } catch {
+      res.status(500).json({ error: 'Failed to update tool permissions' });
     }
   });
 

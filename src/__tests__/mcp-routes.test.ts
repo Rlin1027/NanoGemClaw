@@ -7,11 +7,14 @@ import type { McpRouterDeps } from '../routes/mcp.js';
 // Minimal bridge mock
 function makeBridge(
   state: string = 'connected',
-  tools: { name: string; description: string }[] = [],
+  rawTools: { name: string; description?: string }[] = [],
 ) {
   return {
     getState: vi.fn(() => state),
-    getToolDeclarations: vi.fn(() => tools),
+    getToolDeclarations: vi.fn(() =>
+      rawTools.map((t) => ({ name: t.name, description: t.description ?? '' })),
+    ),
+    getRawTools: vi.fn(() => rawTools),
   };
 }
 
@@ -53,9 +56,17 @@ describe('MCP Routes', () => {
       }),
       toggleServer: vi.fn(async () => true),
       reconnectServer: vi.fn(async () => {}),
-      loadConfig: vi.fn(() => ({ ...config })),
+      loadConfig: vi.fn(() => ({ ...config, servers: [...config.servers] })),
       saveConfig: vi.fn((c: any) => {
         config = c;
+      }),
+      updateAllowedTools: vi.fn(async (_id: string, allowedTools: string[]) => {
+        const server = config.servers.find((s: any) => s.id === _id) as any;
+        if (server) server.allowedTools = allowedTools;
+      }),
+      getRawTools: vi.fn((_id: string) => {
+        const bridge = bridgeMap.get(_id);
+        return bridge ? bridge.getRawTools() : [];
       }),
     };
   });
@@ -74,6 +85,9 @@ describe('MCP Routes', () => {
     });
 
     it('returns connected state and tools when bridge exists', async () => {
+      config.servers = [
+        { ...baseServer, allowedTools: ['mcp_test_server_foo'] },
+      ];
       bridgeMap.set(
         'test_server',
         makeBridge('connected', [
@@ -86,6 +100,19 @@ describe('MCP Routes', () => {
       expect(res.body.data[0].connectionState).toBe('connected');
       expect(res.body.data[0].tools).toHaveLength(1);
       expect(res.body.data[0].tools[0].name).toBe('mcp_test_server_foo');
+      expect(res.body.data[0].tools[0].enabled).toBe(true);
+    });
+
+    it('returns tools with enabled=false when not in allowedTools', async () => {
+      config.servers = [{ ...baseServer, allowedTools: [] }];
+      bridgeMap.set(
+        'test_server',
+        makeBridge('connected', [{ name: 'some_tool', description: 'A tool' }]),
+      );
+      const app = makeApp(deps);
+      const res = await request(app).get('/api/mcp/servers');
+      expect(res.status).toBe(200);
+      expect(res.body.data[0].tools[0].enabled).toBe(false);
     });
   });
 
@@ -224,6 +251,116 @@ describe('MCP Routes', () => {
       const app = makeApp(deps);
       const res = await request(app).delete('/api/mcp/servers/INVALID-ID');
       expect(res.status).toBe(400);
+    });
+  });
+
+  // ── GET /api/mcp/servers/:id/tools ──────────────────────────────────────
+
+  describe('GET /api/mcp/servers/:id/tools', () => {
+    it('returns all tools with enabled flag', async () => {
+      config.servers = [{ ...baseServer, allowedTools: ['tool_a'] }];
+      bridgeMap.set(
+        'test_server',
+        makeBridge('connected', [
+          { name: 'tool_a', description: 'Tool A' },
+          { name: 'tool_b', description: 'Tool B' },
+        ]),
+      );
+      const app = makeApp(deps);
+      const res = await request(app).get('/api/mcp/servers/test_server/tools');
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(2);
+      const toolA = res.body.data.find((t: any) => t.name === 'tool_a');
+      const toolB = res.body.data.find((t: any) => t.name === 'tool_b');
+      expect(toolA.enabled).toBe(true);
+      expect(toolB.enabled).toBe(false);
+    });
+
+    it('returns 404 for unknown server', async () => {
+      (deps.loadConfig as any).mockReturnValue({ servers: [] });
+      const app = makeApp(deps);
+      const res = await request(app).get(
+        '/api/mcp/servers/unknown_server/tools',
+      );
+      expect(res.status).toBe(404);
+    });
+
+    it('returns 400 for invalid server ID', async () => {
+      const app = makeApp(deps);
+      const res = await request(app).get('/api/mcp/servers/INVALID-ID/tools');
+      expect(res.status).toBe(400);
+    });
+
+    it('returns empty array when no bridge exists', async () => {
+      const app = makeApp(deps);
+      const res = await request(app).get('/api/mcp/servers/test_server/tools');
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual([]);
+    });
+  });
+
+  // ── PATCH /api/mcp/servers/:id/tools ────────────────────────────────────
+
+  describe('PATCH /api/mcp/servers/:id/tools', () => {
+    it('updates allowedTools and returns updated tool list', async () => {
+      bridgeMap.set(
+        'test_server',
+        makeBridge('connected', [
+          { name: 'tool_a', description: 'Tool A' },
+          { name: 'tool_b', description: 'Tool B' },
+        ]),
+      );
+      const app = makeApp(deps);
+      const res = await request(app)
+        .patch('/api/mcp/servers/test_server/tools')
+        .send({ allowedTools: ['tool_a'] });
+      expect(res.status).toBe(200);
+      expect(deps.updateAllowedTools).toHaveBeenCalledWith('test_server', [
+        'tool_a',
+      ]);
+      const toolA = res.body.data.find((t: any) => t.name === 'tool_a');
+      const toolB = res.body.data.find((t: any) => t.name === 'tool_b');
+      expect(toolA.enabled).toBe(true);
+      expect(toolB.enabled).toBe(false);
+    });
+
+    it('returns 404 for unknown server', async () => {
+      (deps.loadConfig as any).mockReturnValue({ servers: [] });
+      const app = makeApp(deps);
+      const res = await request(app)
+        .patch('/api/mcp/servers/unknown_server/tools')
+        .send({ allowedTools: [] });
+      expect(res.status).toBe(404);
+    });
+
+    it('returns 400 for invalid server ID', async () => {
+      const app = makeApp(deps);
+      const res = await request(app)
+        .patch('/api/mcp/servers/INVALID-ID/tools')
+        .send({ allowedTools: [] });
+      expect(res.status).toBe(400);
+    });
+
+    it('returns 400 for invalid body', async () => {
+      const app = makeApp(deps);
+      const res = await request(app)
+        .patch('/api/mcp/servers/test_server/tools')
+        .send({ allowedTools: 'not_an_array' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/Invalid/i);
+    });
+
+    it('accepts empty allowedTools array (disables all)', async () => {
+      bridgeMap.set(
+        'test_server',
+        makeBridge('connected', [{ name: 'tool_a', description: 'Tool A' }]),
+      );
+      const app = makeApp(deps);
+      const res = await request(app)
+        .patch('/api/mcp/servers/test_server/tools')
+        .send({ allowedTools: [] });
+      expect(res.status).toBe(200);
+      expect(res.body.data[0].enabled).toBe(false);
     });
   });
 

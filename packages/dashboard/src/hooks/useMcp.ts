@@ -5,6 +5,7 @@ export interface McpTool {
     name: string;
     description?: string;
     inputSchema?: Record<string, unknown>;
+    enabled: boolean;
 }
 
 export interface McpServer {
@@ -66,6 +67,19 @@ export function useMcp() {
         await refetch();
     }, [refetch]);
 
+    const updateToolPermission = useCallback(async (serverId: string, toolName: string, enabled: boolean) => {
+        const server = (data ?? []).find(s => s.id === serverId);
+        const currentAllowed = (server?.tools ?? []).filter(t => t.enabled).map(t => t.name);
+        const allowedTools = enabled
+            ? [...currentAllowed.filter(n => n !== toolName), toolName]
+            : currentAllowed.filter(n => n !== toolName);
+        await apiFetch(`/api/mcp/servers/${encodeURIComponent(serverId)}/tools`, {
+            method: 'PATCH',
+            body: JSON.stringify({ allowedTools }),
+        });
+        await refetch();
+    }, [data, refetch]);
+
     // Polling every 5s for status updates
     const refetchRef = useRef(refetch);
     refetchRef.current = refetch;
@@ -85,5 +99,6 @@ export function useMcp() {
         updateServer,
         removeServer,
         reconnectServer,
+        updateToolPermission,
     };
 }

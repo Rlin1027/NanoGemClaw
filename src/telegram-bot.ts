@@ -143,6 +143,17 @@ export async function connectTelegram(): Promise<void> {
             preferredPath: 'fast' as const,
           });
           logger.info({ chatId }, 'Admin private chat auto-registered');
+        } else if (registeredGroups[chatId].folder !== ADMIN_PRIVATE_FOLDER) {
+          // Fix folder if admin chat was registered with wrong folder
+          registerGroup(chatId, {
+            ...registeredGroups[chatId],
+            folder: ADMIN_PRIVATE_FOLDER,
+            requireTrigger: false,
+          });
+          logger.info(
+            { chatId },
+            'Admin private chat folder corrected to _admin_private',
+          );
         }
 
         // SKIP storeChatMetadata (Gap 15) — admin chat should not appear in group discovery

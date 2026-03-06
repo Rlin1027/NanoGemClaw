@@ -25,6 +25,8 @@ export interface McpServerConfig {
     timeout?: number;
     /** Auto-reconnect on disconnect (default: true) */
     autoReconnect?: boolean;
+    /** Per-tool whitelist. Only listed tools are exposed to Gemini. Empty/undefined = no tools allowed (zero-trust). */
+    allowedTools?: string[];
 }
 
 export interface McpServersConfig {

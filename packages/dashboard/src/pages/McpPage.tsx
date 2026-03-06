@@ -34,13 +34,16 @@ interface ServerCardProps {
     onToggle: (enabled: boolean) => Promise<void>;
     onReconnect: () => Promise<void>;
     onRemove: () => Promise<void>;
+    onToggleTool: (toolName: string, enabled: boolean) => Promise<void>;
 }
 
-function ServerCard({ server, onToggle, onReconnect, onRemove }: ServerCardProps) {
+function ServerCard({ server, onToggle, onReconnect, onRemove, onToggleTool }: ServerCardProps) {
     const [expanded, setExpanded] = useState(false);
     const [toggling, setToggling] = useState(false);
     const [reconnecting, setReconnecting] = useState(false);
     const [removing, setRemoving] = useState(false);
+    const [togglingTools, setTogglingTools] = useState<Set<string>>(new Set());
+    const [bulkToggling, setBulkToggling] = useState(false);
 
     const handleToggle = async () => {
         setToggling(true);
@@ -76,6 +79,42 @@ function ServerCard({ server, onToggle, onReconnect, onRemove }: ServerCardProps
             showToast('Failed to remove server');
         } finally {
             setRemoving(false);
+        }
+    };
+
+    const handleToggleTool = async (toolName: string, enabled: boolean) => {
+        setTogglingTools(prev => new Set(prev).add(toolName));
+        try {
+            await onToggleTool(toolName, enabled);
+            showToast(enabled ? `${toolName} enabled` : `${toolName} disabled`, 'success');
+        } catch {
+            showToast(`Failed to update ${toolName}`);
+        } finally {
+            setTogglingTools(prev => { const next = new Set(prev); next.delete(toolName); return next; });
+        }
+    };
+
+    const handleEnableAll = async () => {
+        setBulkToggling(true);
+        try {
+            await Promise.all(server.tools.filter(t => !t.enabled).map(t => onToggleTool(t.name, true)));
+            showToast('All tools enabled', 'success');
+        } catch {
+            showToast('Failed to enable all tools');
+        } finally {
+            setBulkToggling(false);
+        }
+    };
+
+    const handleDisableAll = async () => {
+        setBulkToggling(true);
+        try {
+            await Promise.all(server.tools.filter(t => t.enabled).map(t => onToggleTool(t.name, false)));
+            showToast('All tools disabled', 'success');
+        } catch {
+            showToast('Failed to disable all tools');
+        } finally {
+            setBulkToggling(false);
         }
     };
 
@@ -147,15 +186,54 @@ function ServerCard({ server, onToggle, onReconnect, onRemove }: ServerCardProps
             </div>
 
             {expanded && server.tools.length > 0 && (
-                <div className="border-t border-slate-700 px-4 py-3 space-y-2">
-                    {server.tools.map(tool => (
-                        <div key={tool.name} className="flex items-start gap-2">
-                            <span className="text-xs font-mono text-blue-300 mt-0.5 flex-shrink-0">{tool.name}</span>
-                            {tool.description && (
-                                <span className="text-xs text-slate-500 leading-relaxed">{tool.description}</span>
-                            )}
+                <div className="border-t border-slate-700 px-4 py-3">
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs text-slate-500">
+                            {server.tools.filter(t => t.enabled).length}/{server.tools.length} enabled
+                        </span>
+                        <div className="flex items-center gap-1">
+                            <button
+                                onClick={handleEnableAll}
+                                disabled={bulkToggling || server.tools.every(t => t.enabled)}
+                                className="px-2 py-0.5 text-xs rounded bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors disabled:opacity-40"
+                            >
+                                Enable All
+                            </button>
+                            <button
+                                onClick={handleDisableAll}
+                                disabled={bulkToggling || server.tools.every(t => !t.enabled)}
+                                className="px-2 py-0.5 text-xs rounded bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors disabled:opacity-40"
+                            >
+                                Disable All
+                            </button>
                         </div>
-                    ))}
+                    </div>
+                    <div className="space-y-1">
+                        {server.tools.map(tool => (
+                            <div key={tool.name} className="flex items-center justify-between gap-2 py-1">
+                                <div className="flex-1 min-w-0">
+                                    <span className="text-xs font-mono text-blue-300">{tool.name}</span>
+                                    {tool.description && (
+                                        <span className="text-xs text-slate-500 ml-2">{tool.description}</span>
+                                    )}
+                                </div>
+                                <button
+                                    onClick={() => handleToggleTool(tool.name, !tool.enabled)}
+                                    disabled={togglingTools.has(tool.name) || bulkToggling}
+                                    className={cn(
+                                        'relative flex-shrink-0 w-8 h-4 rounded-full transition-colors disabled:opacity-50',
+                                        tool.enabled ? 'bg-blue-600' : 'bg-slate-600',
+                                    )}
+                                    title={tool.enabled ? 'Disable tool' : 'Enable tool'}
+                                >
+                                    <span className={cn(
+                                        'absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform',
+                                        tool.enabled ? 'translate-x-4' : 'translate-x-0.5',
+                                    )} />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             )}
         </div>
@@ -310,11 +388,13 @@ function AddServerModal({ onClose, onAdd }: AddServerModalProps) {
 }
 
 export function McpPage() {
-    const { servers, isLoading, refetch, addServer, updateServer, removeServer, reconnectServer } = useMcp();
+    const { servers, isLoading, refetch, addServer, updateServer, removeServer, reconnectServer, updateToolPermission } = useMcp();
     const [showAddModal, setShowAddModal] = useState(false);
 
     const connected = servers.filter(s => s.status === 'connected').length;
     const total = servers.length;
+    const totalTools = servers.reduce((acc, s) => acc + s.tools.length, 0);
+    const enabledTools = servers.reduce((acc, s) => acc + s.tools.filter(t => t.enabled).length, 0);
 
     return (
         <div className="space-y-6">
@@ -351,7 +431,7 @@ export function McpPage() {
                 {[
                     { label: 'Total Servers', value: total },
                     { label: 'Connected', value: connected },
-                    { label: 'Total Tools', value: servers.reduce((acc, s) => acc + s.toolCount, 0) },
+                    { label: 'Tools Enabled', value: `${enabledTools}/${totalTools}` },
                 ].map(stat => (
                     <div key={stat.label} className="bg-slate-800 border border-slate-700 rounded-xl p-4">
                         <div className="text-2xl font-bold text-white">{stat.value}</div>
@@ -386,6 +466,7 @@ export function McpPage() {
                             onToggle={enabled => updateServer(server.id, { enabled })}
                             onReconnect={() => reconnectServer(server.id)}
                             onRemove={() => removeServer(server.id)}
+                            onToggleTool={(toolName, enabled) => updateToolPermission(server.id, toolName, enabled)}
                         />
                     ))}
                 </div>

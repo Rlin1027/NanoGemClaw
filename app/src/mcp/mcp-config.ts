@@ -23,6 +23,7 @@ const McpServerConfigSchema = z.object({
     enabled: z.boolean(),
     timeout: z.number().positive().optional(),
     autoReconnect: z.boolean().optional(),
+    allowedTools: z.array(z.string()).optional(),
 }).superRefine((data, ctx) => {
     if (data.transport === 'stdio' && !data.command) {
         ctx.addIssue({
@@ -70,6 +71,42 @@ export function saveMcpConfig(dataDir: string, config: McpServersConfig): void {
     const content = JSON.stringify(config, null, 2);
     fs.writeFileSync(tmpPath, content, 'utf-8');
     fs.renameSync(tmpPath, configPath);
+}
+
+/**
+ * One-time migration: for servers with allowedTools === undefined,
+ * populate allowedTools with all known tools from the running bridge.
+ * Call this after bridges are initialized.
+ */
+export function migrateAllowedTools(
+    config: McpServersConfig,
+    getServerTools: (serverId: string) => string[],
+    dataDir: string,
+): McpServersConfig {
+    let changed = false;
+
+    const migratedServers = config.servers.map((server) => {
+        if (server.allowedTools !== undefined) {
+            // Already has explicit allowedTools — no-op
+            return server;
+        }
+        // allowedTools undefined = pre-upgrade server: auto-populate with all current tools
+        const tools = getServerTools(server.id);
+        changed = true;
+        logger.info(
+            { serverId: server.id, toolCount: tools.length },
+            'Migrating allowedTools for existing MCP server',
+        );
+        return { ...server, allowedTools: tools };
+    });
+
+    const migrated: McpServersConfig = { servers: migratedServers };
+
+    if (changed) {
+        saveMcpConfig(dataDir, migrated);
+    }
+
+    return migrated;
 }
 
 export function validateMcpConfig(raw: unknown): McpServersConfig {

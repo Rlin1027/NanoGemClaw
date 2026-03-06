@@ -13,7 +13,7 @@ export interface KnowledgeDoc {
 }
 
 export function useKnowledgeDocs(groupFolder: string) {
-    return useApiQuery<KnowledgeDoc[]>(`/api/groups/${groupFolder}/knowledge`);
+    return useApiQuery<KnowledgeDoc[]>(groupFolder ? `/api/groups/${groupFolder}/knowledge` : null);
 }
 
 export function useCreateKnowledgeDoc(groupFolder: string) {

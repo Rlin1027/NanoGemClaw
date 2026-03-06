@@ -8,11 +8,11 @@
 import { logger } from '@nanogemclaw/core';
 import type { NanoPlugin, PluginApi, GeminiToolContribution } from '@nanogemclaw/plugin-api';
 import { McpBridge } from './mcp-bridge.js';
-import { loadMcpConfig } from './mcp-config.js';
+import { loadMcpConfig, migrateAllowedTools } from './mcp-config.js';
 import type { McpServerConfig } from './mcp-types.js';
 
 export { McpBridge } from './mcp-bridge.js';
-export { loadMcpConfig, validateMcpConfig, saveMcpConfig } from './mcp-config.js';
+export { loadMcpConfig, validateMcpConfig, saveMcpConfig, migrateAllowedTools } from './mcp-config.js';
 export type { McpServerConfig, McpServersConfig, McpConnectionState } from './mcp-types.js';
 
 /** Active bridges keyed by server ID */
@@ -88,6 +88,36 @@ export async function toggleServer(id: string, enabled: boolean, dataDir: string
 }
 
 /**
+ * Update the allowed tools whitelist for a server and hot-reload.
+ * Returns true if the server was found, false otherwise.
+ */
+export async function updateAllowedTools(id: string, allowedTools: string[], dataDir: string): Promise<boolean> {
+    const { saveMcpConfig: save, loadMcpConfig: load } = await import('./mcp-config.js');
+    const current = load(dataDir);
+    const server = current.servers.find((s) => s.id === id);
+    if (!server) return false;
+
+    server.allowedTools = allowedTools;
+    save(dataDir, current);
+
+    const bridge = bridges.get(id);
+    if (bridge) {
+        bridge.updateAllowedTools(allowedTools);
+    }
+    return true;
+}
+
+/**
+ * Get raw (unfiltered) tools for a server by ID.
+ * Returns empty array if server has no active bridge.
+ */
+export function getRawTools(id: string): { name: string; description?: string }[] {
+    const bridge = bridges.get(id);
+    if (!bridge) return [];
+    return bridge.getRawTools();
+}
+
+/**
  * Get all tool declarations from all connected MCP bridges.
  * Called by the declaration builder to include MCP tools.
  */
@@ -142,6 +172,17 @@ export function createMcpPlugin(dataDir: string): NanoPlugin & { builtin: true }
                         );
                     }
                 }),
+            );
+
+            // One-time migration: populate allowedTools for pre-upgrade servers
+            const config = loadMcpConfig(dataDir);
+            migrateAllowedTools(
+                config,
+                (serverId) => {
+                    const bridge = bridges.get(serverId);
+                    return bridge ? bridge.getRawTools().map((t) => t.name) : [];
+                },
+                dataDir,
             );
 
             const connectedCount = [...bridges.values()].filter(

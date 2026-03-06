@@ -76,6 +76,7 @@ const stdioConfig: McpServerConfig = {
     enabled: true,
     timeout: 5000,
     autoReconnect: false,
+    allowedTools: ['read_file', 'list_dir'],
 };
 
 const sseConfig: McpServerConfig = {
@@ -87,6 +88,7 @@ const sseConfig: McpServerConfig = {
     enabled: true,
     timeout: 5000,
     autoReconnect: false,
+    allowedTools: ['read_file', 'list_dir'],
 };
 
 const mockToolExecutionContext = {
@@ -373,7 +375,7 @@ describe('McpBridge', () => {
                 ],
             });
 
-            const bridge = new McpBridge(stdioConfig);
+            const bridge = new McpBridge({ ...stdioConfig, allowedTools: ['ping'] });
             await bridge.connect();
 
             const tools = bridge.getToolDeclarations();
@@ -399,7 +401,7 @@ describe('McpBridge', () => {
                 ],
             });
 
-            const bridge = new McpBridge(stdioConfig);
+            const bridge = new McpBridge({ ...stdioConfig, allowedTools: ['test_tool'] });
             await bridge.connect();
 
             const tools = bridge.getToolDeclarations();
@@ -431,7 +433,7 @@ describe('McpBridge', () => {
                 ],
             });
 
-            const bridge = new McpBridge(stdioConfig);
+            const bridge = new McpBridge({ ...stdioConfig, allowedTools: ['test_tool'] });
             await bridge.connect();
 
             const tools = bridge.getToolDeclarations();
@@ -460,13 +462,111 @@ describe('McpBridge', () => {
                 ],
             });
 
-            const bridge = new McpBridge(stdioConfig);
+            const bridge = new McpBridge({ ...stdioConfig, allowedTools: ['test_tool'] });
             await bridge.connect();
 
             const tools = bridge.getToolDeclarations();
             const params = tools[0].parameters as Record<string, unknown>;
             const props = params.properties as Record<string, unknown>;
             expect((props.count as Record<string, unknown>).type).toBe('NUMBER');
+        });
+    });
+
+    describe('allowedTools filtering', () => {
+        it('returns only tools listed in allowedTools', async () => {
+            const bridge = new McpBridge({ ...stdioConfig, allowedTools: ['read_file'] });
+            await bridge.connect();
+            const decls = bridge.getToolDeclarations();
+            expect(decls).toHaveLength(1);
+            expect(decls[0].name).toBe('mcp_testserver_read_file');
+        });
+
+        it('returns empty array when allowedTools is undefined (zero-trust)', async () => {
+            const { allowedTools: _, ...configWithoutAllowed } = stdioConfig;
+            const bridge = new McpBridge(configWithoutAllowed as McpServerConfig);
+            await bridge.connect();
+            expect(bridge.getToolDeclarations()).toHaveLength(0);
+        });
+
+        it('returns empty array when allowedTools is []', async () => {
+            const bridge = new McpBridge({ ...stdioConfig, allowedTools: [] });
+            await bridge.connect();
+            expect(bridge.getToolDeclarations()).toHaveLength(0);
+        });
+
+        it('stale entries in allowedTools are harmlessly ignored', async () => {
+            const bridge = new McpBridge({ ...stdioConfig, allowedTools: ['read_file', 'nonexistent_tool'] });
+            await bridge.connect();
+            const decls = bridge.getToolDeclarations();
+            expect(decls).toHaveLength(1);
+            expect(decls[0].name).toBe('mcp_testserver_read_file');
+        });
+    });
+
+    describe('getRawTools()', () => {
+        it('returns all tools regardless of allowedTools', async () => {
+            const bridge = new McpBridge({ ...stdioConfig, allowedTools: [] });
+            await bridge.connect();
+            const raw = bridge.getRawTools();
+            expect(raw).toHaveLength(2);
+            const names = raw.map((t) => t.name);
+            expect(names).toContain('read_file');
+            expect(names).toContain('list_dir');
+        });
+
+        it('returns all tools even when allowedTools is undefined', async () => {
+            const { allowedTools: _, ...configWithoutAllowed } = stdioConfig;
+            const bridge = new McpBridge(configWithoutAllowed as McpServerConfig);
+            await bridge.connect();
+            expect(bridge.getRawTools()).toHaveLength(2);
+        });
+
+        it('returns empty array when not connected', () => {
+            const bridge = new McpBridge(stdioConfig);
+            expect(bridge.getRawTools()).toHaveLength(0);
+        });
+
+        it('includes description in raw tool list', async () => {
+            const bridge = new McpBridge(stdioConfig);
+            await bridge.connect();
+            const raw = bridge.getRawTools();
+            const readFile = raw.find((t) => t.name === 'read_file');
+            expect(readFile?.description).toBe('Read a file');
+        });
+    });
+
+    describe('updateAllowedTools()', () => {
+        it('changes the filter set immediately', async () => {
+            const bridge = new McpBridge({ ...stdioConfig, allowedTools: [] });
+            await bridge.connect();
+            expect(bridge.getToolDeclarations()).toHaveLength(0);
+
+            bridge.updateAllowedTools(['read_file']);
+            expect(bridge.getToolDeclarations()).toHaveLength(1);
+            expect(bridge.getToolDeclarations()[0].name).toBe('mcp_testserver_read_file');
+        });
+
+        it('enables all tools when all names are provided', async () => {
+            const bridge = new McpBridge({ ...stdioConfig, allowedTools: [] });
+            await bridge.connect();
+            bridge.updateAllowedTools(['read_file', 'list_dir']);
+            expect(bridge.getToolDeclarations()).toHaveLength(2);
+        });
+
+        it('disabling all tools leaves declarations empty', async () => {
+            const bridge = new McpBridge(stdioConfig);
+            await bridge.connect();
+            expect(bridge.getToolDeclarations()).toHaveLength(2);
+
+            bridge.updateAllowedTools([]);
+            expect(bridge.getToolDeclarations()).toHaveLength(0);
+        });
+
+        it('getRawTools still returns all tools after updateAllowedTools', async () => {
+            const bridge = new McpBridge(stdioConfig);
+            await bridge.connect();
+            bridge.updateAllowedTools([]);
+            expect(bridge.getRawTools()).toHaveLength(2);
         });
     });
 });

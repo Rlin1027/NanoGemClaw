@@ -305,9 +305,15 @@ export async function editMessageText(
   try {
     await bot.api.editMessageText(chatId, messageId, text, options as any);
   } catch (err) {
-    logger.error(
-      { chatId, messageId, err: formatError(err) },
-      'Failed to edit message',
-    );
+    // Suppress "message is not modified" — harmless duplicate edit
+    const errMsg = err instanceof Error ? err.message : String(err);
+    if (errMsg.includes('message is not modified')) {
+      logger.debug({ chatId, messageId }, 'Edit skipped: message unchanged');
+    } else {
+      logger.error(
+        { chatId, messageId, err: formatError(err) },
+        'Failed to edit message',
+      );
+    }
   }
 }

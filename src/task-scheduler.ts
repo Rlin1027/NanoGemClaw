@@ -21,11 +21,16 @@ import {
   logTaskRun,
   updateTaskAfterRun,
 } from './db.js';
-// Task scheduler: tasks always use container path (free)
 import { readGroupGeminiMd } from './group-manager.js';
 import { logger } from './logger.js';
 import { isMaintenanceMode } from './maintenance.js';
 import { getEventBus } from '@nanogemclaw/event-bus';
+import {
+  isFastPathEligible,
+  runFastPath,
+  resolvePreferredPath,
+} from './fast-path.js';
+import { getEffectiveSystemPrompt } from './personas.js';
 import { RegisteredGroup, ScheduledTask } from './types.js';
 
 export interface SchedulerDependencies {
@@ -131,25 +136,62 @@ async function runTask(
     });
     const enrichedPrompt = `[Current time: ${timeStr}]\n[This is an automated scheduled task. Respond with text directly.]\n\n${task.prompt}`;
 
-    // Scheduled tasks always use container path (free, no API cost)
     let output: ContainerOutput;
     const effectiveChatJid = chatJid || task.chat_jid;
 
-    logger.info(
-      { taskId: task.id, group: task.group_folder },
-      'Scheduled task using container path (default for tasks)',
-    );
+    // Try fast path if group prefers it or container is unavailable
+    const prefersFast = resolvePreferredPath(group) === 'fast';
 
-    output = await runContainerAgent(group, {
-      prompt: enrichedPrompt,
-      sessionId,
-      groupFolder: task.group_folder,
-      chatJid: effectiveChatJid,
-      isMain,
-      isScheduledTask: true,
-      systemPrompt: geminiMdContent || group.systemPrompt,
-      enableWebSearch: group.enableWebSearch ?? true,
-    });
+    if (prefersFast && isFastPathEligible(group, false)) {
+      logger.info(
+        { taskId: task.id, group: task.group_folder },
+        'Scheduled task using fast path',
+      );
+
+      const systemPrompt = getEffectiveSystemPrompt(
+        geminiMdContent || group.systemPrompt,
+        group.persona,
+      );
+
+      output = await runFastPath(
+        group,
+        {
+          prompt: enrichedPrompt,
+          groupFolder: task.group_folder,
+          chatJid: effectiveChatJid,
+          isMain,
+          isAdmin: false,
+          systemPrompt,
+          enableWebSearch: group.enableWebSearch ?? true,
+          disableFunctionCalling: true,
+          conversationHistory: [],
+        },
+        {
+          sourceGroup: task.group_folder,
+          isMain,
+          isAdmin: false,
+          registeredGroups: deps.registeredGroups(),
+          sendMessage: deps.sendMessage,
+        },
+      );
+    } else {
+      // Container path (default fallback)
+      logger.info(
+        { taskId: task.id, group: task.group_folder },
+        'Scheduled task using container path',
+      );
+
+      output = await runContainerAgent(group, {
+        prompt: enrichedPrompt,
+        sessionId,
+        groupFolder: task.group_folder,
+        chatJid: effectiveChatJid,
+        isMain,
+        isScheduledTask: true,
+        systemPrompt: geminiMdContent || group.systemPrompt,
+        enableWebSearch: group.enableWebSearch ?? true,
+      });
+    }
 
     if (output.status === 'error') {
       error = output.error || 'Unknown error';

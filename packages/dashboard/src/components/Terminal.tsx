@@ -63,14 +63,14 @@ export function Terminal({ logs, isLoading, className, autoScroll = true }: Term
         term.loadAddon(webLinksAddon);
 
         term.open(containerRef.current);
-        fitAddon.fit();
+        try { fitAddon.fit(); } catch { /* container may not be visible yet */ }
 
         terminalRef.current = term;
         fitAddonRef.current = fitAddon;
         prevLogsLengthRef.current = 0;
 
         // Handle resize
-        const handleResize = () => fitAddon.fit();
+        const handleResize = () => { try { fitAddon.fit(); } catch { /* ignore */ } };
         window.addEventListener('resize', handleResize);
 
         return () => {

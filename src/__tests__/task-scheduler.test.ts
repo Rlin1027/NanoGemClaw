@@ -14,6 +14,7 @@ const {
   mockLogger,
   mockIsFastPathEligible,
   mockRunFastPath,
+  mockResolvePreferredPath,
   mockReadGroupGeminiMd,
   mockGetEffectiveSystemPrompt,
 } = vi.hoisted(() => {
@@ -36,6 +37,7 @@ const {
     },
     mockIsFastPathEligible: vi.fn(),
     mockRunFastPath: vi.fn(),
+    mockResolvePreferredPath: vi.fn().mockReturnValue('container'),
     mockReadGroupGeminiMd: vi.fn(),
     mockGetEffectiveSystemPrompt: vi.fn(),
   };
@@ -65,6 +67,7 @@ vi.mock('../maintenance.js', () => ({
 vi.mock('../fast-path.js', () => ({
   isFastPathEligible: mockIsFastPathEligible,
   runFastPath: mockRunFastPath,
+  resolvePreferredPath: mockResolvePreferredPath,
 }));
 
 vi.mock('../group-manager.js', () => ({
@@ -152,6 +155,7 @@ describe('task-scheduler', () => {
     });
 
     // Default: use container path (fast path disabled)
+    mockResolvePreferredPath.mockReturnValue('container');
     mockIsFastPathEligible.mockReturnValue(false);
     mockRunFastPath.mockResolvedValue({
       status: 'success',

@@ -260,6 +260,21 @@ export class McpBridge {
     }
 
     /**
+     * Returns all tools discovered from the MCP server, regardless of whitelist.
+     */
+    getRawTools(): { name: string; description?: string }[] {
+        return this.mcpTools.map((t) => ({ name: t.name, description: t.description }));
+    }
+
+    /**
+     * Update the allowed tools whitelist. Triggers declaration cache invalidation.
+     */
+    updateAllowedTools(allowedTools: string[]): void {
+        this.config = { ...this.config, allowedTools };
+        import(GEMINI_TOOLS_PATH).then((m) => m.clearDeclarationCache()).catch(() => {});
+    }
+
+    /**
      * Returns Gemini-compatible tool declarations.
      * Each execute() is a closure capturing this bridge instance.
      */
@@ -268,9 +283,11 @@ export class McpBridge {
             return [];
         }
 
+        const allowed = new Set(this.config.allowedTools ?? []);
+        const visibleTools = this.mcpTools.filter((t) => allowed.has(t.name));
         const bridge = this;
 
-        return this.mcpTools.map((mcpTool) => {
+        return visibleTools.map((mcpTool) => {
             const prefixedName = `mcp_${bridge.config.id}_${mcpTool.name}`;
 
             return {

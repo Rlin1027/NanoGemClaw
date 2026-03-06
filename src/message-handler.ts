@@ -110,7 +110,8 @@ export async function processMessage(msg: Message): Promise<void> {
     msg.video ||
     msg.document
   );
-  const needsTrigger = !isMainGroup && group.requireTrigger !== false;
+  const needsTrigger =
+    !isMainGroup && !isAdminChat && group.requireTrigger !== false;
   if (
     needsTrigger &&
     !isBotCommand &&
@@ -252,6 +253,17 @@ export async function processMessage(msg: Message): Promise<void> {
           return;
         }
         content = `[Voice message transcription: "${transcription}"]\n${content}`;
+        // Store transcription in DB so getMessagesSince() includes it in the prompt
+        storeMessage(
+          msg.message_id.toString(),
+          chatId,
+          msg.from?.first_name || msg.from?.username || 'Unknown',
+          msg.from?.first_name || msg.from?.username || 'Unknown',
+          content,
+          new Date(msg.date * 1000).toISOString(),
+          false,
+          threadIdStr ?? null,
+        );
         mediaPath = null; // Transcription captured; audio file no longer needed for routing
       } else {
         content = `[Media: ${mediaInfo.type} at ${containerMediaPath}]\n${content}`;
