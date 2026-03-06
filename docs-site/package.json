@@ -1,0 +1,14 @@
+{
+  "name": "@nanogemclaw/docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "docs:dev": "vitepress dev --port 5174",
+    "docs:build": "vitepress build",
+    "docs:preview": "vitepress preview --port 5174"
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.0",
+    "vue": "^3.5.0"
+  }
+}
