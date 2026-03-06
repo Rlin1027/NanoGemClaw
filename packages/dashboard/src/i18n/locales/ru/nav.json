@@ -15,5 +15,7 @@
   "dashboard": "Панель управления",
   "realTimeCommandCenter": "Центр управления в реальном времени",
   "activityLogs": "Журнал активности",
-  "schedule": "Расписание"
+  "schedule": "Расписание",
+  "mcp": "MCP Серверы",
+  "toolCalls": "Вызовы инструментов"
 }

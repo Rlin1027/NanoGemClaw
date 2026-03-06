@@ -15,5 +15,7 @@
   "dashboard": "Panel",
   "realTimeCommandCenter": "Centro de Comando en Tiempo Real",
   "activityLogs": "Registro de Actividad",
-  "schedule": "Horario"
+  "schedule": "Horario",
+  "mcp": "Servidores MCP",
+  "toolCalls": "Llamadas de Herramientas"
 }

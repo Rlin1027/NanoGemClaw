@@ -15,5 +15,7 @@
   "dashboard": "ダッシュボード",
   "realTimeCommandCenter": "リアルタイムコマンドセンター",
   "activityLogs": "アクティビティログ",
-  "schedule": "スケジュール"
+  "schedule": "スケジュール",
+  "mcp": "MCP サーバー",
+  "toolCalls": "ツール呼び出し"
 }

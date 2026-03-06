@@ -15,5 +15,7 @@
   "dashboard": "Painel",
   "realTimeCommandCenter": "Central de Comando em Tempo Real",
   "activityLogs": "Registro de Atividades",
-  "schedule": "Agenda"
+  "schedule": "Agenda",
+  "mcp": "Servidores MCP",
+  "toolCalls": "Chamadas de Ferramentas"
 }

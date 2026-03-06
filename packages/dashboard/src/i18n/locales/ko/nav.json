@@ -15,5 +15,7 @@
   "dashboard": "대시보드",
   "realTimeCommandCenter": "실시간 커맨드 센터",
   "activityLogs": "활동 로그",
-  "schedule": "주간 일정"
+  "schedule": "주간 일정",
+  "mcp": "MCP 서버",
+  "toolCalls": "도구 호출"
 }
