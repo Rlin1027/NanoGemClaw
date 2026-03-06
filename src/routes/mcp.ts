@@ -3,34 +3,36 @@ import { z } from 'zod';
 
 const SERVER_ID_RE = /^[a-z0-9_]+$/;
 
-const McpServerConfigSchema = z.object({
-  id: z.string().regex(SERVER_ID_RE, 'Server ID must match /^[a-z0-9_]+$/'),
-  name: z.string().min(1),
-  transport: z.enum(['stdio', 'sse']),
-  command: z.string().optional(),
-  args: z.array(z.string()).optional(),
-  env: z.record(z.string(), z.string()).optional(),
-  url: z.string().url().optional(),
-  permission: z.enum(['main', 'any']),
-  enabled: z.boolean(),
-  timeout: z.number().positive().optional(),
-  autoReconnect: z.boolean().optional(),
-}).superRefine((data, ctx) => {
-  if (data.transport === 'stdio' && !data.command) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'stdio transport requires "command" field',
-      path: ['command'],
-    });
-  }
-  if (data.transport === 'sse' && !data.url) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'sse transport requires "url" field',
-      path: ['url'],
-    });
-  }
-});
+const McpServerConfigSchema = z
+  .object({
+    id: z.string().regex(SERVER_ID_RE, 'Server ID must match /^[a-z0-9_]+$/'),
+    name: z.string().min(1),
+    transport: z.enum(['stdio', 'sse']),
+    command: z.string().optional(),
+    args: z.array(z.string()).optional(),
+    env: z.record(z.string(), z.string()).optional(),
+    url: z.string().url().optional(),
+    permission: z.enum(['main', 'any']),
+    enabled: z.boolean(),
+    timeout: z.number().positive().optional(),
+    autoReconnect: z.boolean().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.transport === 'stdio' && !data.command) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'stdio transport requires "command" field',
+        path: ['command'],
+      });
+    }
+    if (data.transport === 'sse' && !data.url) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'sse transport requires "url" field',
+        path: ['url'],
+      });
+    }
+  });
 
 /** Serialized MCP server info for API responses */
 interface McpServerInfo {
@@ -44,7 +46,13 @@ interface McpServerInfo {
 
 /** Dependencies injected by server.ts — no direct app/ imports */
 export interface McpRouterDeps {
-  getBridges: () => Map<string, { getState(): string; getToolDeclarations(): { name: string; description: string }[] }>;
+  getBridges: () => Map<
+    string,
+    {
+      getState(): string;
+      getToolDeclarations(): { name: string; description: string }[];
+    }
+  >;
   addServer: (config: unknown) => Promise<void>;
   removeServer: (id: string) => Promise<boolean>;
   toggleServer: (id: string, enabled: boolean) => Promise<boolean>;
@@ -55,13 +63,24 @@ export interface McpRouterDeps {
 
 function serializeServer(
   config: Record<string, unknown>,
-  bridge: { getState(): string; getToolDeclarations(): { name: string; description: string }[] } | undefined,
+  bridge:
+    | {
+        getState(): string;
+        getToolDeclarations(): { name: string; description: string }[];
+      }
+    | undefined,
 ): McpServerInfo {
   const state = bridge ? bridge.getState() : 'disconnected';
   const tools = bridge
-    ? bridge.getToolDeclarations().map((t) => ({ name: t.name, description: t.description }))
+    ? bridge
+        .getToolDeclarations()
+        .map((t) => ({ name: t.name, description: t.description }))
     : [];
-  return { ...(config as object), connectionState: state, tools } as McpServerInfo;
+  return {
+    ...(config as object),
+    connectionState: state,
+    tools,
+  } as McpServerInfo;
 }
 
 export function createMcpRouter(deps: McpRouterDeps): Router {
@@ -72,7 +91,9 @@ export function createMcpRouter(deps: McpRouterDeps): Router {
     try {
       const config = deps.loadConfig();
       const bridgeMap = deps.getBridges();
-      const data = config.servers.map((s: any) => serializeServer(s, bridgeMap.get(s.id)));
+      const data = config.servers.map((s: any) =>
+        serializeServer(s, bridgeMap.get(s.id)),
+      );
       res.json({ data });
     } catch {
       res.status(500).json({ error: 'Failed to list MCP servers' });
@@ -83,21 +104,27 @@ export function createMcpRouter(deps: McpRouterDeps): Router {
   router.post('/mcp/servers', async (req, res) => {
     const parsed = McpServerConfigSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: 'Invalid server config', details: parsed.error.issues });
+      res
+        .status(400)
+        .json({ error: 'Invalid server config', details: parsed.error.issues });
       return;
     }
 
     // Check for duplicate ID
     const existing = deps.loadConfig();
     if (existing.servers.some((s: any) => s.id === parsed.data.id)) {
-      res.status(409).json({ error: `Server with id '${parsed.data.id}' already exists` });
+      res
+        .status(409)
+        .json({ error: `Server with id '${parsed.data.id}' already exists` });
       return;
     }
 
     try {
       await deps.addServer(parsed.data);
       const bridge = deps.getBridges().get(parsed.data.id);
-      res.status(201).json({ data: serializeServer(parsed.data as any, bridge) });
+      res
+        .status(201)
+        .json({ data: serializeServer(parsed.data as any, bridge) });
     } catch {
       res.status(500).json({ error: 'Failed to add MCP server' });
     }
@@ -122,7 +149,9 @@ export function createMcpRouter(deps: McpRouterDeps): Router {
     const body = { ...req.body, id };
     const parsed = McpServerConfigSchema.safeParse(body);
     if (!parsed.success) {
-      res.status(400).json({ error: 'Invalid server config', details: parsed.error.issues });
+      res
+        .status(400)
+        .json({ error: 'Invalid server config', details: parsed.error.issues });
       return;
     }
 

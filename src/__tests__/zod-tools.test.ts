@@ -32,7 +32,9 @@ describe('validateToolInput', () => {
         name: z.string(),
       });
 
-      const result = validateToolInput(schema, { name: 123 as unknown as string });
+      const result = validateToolInput(schema, {
+        name: 123 as unknown as string,
+      });
       expect(result.valid).toBe(false);
       expect(result.error).toBeDefined();
       expect(typeof result.error).toBe('string');
@@ -205,14 +207,18 @@ describe('zodToGeminiParameters', () => {
     });
     const result = zodToGeminiParameters(schema);
     expect(result?.required).toEqual(['required']);
-    expect(Object.keys((result?.properties as Record<string, unknown>) ?? {})).toContain('optional');
+    expect(
+      Object.keys((result?.properties as Record<string, unknown>) ?? {}),
+    ).toContain('optional');
   });
 
   it('adds nullable: true for z.nullable fields', async () => {
     const { z } = await import('zod');
     const schema = z.object({ value: z.string().nullable() });
     const result = zodToGeminiParameters(schema);
-    expect((result?.properties as Record<string, unknown>)?.value).toMatchObject({
+    expect(
+      (result?.properties as Record<string, unknown>)?.value,
+    ).toMatchObject({
       type: 'STRING',
       nullable: true,
     });

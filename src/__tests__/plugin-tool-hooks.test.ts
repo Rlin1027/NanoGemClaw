@@ -36,7 +36,9 @@ import type {
 // Helpers
 // ============================================================================
 
-function makeCtx(overrides?: Partial<ToolCallHookContext>): ToolCallHookContext {
+function makeCtx(
+  overrides?: Partial<ToolCallHookContext>,
+): ToolCallHookContext {
   return {
     toolName: 'test_tool',
     args: { foo: 'bar' },
@@ -70,7 +72,9 @@ describe('beforeToolCall hook pipeline', () => {
   it('returns null when all hooks return void/undefined', async () => {
     const hooks: BeforeToolCallHook[] = [
       async () => undefined,
-      async () => { /* pass */ },
+      async () => {
+        /* pass */
+      },
     ];
     const runHooks = async (ctx: ToolCallHookContext) => {
       for (const hook of hooks) {
@@ -122,7 +126,9 @@ describe('beforeToolCall hook pipeline', () => {
   it('propagates errors (broken gate = closed)', async () => {
     const error = new Error('hook failure');
     const hooks: BeforeToolCallHook[] = [
-      async () => { throw error; },
+      async () => {
+        throw error;
+      },
     ];
     const runHooks = async (ctx: ToolCallHookContext) => {
       for (const hook of hooks) {
@@ -138,9 +144,15 @@ describe('beforeToolCall hook pipeline', () => {
   it('runs hooks in registration order', async () => {
     const order: number[] = [];
     const hooks: BeforeToolCallHook[] = [
-      async () => { order.push(1); },
-      async () => { order.push(2); },
-      async () => { order.push(3); },
+      async () => {
+        order.push(1);
+      },
+      async () => {
+        order.push(2);
+      },
+      async () => {
+        order.push(3);
+      },
     ];
     const runHooks = async (ctx: ToolCallHookContext) => {
       for (const hook of hooks) {
@@ -159,7 +171,11 @@ describe('afterToolCall hook pipeline', () => {
   type AfterCtx = ToolCallHookContext & { result: Record<string, unknown> };
 
   function makeAfterCtx(overrides?: Partial<AfterCtx>): AfterCtx {
-    return { ...makeCtx(), result: { success: true, data: 'original' }, ...overrides };
+    return {
+      ...makeCtx(),
+      result: { success: true, data: 'original' },
+      ...overrides,
+    };
   }
 
   it('returns null when no hooks are registered', async () => {
@@ -170,8 +186,13 @@ describe('afterToolCall hook pipeline', () => {
       for (const hook of hooks) {
         try {
           const r = await hook({ ...ctx, result: current });
-          if (r && 'modifiedResult' in r) { current = r.modifiedResult; modified = true; }
-        } catch (err) { /* swallow */ }
+          if (r && 'modifiedResult' in r) {
+            current = r.modifiedResult;
+            modified = true;
+          }
+        } catch (err) {
+          /* swallow */
+        }
       }
       return modified ? current : null;
     };
@@ -191,8 +212,13 @@ describe('afterToolCall hook pipeline', () => {
       for (const hook of hooks) {
         try {
           const r = await hook({ ...ctx, result: current });
-          if (r && 'modifiedResult' in r) { current = r.modifiedResult; modified = true; }
-        } catch (err) { /* swallow */ }
+          if (r && 'modifiedResult' in r) {
+            current = r.modifiedResult;
+            modified = true;
+          }
+        } catch (err) {
+          /* swallow */
+        }
       }
       return modified ? current : null;
     };
@@ -212,20 +238,32 @@ describe('afterToolCall hook pipeline', () => {
       for (const hook of hooks) {
         try {
           const r = await hook({ ...ctx, result: current });
-          if (r && 'modifiedResult' in r) { current = r.modifiedResult; modified = true; }
-        } catch (err) { /* swallow */ }
+          if (r && 'modifiedResult' in r) {
+            current = r.modifiedResult;
+            modified = true;
+          }
+        } catch (err) {
+          /* swallow */
+        }
       }
       return modified ? current : null;
     };
 
     const result = await runHooks(makeAfterCtx());
-    expect(result).toMatchObject({ success: true, data: 'original', step1: true, step2: true });
+    expect(result).toMatchObject({
+      success: true,
+      data: 'original',
+      step1: true,
+      step2: true,
+    });
   });
 
   it('swallows errors from hooks and preserves the result', async () => {
     const afterHookErrors: unknown[] = [];
     const hooks: AfterToolCallHook[] = [
-      async () => { throw new Error('after hook error'); },
+      async () => {
+        throw new Error('after hook error');
+      },
     ];
     const runHooks = async (ctx: AfterCtx) => {
       let current = ctx.result;
@@ -233,8 +271,13 @@ describe('afterToolCall hook pipeline', () => {
       for (const hook of hooks) {
         try {
           const r = await hook({ ...ctx, result: current });
-          if (r && 'modifiedResult' in r) { current = r.modifiedResult; modified = true; }
-        } catch (err) { afterHookErrors.push(err); }
+          if (r && 'modifiedResult' in r) {
+            current = r.modifiedResult;
+            modified = true;
+          }
+        } catch (err) {
+          afterHookErrors.push(err);
+        }
       }
       return modified ? current : null;
     };
@@ -248,7 +291,9 @@ describe('afterToolCall hook pipeline', () => {
   it('preserves original result if hook after an error does not modify', async () => {
     const passHook = vi.fn(async () => undefined);
     const hooks: AfterToolCallHook[] = [
-      async () => { throw new Error('oops'); },
+      async () => {
+        throw new Error('oops');
+      },
       passHook,
     ];
     const runHooks = async (ctx: AfterCtx) => {
@@ -257,8 +302,13 @@ describe('afterToolCall hook pipeline', () => {
       for (const hook of hooks) {
         try {
           const r = await hook({ ...ctx, result: current });
-          if (r && 'modifiedResult' in r) { current = r.modifiedResult; modified = true; }
-        } catch { /* swallow */ }
+          if (r && 'modifiedResult' in r) {
+            current = r.modifiedResult;
+            modified = true;
+          }
+        } catch {
+          /* swallow */
+        }
       }
       return modified ? current : null;
     };
@@ -307,7 +357,9 @@ describe('registerInternalPlugin integration', () => {
       version: '1.0.0',
       builtin: true as const,
       hooks: {
-        beforeToolCall: async () => { order.push('builtin'); },
+        beforeToolCall: async () => {
+          order.push('builtin');
+        },
       },
     });
 

@@ -3,7 +3,7 @@
  * Media handling, admin commands, agent execution, and response parsing
  * are delegated to their respective modules.
  */
-import TelegramBot from 'node-telegram-bot-api';
+import type { Message } from 'grammy/types';
 import path from 'path';
 
 import { ASSISTANT_NAME, TRIGGER_PATTERN } from './config.js';
@@ -21,6 +21,7 @@ import {
   sendMessageWithButtons,
   storeSuggestion,
   setTyping,
+  editMessageText,
   QuickReplyButton,
 } from './telegram-helpers.js';
 import { formatError } from './utils.js';
@@ -40,7 +41,7 @@ export { startMediaCleanupScheduler } from './media-handler.js';
  * Process an incoming message.
  * Concurrency is handled at the container level (container-runner.ts).
  */
-export async function processMessage(msg: TelegramBot.Message): Promise<void> {
+export async function processMessage(msg: Message): Promise<void> {
   const chatId = msg.chat.id.toString();
   const registeredGroups = getRegisteredGroups();
   const group = registeredGroups[chatId];
@@ -56,8 +57,8 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
   if (isMaintenanceMode()) {
     const { tf: i18nTf, getGroupLang: i18nGetGroupLang } =
       await import('./i18n/index.js');
-    await bot.sendMessage(
-      parseInt(chatId),
+    await bot.api.sendMessage(
+      chatId,
       i18nTf('maintenanceMode', undefined, i18nGetGroupLang(group.folder)),
       { ...(threadIdNum ? { message_thread_id: threadIdNum } : {}) },
     );
@@ -180,12 +181,12 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
   // Handle media with progress updates
   const mediaInfo = extractMediaInfo(msg);
   let mediaPath: string | null = null;
-  let statusMsg: TelegramBot.Message | null = null;
+  let statusMsg: Message | null = null;
 
   const groupLang = getGroupLang(group.folder);
 
   // Send status message for processing requests
-  statusMsg = await bot.sendMessage(
+  statusMsg = await bot.api.sendMessage(
     chatId,
     `⏳ ${tf('processing', undefined, groupLang)}...`,
     {
@@ -195,12 +196,10 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
   );
 
   if (mediaInfo) {
-    await bot.editMessageText(
+    await editMessageText(
+      chatId,
+      statusMsg.message_id,
       `📥 ${tf('downloadingMedia', undefined, groupLang)}...`,
-      {
-        chat_id: chatId,
-        message_id: statusMsg.message_id,
-      },
     );
 
     mediaPath = await downloadMedia(
@@ -215,22 +214,18 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
       if (mediaInfo.type === 'voice') {
         // Check voice duration (Telegram provides this in msg.voice.duration)
         if (msg.voice?.duration && msg.voice.duration > 300) {
-          await bot.editMessageText(
+          await editMessageText(
+            chatId,
+            statusMsg.message_id,
             `⚠️ ${tf('stt_too_long', undefined, groupLang)}`,
-            {
-              chat_id: chatId,
-              message_id: statusMsg.message_id,
-            },
           );
           return;
         }
 
-        await bot.editMessageText(
+        await editMessageText(
+          chatId,
+          statusMsg.message_id,
           `🧠 ${tf('transcribing', undefined, groupLang)}...`,
-          {
-            chat_id: chatId,
-            message_id: statusMsg.message_id,
-          },
         );
 
         const { transcribeAudio } = await import('./stt.js');
@@ -248,12 +243,10 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
             'Voice message transcribed',
           );
         } catch (err) {
-          await bot.editMessageText(
+          await editMessageText(
+            chatId,
+            statusMsg.message_id,
             `❌ ${tf('stt_error', undefined, groupLang)}`,
-            {
-              chat_id: chatId,
-              message_id: statusMsg.message_id,
-            },
           );
           logger.error({ err, chatId }, 'Voice transcription failed');
           return;
@@ -266,10 +259,11 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
     }
   }
 
-  await bot.editMessageText(`🤖 ${tf('thinking', undefined, groupLang)}...`, {
-    chat_id: chatId,
-    message_id: statusMsg.message_id,
-  });
+  await editMessageText(
+    chatId,
+    statusMsg.message_id,
+    `🤖 ${tf('thinking', undefined, groupLang)}...`,
+  );
 
   // Get all messages since last agent interaction
   const lastAgentTimestamp = getLastAgentTimestamp();
@@ -369,8 +363,8 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
 
       // Clean up status message
       if (statusMsg) {
-        await bot
-          .deleteMessage(parseInt(chatId), statusMsg.message_id)
+        await bot.api
+          .deleteMessage(chatId, statusMsg.message_id)
           .catch(() => {});
       }
 
@@ -437,9 +431,7 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
       } catch {}
     } else if (ipcAlreadySent && statusMsg) {
       // IPC handled the response; just clean up status message
-      await bot
-        .deleteMessage(parseInt(chatId), statusMsg.message_id)
-        .catch(() => {});
+      await bot.api.deleteMessage(chatId, statusMsg.message_id).catch(() => {});
     } else if (statusMsg) {
       // Run plugin onMessageError hooks
       try {
@@ -453,17 +445,18 @@ export async function processMessage(msg: TelegramBot.Message): Promise<void> {
       } catch {}
 
       // If no response, update status message to error with retry button
-      await bot
-        .editMessageText(`❌ ${tf('errorOccurred', undefined, groupLang)}`, {
-          chat_id: parseInt(chatId),
-          message_id: statusMsg.message_id,
+      await editMessageText(
+        chatId,
+        statusMsg.message_id,
+        `❌ ${tf('errorOccurred', undefined, groupLang)}`,
+        {
           reply_markup: {
             inline_keyboard: [
               [{ text: '🔄 Retry', callback_data: `retry:${msg.message_id}` }],
             ],
           },
-        })
-        .catch(() => {});
+        },
+      );
     }
   } finally {
     await setTyping(chatId, false, threadIdNum);

@@ -10,7 +10,7 @@
  * 3. Copy the token and set TELEGRAM_BOT_TOKEN in your .env file
  */
 import 'dotenv/config';
-import TelegramBot from 'node-telegram-bot-api';
+import { Bot } from 'grammy';
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -50,9 +50,9 @@ if (!token) {
 
 console.log('Verifying Telegram bot token...\n');
 
-const bot = new TelegramBot(token, { polling: false });
+const bot = new Bot(token);
 
-bot
+bot.api
   .getMe()
   .then((me) => {
     console.log(
@@ -89,7 +89,7 @@ bot
     );
     process.exit(0);
   })
-  .catch((err) => {
+  .catch((err: Error) => {
     console.error(
       '╔══════════════════════════════════════════════════════════════╗',
     );

@@ -108,7 +108,10 @@ describe('validateToolInput integration', () => {
       country: z.string(),
     });
 
-    const valid = validateToolInput(schema, { city: 'Tokyo', country: 'Japan' });
+    const valid = validateToolInput(schema, {
+      city: 'Tokyo',
+      country: 'Japan',
+    });
     expect(valid.valid).toBe(true);
     expect(valid.data).toEqual({ city: 'Tokyo', country: 'Japan' });
 
@@ -125,7 +128,11 @@ describe('validateToolInput integration', () => {
 
     const result = validateToolInput(schema, { tags: 'a, b, c' });
     expect(result.valid).toBe(true);
-    expect((result.data as Record<string, unknown>).tags).toEqual(['a', 'b', 'c']);
+    expect((result.data as Record<string, unknown>).tags).toEqual([
+      'a',
+      'b',
+      'c',
+    ]);
   });
 
   it('passes through gracefully when no .parse method exists', () => {
@@ -187,14 +194,23 @@ describe('McpBridge execute() closure when disconnected', () => {
     // Mock MCP SDK
     vi.doMock('@modelcontextprotocol/sdk/client/index.js', () => ({
       Client: function () {
-        return { connect: vi.fn(), close: vi.fn(), listTools: vi.fn(), callTool: vi.fn() };
+        return {
+          connect: vi.fn(),
+          close: vi.fn(),
+          listTools: vi.fn(),
+          callTool: vi.fn(),
+        };
       },
     }));
     vi.doMock('@modelcontextprotocol/sdk/client/stdio.js', () => ({
-      StdioClientTransport: function () { return { pid: 99999 }; },
+      StdioClientTransport: function () {
+        return { pid: 99999 };
+      },
     }));
     vi.doMock('@modelcontextprotocol/sdk/client/sse.js', () => ({
-      SSEClientTransport: function () { return {}; },
+      SSEClientTransport: function () {
+        return {};
+      },
     }));
     vi.doMock('@nanogemclaw/core', () => ({
       logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -251,9 +267,13 @@ describe('inputSchemaRegistry coherence', () => {
 
   it('registerInputSchema accepts any object with .parse()', () => {
     const customSchema = {
-      parse(data: unknown) { return data; },
+      parse(data: unknown) {
+        return data;
+      },
     };
-    expect(() => registerInputSchema('custom_tool', customSchema)).not.toThrow();
+    expect(() =>
+      registerInputSchema('custom_tool', customSchema),
+    ).not.toThrow();
   });
 
   it('clearInputSchemaRegistry resets registry without error', () => {

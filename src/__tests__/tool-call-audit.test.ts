@@ -15,8 +15,12 @@ const mockGetToolCallStats = vi.hoisted(() =>
     by_tool: [],
   }),
 );
-const mockRunBeforeToolCallHooks = vi.hoisted(() => vi.fn().mockResolvedValue(null));
-const mockRunAfterToolCallHooks = vi.hoisted(() => vi.fn().mockResolvedValue(null));
+const mockRunBeforeToolCallHooks = vi.hoisted(() =>
+  vi.fn().mockResolvedValue(null),
+);
+const mockRunAfterToolCallHooks = vi.hoisted(() =>
+  vi.fn().mockResolvedValue(null),
+);
 
 vi.mock('../db.js', () => ({
   insertToolCallLog: mockInsertToolCallLog,
@@ -79,7 +83,13 @@ describe('tool call audit', () => {
       const { executeFunctionCall } = await import('../gemini-tools.js');
       const context = { isMain: true, bot: null, registerGroup: null };
 
-      await executeFunctionCall('list_tasks', {}, context as any, 'main', '-100123');
+      await executeFunctionCall(
+        'list_tasks',
+        {},
+        context as any,
+        'main',
+        '-100123',
+      );
 
       expect(mockInsertToolCallLog).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -97,7 +107,13 @@ describe('tool call audit', () => {
       const { executeFunctionCall } = await import('../gemini-tools.js');
       const context = { isMain: true, bot: null, registerGroup: null };
 
-      const result = await executeFunctionCall('list_tasks', {}, context as any, 'main', '-100123');
+      const result = await executeFunctionCall(
+        'list_tasks',
+        {},
+        context as any,
+        'main',
+        '-100123',
+      );
 
       expect(result.response).toMatchObject({ success: false });
       expect(mockInsertToolCallLog).toHaveBeenCalledWith(
@@ -112,7 +128,13 @@ describe('tool call audit', () => {
       const { executeFunctionCall } = await import('../gemini-tools.js');
       const context = { isMain: true, bot: null, registerGroup: null };
 
-      await executeFunctionCall('list_tasks', {}, context as any, 'main', '-100123');
+      await executeFunctionCall(
+        'list_tasks',
+        {},
+        context as any,
+        'main',
+        '-100123',
+      );
 
       const call = mockInsertToolCallLog.mock.calls[0][0];
       expect(typeof call.duration_ms).toBe('number');
@@ -122,9 +144,18 @@ describe('tool call audit', () => {
     it('redacts sensitive args in args_summary', async () => {
       const { executeFunctionCall } = await import('../gemini-tools.js');
       const context = { isMain: true, bot: null, registerGroup: null };
-      const sensitiveArgs = { api_key: 'sk-super-secret-token', prompt: 'hello' };
+      const sensitiveArgs = {
+        api_key: 'sk-super-secret-token',
+        prompt: 'hello',
+      };
 
-      await executeFunctionCall('list_tasks', sensitiveArgs, context as any, 'main', '-100123');
+      await executeFunctionCall(
+        'list_tasks',
+        sensitiveArgs,
+        context as any,
+        'main',
+        '-100123',
+      );
 
       const call = mockInsertToolCallLog.mock.calls[0][0];
       expect(call.args_summary).not.toContain('sk-super-secret-token');
@@ -135,7 +166,13 @@ describe('tool call audit', () => {
       const context = { isMain: true, bot: null, registerGroup: null };
       const longArgs = { prompt: 'x'.repeat(500) };
 
-      await executeFunctionCall('list_tasks', longArgs, context as any, 'main', '-100123');
+      await executeFunctionCall(
+        'list_tasks',
+        longArgs,
+        context as any,
+        'main',
+        '-100123',
+      );
 
       const call = mockInsertToolCallLog.mock.calls[0][0];
       expect(call.args_summary!.length).toBeLessThanOrEqual(202); // 200 + '…'

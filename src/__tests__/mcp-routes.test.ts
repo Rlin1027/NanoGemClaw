@@ -5,7 +5,10 @@ import { createMcpRouter } from '../routes/mcp.js';
 import type { McpRouterDeps } from '../routes/mcp.js';
 
 // Minimal bridge mock
-function makeBridge(state: string = 'connected', tools: { name: string; description: string }[] = []) {
+function makeBridge(
+  state: string = 'connected',
+  tools: { name: string; description: string }[] = [],
+) {
   return {
     getState: vi.fn(() => state),
     getToolDeclarations: vi.fn(() => tools),
@@ -51,7 +54,9 @@ describe('MCP Routes', () => {
       toggleServer: vi.fn(async () => true),
       reconnectServer: vi.fn(async () => {}),
       loadConfig: vi.fn(() => ({ ...config })),
-      saveConfig: vi.fn((c: any) => { config = c; }),
+      saveConfig: vi.fn((c: any) => {
+        config = c;
+      }),
     };
   });
 
@@ -69,7 +74,12 @@ describe('MCP Routes', () => {
     });
 
     it('returns connected state and tools when bridge exists', async () => {
-      bridgeMap.set('test_server', makeBridge('connected', [{ name: 'mcp_test_server_foo', description: 'Foo tool' }]));
+      bridgeMap.set(
+        'test_server',
+        makeBridge('connected', [
+          { name: 'mcp_test_server_foo', description: 'Foo tool' },
+        ]),
+      );
       const app = makeApp(deps);
       const res = await request(app).get('/api/mcp/servers');
       expect(res.status).toBe(200);
@@ -97,7 +107,9 @@ describe('MCP Routes', () => {
       const res = await request(app).post('/api/mcp/servers').send(newServer);
       expect(res.status).toBe(201);
       expect(res.body.data.id).toBe('new_server');
-      expect(deps.addServer).toHaveBeenCalledWith(expect.objectContaining({ id: 'new_server' }));
+      expect(deps.addServer).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'new_server' }),
+      );
     });
 
     it('returns 400 for invalid config (missing command for stdio)', async () => {
@@ -129,7 +141,9 @@ describe('MCP Routes', () => {
 
     it('returns 409 for duplicate server ID', async () => {
       const app = makeApp(deps);
-      const res = await request(app).post('/api/mcp/servers').send({ ...baseServer });
+      const res = await request(app)
+        .post('/api/mcp/servers')
+        .send({ ...baseServer });
       expect(res.status).toBe(409);
       expect(res.body.error).toMatch(/already exists/i);
     });
@@ -218,7 +232,9 @@ describe('MCP Routes', () => {
   describe('POST /api/mcp/servers/:id/reconnect', () => {
     it('reconnects existing server and returns updated state', async () => {
       const app = makeApp(deps);
-      const res = await request(app).post('/api/mcp/servers/test_server/reconnect');
+      const res = await request(app).post(
+        '/api/mcp/servers/test_server/reconnect',
+      );
       expect(res.status).toBe(200);
       expect(res.body.data.id).toBe('test_server');
       expect(deps.reconnectServer).toHaveBeenCalledWith('test_server');
@@ -227,13 +243,17 @@ describe('MCP Routes', () => {
     it('returns 404 for unknown server', async () => {
       (deps.loadConfig as any).mockReturnValue({ servers: [] });
       const app = makeApp(deps);
-      const res = await request(app).post('/api/mcp/servers/unknown_server/reconnect');
+      const res = await request(app).post(
+        '/api/mcp/servers/unknown_server/reconnect',
+      );
       expect(res.status).toBe(404);
     });
 
     it('returns 400 for invalid server ID', async () => {
       const app = makeApp(deps);
-      const res = await request(app).post('/api/mcp/servers/INVALID-ID/reconnect');
+      const res = await request(app).post(
+        '/api/mcp/servers/INVALID-ID/reconnect',
+      );
       expect(res.status).toBe(400);
     });
   });

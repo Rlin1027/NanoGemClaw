@@ -106,7 +106,7 @@ export interface IpcContext {
   registeredGroups: Record<string, RegisteredGroup>;
   sendMessage: (chatJid: string, text: string) => Promise<void>;
   registerGroup?: (chatId: string, group: RegisteredGroup) => void;
-  bot?: any; // TelegramBot instance for media sending
+  bot?: any; // grammY Bot instance for media sending
 }
 
 export interface IpcHandler {

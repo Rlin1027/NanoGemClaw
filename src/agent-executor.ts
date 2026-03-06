@@ -1,7 +1,7 @@
 /**
  * Agent Executor - Agent execution with retry logic and container/fast-path routing.
  */
-import TelegramBot from 'node-telegram-bot-api';
+import type { Message } from 'grammy/types';
 import fs from 'fs';
 import path from 'path';
 
@@ -22,7 +22,7 @@ import {
 import { getAllTasks } from './db.js';
 import { logger } from './logger.js';
 import { getBot, getRegisteredGroups, getSessions } from './state.js';
-import { sendMessage } from './telegram-helpers.js';
+import { sendMessage, editMessageText } from './telegram-helpers.js';
 import { getAvailableGroups, saveState } from './group-manager.js';
 import { RegisteredGroup } from './types.js';
 import { saveJson } from './utils.js';
@@ -63,7 +63,7 @@ export async function runAgent(
   prompt: string,
   chatId: string,
   mediaPath: string | null = null,
-  statusMsg: TelegramBot.Message | null = null,
+  statusMsg: Message | null = null,
   messageThreadId?: number | null,
 ): Promise<string | null> {
   const bot = getBot();
@@ -102,12 +102,7 @@ export async function runAgent(
         progressText = toolKey
           ? i18nTf(toolKey, undefined, groupLang)
           : i18nTf('usingTool', { toolName: info.toolName || '' }, groupLang);
-        await bot
-          .editMessageText(progressText, {
-            chat_id: chatId,
-            message_id: statusMsg.message_id,
-          })
-          .catch(() => {});
+        await editMessageText(chatId, statusMsg.message_id, progressText);
       } else if (info.type === 'message') {
         // Use streaming for long responses (>100 chars)
         if (info.contentSnapshot && info.contentSnapshot.length > 100) {
@@ -115,24 +110,18 @@ export async function runAgent(
           if (telegramRateLimiter.canEdit(chatId)) {
             const truncated = safeMarkdownTruncate(info.contentSnapshot, 4096);
             const streamingIndicator = info.isComplete ? '' : ' ⏳';
-            await bot
-              .editMessageText(`💬 ${truncated}${streamingIndicator}`, {
-                chat_id: chatId,
-                message_id: statusMsg.message_id,
-                parse_mode: 'Markdown',
-              })
-              .catch(() => {});
+            await editMessageText(
+              chatId,
+              statusMsg.message_id,
+              `💬 ${truncated}${streamingIndicator}`,
+              { parse_mode: 'Markdown' },
+            );
             telegramRateLimiter.recordEdit(chatId);
           }
         } else if (info.content || info.contentSnapshot) {
           // Short response or fallback
           progressText = i18nTf('responding', undefined, groupLang);
-          await bot
-            .editMessageText(progressText, {
-              chat_id: chatId,
-              message_id: statusMsg.message_id,
-            })
-            .catch(() => {});
+          await editMessageText(chatId, statusMsg.message_id, progressText);
         }
       }
     } catch (err) {
@@ -165,7 +154,8 @@ export async function runAgent(
     // ========================================================================
     // Fast Path: Direct Gemini API with streaming + function calling
     // ========================================================================
-    const { isFastPathEligible, runFastPath, resolvePreferredPath } = await import('./fast-path.js');
+    const { isFastPathEligible, runFastPath, resolvePreferredPath } =
+      await import('./fast-path.js');
     const hasMedia = !!mediaPath;
     const prefersFast = isAdminChat || resolvePreferredPath(group) === 'fast';
 
@@ -284,7 +274,10 @@ export async function runAgent(
     }
 
     if (!hasMedia && !prefersFast) {
-      logger.info({ group: group.name }, 'Using container path (group preferred)');
+      logger.info(
+        { group: group.name },
+        'Using container path (group preferred)',
+      );
     }
 
     // ========================================================================
@@ -324,14 +317,18 @@ export async function runAgent(
       try {
         const pluginLoaderPath = '../app/src/plugin-loader.js';
         const { dispatchPluginToolCall } = await import(pluginLoaderPath);
-        const result = await dispatchPluginToolCall('search_knowledge', { query: prompt }, {
-          groupFolder: group.folder,
-          chatJid: chatId,
-          isMain,
-          sendMessage: async (jid: string, text: string) => {
-            await sendMessage(jid, text, messageThreadId);
+        const result = await dispatchPluginToolCall(
+          'search_knowledge',
+          { query: prompt },
+          {
+            groupFolder: group.folder,
+            chatJid: chatId,
+            isMain,
+            sendMessage: async (jid: string, text: string) => {
+              await sendMessage(jid, text, messageThreadId);
+            },
           },
-        });
+        );
         if (result && typeof result === 'string' && result.length > 0) {
           knowledgeContext = result.slice(0, 8000);
           // Write RAG results as a physical file in the knowledge folder
@@ -345,12 +342,24 @@ export async function runAgent(
               knowledgeContext,
             'utf-8',
           );
-          logger.info({ group: group.name, contextLength: knowledgeContext.length }, 'RAG pre-injection: written to knowledge folder');
+          logger.info(
+            { group: group.name, contextLength: knowledgeContext.length },
+            'RAG pre-injection: written to knowledge folder',
+          );
         } else {
-          logger.debug({ group: group.name }, 'RAG pre-injection: no relevant results');
+          logger.debug(
+            { group: group.name },
+            'RAG pre-injection: no relevant results',
+          );
         }
       } catch (err) {
-        logger.warn({ group: group.name, err: err instanceof Error ? err.message : String(err) }, 'RAG pre-injection failed, proceeding without knowledge');
+        logger.warn(
+          {
+            group: group.name,
+            err: err instanceof Error ? err.message : String(err),
+          },
+          'RAG pre-injection failed, proceeding without knowledge',
+        );
       }
     }
 
@@ -426,16 +435,12 @@ export async function runAgent(
 
         // Send retry status update to chat
         try {
-          await bot
-            .sendMessage(
-              parseInt(chatId),
-              i18nTf('retrying', undefined, groupLang),
-              {
-                ...(messageThreadId
-                  ? { message_thread_id: messageThreadId }
-                  : {}),
-              },
-            )
+          await bot.api
+            .sendMessage(chatId, i18nTf('retrying', undefined, groupLang), {
+              ...(messageThreadId
+                ? { message_thread_id: messageThreadId }
+                : {}),
+            })
             .catch(() => {});
         } catch (err) {
           logger.debug({ err }, 'Retry status message error');
@@ -480,7 +485,9 @@ export async function runAgent(
     // Clean up temporary RAG file
     try {
       if (fs.existsSync(ragFilePath)) fs.unlinkSync(ragFilePath);
-    } catch { /* ignore cleanup errors */ }
+    } catch {
+      /* ignore cleanup errors */
+    }
     // Clear streaming state
     messageConsolidator.setStreaming(chatId, false, messageThreadId);
   }

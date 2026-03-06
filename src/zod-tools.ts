@@ -100,9 +100,9 @@ interface ZodDef {
   type: string;
   shape?: Record<string, ZodLike>;
   innerType?: ZodLike;
-  element?: ZodLike;          // array item
+  element?: ZodLike; // array item
   entries?: Record<string, string>; // enum entries
-  options?: unknown[];         // union options
+  options?: unknown[]; // union options
 }
 
 interface ZodLike {

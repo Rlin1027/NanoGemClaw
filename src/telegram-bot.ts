@@ -1,7 +1,8 @@
 /**
  * Telegram Bot Connection - Bot initialization, event handlers, and background services.
  */
-import TelegramBot from 'node-telegram-bot-api';
+import { Bot } from 'grammy';
+import type { Message } from 'grammy/types';
 
 import {
   ADMIN_PRIVATE_FOLDER,
@@ -48,7 +49,7 @@ export async function connectTelegram(): Promise<void> {
     process.exit(1);
   }
 
-  const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
+  const bot = new Bot(TELEGRAM_BOT_TOKEN);
   setBot(bot);
 
   // Warn if auto-detect mode is armed
@@ -89,7 +90,7 @@ export async function connectTelegram(): Promise<void> {
           ? { message_thread_id: result.messageThreadId }
           : {}),
         ...(replyToMsg ? { reply_to_message: replyToMsg } : {}),
-      } as TelegramBot.Message;
+      } as unknown as Message;
 
       await processMessage(syntheticMsg);
       saveState();
@@ -99,7 +100,8 @@ export async function connectTelegram(): Promise<void> {
   });
 
   // Handle incoming messages
-  bot.on('message', async (msg: TelegramBot.Message) => {
+  bot.on('message', async (ctx) => {
+    const msg = ctx.message!;
     const chatId = msg.chat.id.toString();
     const content = msg.text || msg.caption || '';
     const senderId = msg.from?.id.toString() || '';
@@ -272,17 +274,18 @@ export async function connectTelegram(): Promise<void> {
   });
 
   // Handle polling errors
-  bot.on('polling_error', (err: Error) => {
+  bot.catch((err) => {
     logger.error({ err: err.message }, 'Telegram polling error');
   });
 
   // Handle inline keyboard button clicks
-  bot.on('callback_query', async (query: TelegramBot.CallbackQuery) => {
+  bot.on('callback_query:data', async (ctx) => {
+    const query = ctx.callbackQuery;
     const chatId = query.message?.chat.id.toString();
     const data = query.data;
 
     if (!chatId || !data) {
-      await bot.answerCallbackQuery(query.id);
+      await bot.api.answerCallbackQuery(query.id);
       return;
     }
 
@@ -290,7 +293,7 @@ export async function connectTelegram(): Promise<void> {
 
     try {
       // Acknowledge the button click
-      await bot.answerCallbackQuery(query.id);
+      await bot.api.answerCallbackQuery(query.id);
 
       // Try to parse as JSON payload first (new format from suggest_actions)
       let callbackPayload: { type: string; data: string } | null = null;
@@ -311,9 +314,9 @@ export async function connectTelegram(): Promise<void> {
         switch (callbackPayload.type) {
           case 'reply': {
             // Send the data as a new message (process as user message)
-            const fakeMsg: TelegramBot.Message = {
+            const fakeMsg: Message = {
               message_id: Date.now(),
-              chat: { id: parseInt(chatId), type: 'group' },
+              chat: { id: parseInt(chatId), type: 'group', title: '' },
               date: Math.floor(Date.now() / 1000),
               text: callbackPayload.data,
               from: {
@@ -328,9 +331,9 @@ export async function connectTelegram(): Promise<void> {
           }
           case 'command': {
             // Execute the data as a bot command
-            const fakeMsg: TelegramBot.Message = {
+            const fakeMsg: Message = {
               message_id: Date.now(),
-              chat: { id: parseInt(chatId), type: 'group' },
+              chat: { id: parseInt(chatId), type: 'group', title: '' },
               date: Math.floor(Date.now() / 1000),
               text: callbackPayload.data,
               from: {
@@ -403,9 +406,9 @@ export async function connectTelegram(): Promise<void> {
               threadId?.toString() ?? null,
             );
 
-            const fakeMsg: TelegramBot.Message = {
+            const fakeMsg: Message = {
               message_id: parseInt(msgId),
-              chat: { id: parseInt(chatId), type: 'group' },
+              chat: { id: parseInt(chatId), type: 'group', title: '' },
               date: Math.floor(Date.now() / 1000),
               text: fullText,
               from: {
@@ -438,7 +441,7 @@ export async function connectTelegram(): Promise<void> {
 
           // Validate originalMsgId is numeric
           if (!/^\d+$/.test(originalMsgId)) {
-            await bot.answerCallbackQuery(query.id, {
+            await bot.api.answerCallbackQuery(query.id, {
               text: 'Invalid message ID',
             });
             return;
@@ -448,7 +451,7 @@ export async function connectTelegram(): Promise<void> {
           const { getMessageById, checkRateLimit } = await import('./db.js');
           const rateCheck = checkRateLimit(`retry:${chatId}`, 5, 60000);
           if (!rateCheck.allowed) {
-            await bot.answerCallbackQuery(query.id, {
+            await bot.api.answerCallbackQuery(query.id, {
               text: 'Rate limited. Please wait.',
             });
             return;
@@ -465,9 +468,9 @@ export async function connectTelegram(): Promise<void> {
             );
 
             // Construct a skeletal Telegram message for processMessage
-            const fakeMsg: TelegramBot.Message = {
+            const fakeMsg: Message = {
               message_id: parseInt(originalMsgId),
-              chat: { id: parseInt(chatId), type: 'group' },
+              chat: { id: parseInt(chatId), type: 'group', title: '' },
               date: Math.floor(
                 new Date(originalMsg.timestamp).getTime() / 1000,
               ),
@@ -539,11 +542,12 @@ export async function connectTelegram(): Promise<void> {
   });
 
   // Get bot info
-  const me = await bot.getMe();
+  await bot.init();
+  const me = bot.botInfo;
   logger.info({ username: me.username, id: me.id }, 'Telegram bot connected');
 
   // Set bot commands for the "Menu" button
-  await bot.setMyCommands([
+  await bot.api.setMyCommands([
     { command: 'start', description: 'Start the bot and see instructions' },
     { command: 'tasks', description: 'List and manage active tasks' },
     { command: 'persona', description: 'Change the assistant personality' },
@@ -567,4 +571,11 @@ export async function connectTelegram(): Promise<void> {
   console.log(
     `  Registered groups: ${Object.keys(getRegisteredGroups()).length}\n`,
   );
+
+  // Start polling — do NOT await (resolves only when bot.stop() is called)
+  bot.start({
+    onStart: (botInfo) => {
+      logger.info({ username: botInfo.username }, 'Bot polling started');
+    },
+  });
 }

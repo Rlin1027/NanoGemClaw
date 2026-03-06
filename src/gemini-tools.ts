@@ -9,6 +9,7 @@
  * the same permission model and validation logic.
  */
 
+import { InputFile } from 'grammy';
 import type { IpcContext, ToolMetadata } from './types.js';
 import type { ToolResponse } from '@nanogemclaw/core';
 import { logger } from './logger.js';
@@ -23,7 +24,8 @@ import type { ParseableSchema } from './zod-tools.js';
 // Tool Call Audit Helpers
 // ============================================================================
 
-const SENSITIVE_KEY_RE = /^(?:api[_-]?key|token|password|secret|auth|bearer|access[_-]?key)$/i;
+const SENSITIVE_KEY_RE =
+  /^(?:api[_-]?key|token|password|secret|auth|bearer|access[_-]?key)$/i;
 
 function sanitizeArgs(args: Record<string, any>, maxLen: number): string {
   try {
@@ -33,7 +35,9 @@ function sanitizeArgs(args: Record<string, any>, maxLen: number): string {
       }
       return value;
     });
-    return redacted.length > maxLen ? redacted.slice(0, maxLen) + '…' : redacted;
+    return redacted.length > maxLen
+      ? redacted.slice(0, maxLen) + '…'
+      : redacted;
   } catch {
     return '[unserializable]';
   }
@@ -204,7 +208,7 @@ export function buildFunctionDeclarations(
       {
         name: 'update_group_settings',
         description:
-          'Update settings for a group. Supported fields: persona, requireTrigger (boolean), enableWebSearch (boolean), preferredPath (\'fast\' | \'container\'), geminiModel (string), name (string).',
+          "Update settings for a group. Supported fields: persona, requireTrigger (boolean), enableWebSearch (boolean), preferredPath ('fast' | 'container'), geminiModel (string), name (string).",
         parameters: {
           type: 'OBJECT',
           properties: {
@@ -686,7 +690,10 @@ export async function executeFunctionCall(
           created_at: new Date().toISOString(),
         });
       } catch (auditErr) {
-        logger.warn({ err: auditErr }, 'Failed to write tool call audit log (blocked)');
+        logger.warn(
+          { err: auditErr },
+          'Failed to write tool call audit log (blocked)',
+        );
       }
       return {
         name,
@@ -702,7 +709,10 @@ export async function executeFunctionCall(
   {
     const inputSchema = inputSchemaRegistry.get(name);
     if (inputSchema) {
-      const validation = validateToolInput(inputSchema, args as Record<string, unknown>);
+      const validation = validateToolInput(
+        inputSchema,
+        args as Record<string, unknown>,
+      );
       if (!validation.valid) {
         return {
           name,
@@ -718,585 +728,622 @@ export async function executeFunctionCall(
   }
 
   const executeSwitch = async (): Promise<FunctionCallResult> => {
-  try {
-    switch (name) {
-      case 'schedule_task': {
-        const { createTask } = await import('./db.js');
-        const { TIMEZONE } = await import('./config.js');
+    try {
+      switch (name) {
+        case 'schedule_task': {
+          const { createTask } = await import('./db.js');
+          const { TIMEZONE } = await import('./config.js');
 
-        const scheduleType = args.schedule_type as 'cron' | 'interval' | 'once';
-        let nextRun: string | null = null;
+          const scheduleType = args.schedule_type as
+            | 'cron'
+            | 'interval'
+            | 'once';
+          let nextRun: string | null = null;
 
-        if (scheduleType === 'cron') {
-          const { CronExpressionParser } = await import('cron-parser');
-          const interval = CronExpressionParser.parse(args.schedule_value, {
-            tz: TIMEZONE,
-          });
-          nextRun = interval.next().toISOString();
-        } else if (scheduleType === 'interval') {
-          const ms = parseInt(args.schedule_value, 10);
-          if (isNaN(ms) || ms <= 0) {
-            return {
-              name,
-              response: { success: false, error: 'Invalid interval value' },
-            };
-          }
-          nextRun = new Date(Date.now() + ms).toISOString();
-        } else if (scheduleType === 'once') {
-          const scheduled = new Date(args.schedule_value);
-          if (isNaN(scheduled.getTime())) {
-            return {
-              name,
-              response: { success: false, error: 'Invalid timestamp' },
-            };
-          }
-          nextRun = scheduled.toISOString();
-        }
-
-        const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        createTask({
-          id: taskId,
-          group_folder: groupFolder,
-          chat_jid: chatJid,
-          prompt: args.prompt,
-          schedule_type: scheduleType,
-          schedule_value: args.schedule_value,
-          context_mode: args.context_mode || 'isolated',
-          next_run: nextRun,
-          status: 'active',
-          created_at: new Date().toISOString(),
-        });
-
-        return {
-          name,
-          response: wrapToolResponse(true, { task_id: taskId, next_run: nextRun }),
-        };
-      }
-
-      case 'list_tasks': {
-        const { getTasksForGroup } = await import('./db.js');
-        const tasks = getTasksForGroup(groupFolder);
-        return {
-          name,
-          response: wrapToolResponse(true, {
-            tasks: tasks.map((t) => ({
-              id: t.id,
-              prompt: t.prompt.slice(0, 100),
-              schedule_type: t.schedule_type,
-              schedule_value: t.schedule_value,
-              status: t.status,
-              next_run: t.next_run,
-            })),
-          }),
-        };
-      }
-
-      case 'pause_task': {
-        const { updateTask: pauseUpdate, getTaskById: pauseLookup } =
-          await import('./db.js');
-        const pauseTarget = pauseLookup(args.task_id);
-        if (!pauseTarget) {
-          return {
-            name,
-            response: {
-              success: false,
-              error: `Task not found: ${args.task_id}. Use list_tasks to get valid task IDs.`,
-            },
-          };
-        }
-        if (pauseTarget.status !== 'active') {
-          return {
-            name,
-            response: {
-              success: false,
-              error: `Task is not active (current status: ${pauseTarget.status}). Only active tasks can be paused.`,
-            },
-          };
-        }
-        pauseUpdate(args.task_id, { status: 'paused' });
-        return {
-          name,
-          response: { success: true, task_id: args.task_id, status: 'paused' },
-        };
-      }
-
-      case 'resume_task': {
-        const { updateTask: resumeUpdate, getTaskById: resumeLookup } =
-          await import('./db.js');
-        const resumeTarget = resumeLookup(args.task_id);
-        if (!resumeTarget) {
-          return {
-            name,
-            response: {
-              success: false,
-              error: `Task not found: ${args.task_id}. Use list_tasks to get valid task IDs.`,
-            },
-          };
-        }
-        if (resumeTarget.status !== 'paused') {
-          return {
-            name,
-            response: {
-              success: false,
-              error: `Task is not paused (current status: ${resumeTarget.status}). Only paused tasks can be resumed.`,
-            },
-          };
-        }
-        resumeUpdate(args.task_id, { status: 'active' });
-        return {
-          name,
-          response: { success: true, task_id: args.task_id, status: 'active' },
-        };
-      }
-
-      case 'cancel_task': {
-        const { deleteTask, getTaskById } = await import('./db.js');
-        const task = getTaskById(args.task_id);
-        if (!task) {
-          return {
-            name,
-            response: {
-              success: false,
-              error: `Task not found: ${args.task_id}. Use list_tasks to get valid task IDs.`,
-            },
-          };
-        }
-        deleteTask(args.task_id);
-        return {
-          name,
-          response: wrapToolResponse(true, { task_id: args.task_id, deleted: true }),
-        };
-      }
-
-      case 'generate_image': {
-        const { generateImage } = await import('./image-gen.js');
-        const { GROUPS_DIR } = await import('./config.js');
-        const path = await import('path');
-        const outputDir = path.join(GROUPS_DIR, groupFolder, 'media');
-        const result = await generateImage(args.prompt, outputDir);
-
-        if (result.success && result.imagePath && context.bot) {
-          await context.bot.sendPhoto(chatJid, result.imagePath, {
-            caption: `🎨 Generated: ${args.prompt.slice(0, 100)}`,
-          });
-          return { name, response: { success: true, sent: true } };
-        }
-
-        return {
-          name,
-          response: {
-            success: result.success,
-            error: result.error || 'No bot instance available',
-          },
-        };
-      }
-
-      case 'set_preference': {
-        const ALLOWED_KEYS = [
-          'language',
-          'nickname',
-          'response_style',
-          'interests',
-          'timezone',
-          'custom_instructions',
-        ];
-        if (!ALLOWED_KEYS.includes(args.key)) {
-          return {
-            name,
-            response: { success: false, error: `Invalid key: ${args.key}` },
-          };
-        }
-
-        const { setPreference } = await import('./db.js');
-        setPreference(groupFolder, args.key, String(args.value));
-        return { name, response: { success: true, key: args.key } };
-      }
-
-      case 'remember_fact': {
-        const { upsertFact } = await import('./db.js');
-        const factKey = String(args.key)
-          .slice(0, 50)
-          .replace(/[^\w_-]/g, '_');
-        const factValue = String(args.value).slice(0, 500);
-        upsertFact(groupFolder, factKey, factValue, 'user_set', 1.0);
-        return {
-          name,
-          response: wrapToolResponse(true, { key: factKey, remembered: true }),
-        };
-      }
-
-      // ================================================================
-      // Admin-only tool handlers
-      // ================================================================
-
-      case 'list_all_groups': {
-        const { getRegisteredGroups } = await import('./state.js');
-        const { isAdminGroup } = await import('./admin-auth.js');
-        const { getActiveTaskCountsBatch, getMessageCountsBatch } =
-          await import('./db.js');
-        const groups = getRegisteredGroups();
-        const taskCounts = getActiveTaskCountsBatch();
-        const msgCounts = getMessageCountsBatch();
-
-        const groupList = Object.entries(groups)
-          .filter(([, g]) => !isAdminGroup(g.folder))
-          .map(([chatId, g]) => ({
-            folder: g.folder,
-            name: g.name,
-            chatId,
-            persona: g.persona || 'default',
-            requireTrigger: g.requireTrigger !== false,
-            enableWebSearch: g.enableWebSearch !== false,
-            preferredPath: resolvePreferredPath(g),
-            geminiModel: g.geminiModel || 'auto',
-            messageCount: msgCounts.get(chatId) || 0,
-            activeTaskCount: taskCounts.get(g.folder) || 0,
-          }));
-
-        return {
-          name,
-          response: {
-            success: true,
-            groups: groupList,
-            count: groupList.length,
-          },
-        };
-      }
-
-      case 'get_group_detail': {
-        const invalid = validateGroupFolder(name, args.group_folder);
-        if (invalid) return invalid;
-        const { getGroupDetailContext } = await import('./admin-context.js');
-        const detail = getGroupDetailContext(args.group_folder);
-        return { name, response: { success: true, detail } };
-      }
-
-      case 'update_group_settings': {
-        const invalid = validateGroupFolder(name, args.group_folder);
-        if (invalid) return invalid;
-        const { getRegisteredGroups: getGroups } = await import('./state.js');
-        const { isAdminGroup: isAdminCheck } = await import('./admin-auth.js');
-        const groups = getGroups();
-
-        if (isAdminCheck(args.group_folder)) {
-          return {
-            name,
-            response: {
-              success: false,
-              error: 'Cannot modify admin chat settings',
-            },
-          };
-        }
-
-        const entry = Object.entries(groups).find(
-          ([, g]) => g.folder === args.group_folder,
-        );
-        if (!entry) {
-          return {
-            name,
-            response: {
-              success: false,
-              error: `Group "${args.group_folder}" not found`,
-            },
-          };
-        }
-
-        let settings: Record<string, any>;
-        try {
-          settings = JSON.parse(args.settings);
-        } catch {
-          return {
-            name,
-            response: { success: false, error: 'Invalid JSON in settings' },
-          };
-        }
-
-        const [, targetGroup] = entry;
-        const ALLOWED_SETTINGS = [
-          'persona',
-          'requireTrigger',
-          'enableWebSearch',
-          'preferredPath',
-          'geminiModel',
-          'name',
-        ];
-        const BOOL_FIELDS = new Set([
-          'requireTrigger',
-          'enableWebSearch',
-        ]);
-        const applied: string[] = [];
-        for (const key of Object.keys(settings)) {
-          if (!ALLOWED_SETTINGS.includes(key)) continue;
-          let value = settings[key];
-          if (BOOL_FIELDS.has(key)) value = Boolean(value);
-          if (key === 'preferredPath' && !['fast', 'container'].includes(value)) continue;
-          (targetGroup as any)[key] = value;
-          applied.push(key);
-        }
-
-        if (applied.length > 0) {
-          const { DATA_DIR: dataDir } = await import('./config.js');
-          const pathMod = await import('path');
-          const { saveJson: save } = await import('./utils.js');
-          save(pathMod.join(dataDir, 'registered_groups.json'), groups);
-        }
-
-        return {
-          name,
-          response: { success: true, applied, group_folder: args.group_folder },
-        };
-      }
-
-      case 'read_group_prompt': {
-        const invalid = validateGroupFolder(name, args.group_folder);
-        if (invalid) return invalid;
-        const { readGroupGeminiMd } = await import('./group-manager.js');
-        const content = readGroupGeminiMd(args.group_folder);
-        return {
-          name,
-          response: {
-            success: true,
-            content: content || '(No GEMINI.md found)',
-          },
-        };
-      }
-
-      case 'write_group_prompt': {
-        const invalid = validateGroupFolder(name, args.group_folder);
-        if (invalid) return invalid;
-        const fsMod = await import('fs');
-        const pathMod = await import('path');
-        const { GROUPS_DIR: groupsDir } = await import('./config.js');
-        const filePath = pathMod.join(
-          groupsDir,
-          args.group_folder,
-          'GEMINI.md',
-        );
-        const dir = pathMod.dirname(filePath);
-
-        if (!fsMod.existsSync(dir)) {
-          return {
-            name,
-            response: {
-              success: false,
-              error: `Group folder "${args.group_folder}" does not exist`,
-            },
-          };
-        }
-
-        fsMod.writeFileSync(filePath, args.content, 'utf-8');
-
-        // Invalidate context cache for this group
-        try {
-          const { invalidateCache } = await import('./context-cache.js');
-          await invalidateCache(args.group_folder);
-        } catch {
-          /* best effort */
-        }
-
-        return {
-          name,
-          response: {
-            success: true,
-            group_folder: args.group_folder,
-            written: true,
-          },
-        };
-      }
-
-      case 'list_all_tasks': {
-        const { getAllTasks: getTasks } = await import('./db.js');
-        const tasks = getTasks();
-        return {
-          name,
-          response: {
-            success: true,
-            tasks: tasks.map((t) => ({
-              id: t.id,
-              group_folder: t.group_folder,
-              prompt: t.prompt.slice(0, 100),
-              schedule_type: t.schedule_type,
-              schedule_value: t.schedule_value,
-              status: t.status,
-              next_run: t.next_run,
-            })),
-            count: tasks.length,
-          },
-        };
-      }
-
-      case 'manage_cross_group_task': {
-        const {
-          getTaskById: lookupTask,
-          updateTask: modifyTask,
-          deleteTask: removeTask,
-        } = await import('./db.js');
-        const task = lookupTask(args.task_id);
-        if (!task) {
-          return {
-            name,
-            response: {
-              success: false,
-              error: `Task not found: ${args.task_id}`,
-            },
-          };
-        }
-
-        switch (args.action) {
-          case 'pause':
-            if (task.status !== 'active') {
+          if (scheduleType === 'cron') {
+            const { CronExpressionParser } = await import('cron-parser');
+            const interval = CronExpressionParser.parse(args.schedule_value, {
+              tz: TIMEZONE,
+            });
+            nextRun = interval.next().toISOString();
+          } else if (scheduleType === 'interval') {
+            const ms = parseInt(args.schedule_value, 10);
+            if (isNaN(ms) || ms <= 0) {
               return {
                 name,
-                response: {
-                  success: false,
-                  error: `Task is ${task.status}, not active`,
-                },
+                response: { success: false, error: 'Invalid interval value' },
               };
             }
-            modifyTask(args.task_id, { status: 'paused' });
-            return {
-              name,
-              response: {
-                success: true,
-                task_id: args.task_id,
-                status: 'paused',
-              },
-            };
-          case 'resume':
-            if (task.status !== 'paused') {
+            nextRun = new Date(Date.now() + ms).toISOString();
+          } else if (scheduleType === 'once') {
+            const scheduled = new Date(args.schedule_value);
+            if (isNaN(scheduled.getTime())) {
               return {
                 name,
-                response: {
-                  success: false,
-                  error: `Task is ${task.status}, not paused`,
-                },
+                response: { success: false, error: 'Invalid timestamp' },
               };
             }
-            modifyTask(args.task_id, { status: 'active' });
-            return {
-              name,
-              response: {
-                success: true,
-                task_id: args.task_id,
-                status: 'active',
-              },
-            };
-          case 'cancel':
-            removeTask(args.task_id);
-            return {
-              name,
-              response: { success: true, task_id: args.task_id, deleted: true },
-            };
-          default:
+            nextRun = scheduled.toISOString();
+          }
+
+          const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          createTask({
+            id: taskId,
+            group_folder: groupFolder,
+            chat_jid: chatJid,
+            prompt: args.prompt,
+            schedule_type: scheduleType,
+            schedule_value: args.schedule_value,
+            context_mode: args.context_mode || 'isolated',
+            next_run: nextRun,
+            status: 'active',
+            created_at: new Date().toISOString(),
+          });
+
+          return {
+            name,
+            response: wrapToolResponse(true, {
+              task_id: taskId,
+              next_run: nextRun,
+            }),
+          };
+        }
+
+        case 'list_tasks': {
+          const { getTasksForGroup } = await import('./db.js');
+          const tasks = getTasksForGroup(groupFolder);
+          return {
+            name,
+            response: wrapToolResponse(true, {
+              tasks: tasks.map((t) => ({
+                id: t.id,
+                prompt: t.prompt.slice(0, 100),
+                schedule_type: t.schedule_type,
+                schedule_value: t.schedule_value,
+                status: t.status,
+                next_run: t.next_run,
+              })),
+            }),
+          };
+        }
+
+        case 'pause_task': {
+          const { updateTask: pauseUpdate, getTaskById: pauseLookup } =
+            await import('./db.js');
+          const pauseTarget = pauseLookup(args.task_id);
+          if (!pauseTarget) {
             return {
               name,
               response: {
                 success: false,
-                error: `Unknown action: ${args.action}`,
+                error: `Task not found: ${args.task_id}. Use list_tasks to get valid task IDs.`,
               },
             };
-        }
-      }
-
-      case 'send_message_to_group': {
-        const invalid = validateGroupFolder(name, args.group_folder);
-        if (invalid) return invalid;
-        const { getRegisteredGroups: allGroups } = await import('./state.js');
-        const { isAdminGroup: isAdminFolderCheck } =
-          await import('./admin-auth.js');
-        const groups = allGroups();
-
-        if (isAdminFolderCheck(args.group_folder)) {
-          return {
-            name,
-            response: { success: false, error: 'Cannot send to admin chat' },
-          };
-        }
-
-        const entry = Object.entries(groups).find(
-          ([, g]) => g.folder === args.group_folder,
-        );
-        if (!entry) {
+          }
+          if (pauseTarget.status !== 'active') {
+            return {
+              name,
+              response: {
+                success: false,
+                error: `Task is not active (current status: ${pauseTarget.status}). Only active tasks can be paused.`,
+              },
+            };
+          }
+          pauseUpdate(args.task_id, { status: 'paused' });
           return {
             name,
             response: {
-              success: false,
-              error: `Group "${args.group_folder}" not found`,
+              success: true,
+              task_id: args.task_id,
+              status: 'paused',
             },
           };
         }
 
-        const [targetChatId] = entry;
-        await context.sendMessage(targetChatId, args.message);
-        return {
-          name,
-          response: { success: true, sent_to: args.group_folder },
-        };
-      }
-
-      case 'register_group': {
-        if (!context.isMain) {
+        case 'resume_task': {
+          const { updateTask: resumeUpdate, getTaskById: resumeLookup } =
+            await import('./db.js');
+          const resumeTarget = resumeLookup(args.task_id);
+          if (!resumeTarget) {
+            return {
+              name,
+              response: {
+                success: false,
+                error: `Task not found: ${args.task_id}. Use list_tasks to get valid task IDs.`,
+              },
+            };
+          }
+          if (resumeTarget.status !== 'paused') {
+            return {
+              name,
+              response: {
+                success: false,
+                error: `Task is not paused (current status: ${resumeTarget.status}). Only paused tasks can be resumed.`,
+              },
+            };
+          }
+          resumeUpdate(args.task_id, { status: 'active' });
           return {
             name,
-            response: { success: false, error: 'Permission denied' },
+            response: {
+              success: true,
+              task_id: args.task_id,
+              status: 'active',
+            },
           };
         }
-        if (context.registerGroup) {
-          context.registerGroup(args.chat_id, {
-            name: args.name,
-            folder: args.name.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase(),
-            trigger: `@${process.env.ASSISTANT_NAME || 'Andy'}`,
-            added_at: new Date().toISOString(),
-          });
-          return { name, response: { success: true, chat_id: args.chat_id } };
-        }
-        return {
-          name,
-          response: { success: false, error: 'Registrar not available' },
-        };
-      }
 
-      default: {
-        const pluginLoaderPath = '../app/src/plugin-loader.js';
-        const { dispatchPluginToolCall } = await import(pluginLoaderPath);
-        const pluginResult = await dispatchPluginToolCall(name, args, {
-          groupFolder,
-          chatJid,
-          isMain: context.isMain,
-          sendMessage: async (id: string, text: string) => {
-            if (context.bot) await context.bot.sendMessage(parseInt(id), text);
-          },
-        });
-        if (pluginResult !== null) {
-          if (typeof pluginResult === 'string') {
-            try {
-              return { name, response: JSON.parse(pluginResult) };
-            } catch {
-              return { name, response: { success: true, data: { text: pluginResult } } };
-            }
+        case 'cancel_task': {
+          const { deleteTask, getTaskById } = await import('./db.js');
+          const task = getTaskById(args.task_id);
+          if (!task) {
+            return {
+              name,
+              response: {
+                success: false,
+                error: `Task not found: ${args.task_id}. Use list_tasks to get valid task IDs.`,
+              },
+            };
           }
-          return { name, response: pluginResult };
+          deleteTask(args.task_id);
+          return {
+            name,
+            response: wrapToolResponse(true, {
+              task_id: args.task_id,
+              deleted: true,
+            }),
+          };
         }
-        return {
-          name,
-          response: {
-            success: false,
-            error: `Unknown function: ${name}. This function is not available. Respond with text directly.`,
-          },
-        };
+
+        case 'generate_image': {
+          const { generateImage } = await import('./image-gen.js');
+          const { GROUPS_DIR } = await import('./config.js');
+          const path = await import('path');
+          const outputDir = path.join(GROUPS_DIR, groupFolder, 'media');
+          const result = await generateImage(args.prompt, outputDir);
+
+          if (result.success && result.imagePath && context.bot) {
+            await context.bot.api.sendPhoto(
+              chatJid,
+              new InputFile(result.imagePath),
+              {
+                caption: `🎨 Generated: ${args.prompt.slice(0, 100)}`,
+              },
+            );
+            return { name, response: { success: true, sent: true } };
+          }
+
+          return {
+            name,
+            response: {
+              success: result.success,
+              error: result.error || 'No bot instance available',
+            },
+          };
+        }
+
+        case 'set_preference': {
+          const ALLOWED_KEYS = [
+            'language',
+            'nickname',
+            'response_style',
+            'interests',
+            'timezone',
+            'custom_instructions',
+          ];
+          if (!ALLOWED_KEYS.includes(args.key)) {
+            return {
+              name,
+              response: { success: false, error: `Invalid key: ${args.key}` },
+            };
+          }
+
+          const { setPreference } = await import('./db.js');
+          setPreference(groupFolder, args.key, String(args.value));
+          return { name, response: { success: true, key: args.key } };
+        }
+
+        case 'remember_fact': {
+          const { upsertFact } = await import('./db.js');
+          const factKey = String(args.key)
+            .slice(0, 50)
+            .replace(/[^\w_-]/g, '_');
+          const factValue = String(args.value).slice(0, 500);
+          upsertFact(groupFolder, factKey, factValue, 'user_set', 1.0);
+          return {
+            name,
+            response: wrapToolResponse(true, {
+              key: factKey,
+              remembered: true,
+            }),
+          };
+        }
+
+        // ================================================================
+        // Admin-only tool handlers
+        // ================================================================
+
+        case 'list_all_groups': {
+          const { getRegisteredGroups } = await import('./state.js');
+          const { isAdminGroup } = await import('./admin-auth.js');
+          const { getActiveTaskCountsBatch, getMessageCountsBatch } =
+            await import('./db.js');
+          const groups = getRegisteredGroups();
+          const taskCounts = getActiveTaskCountsBatch();
+          const msgCounts = getMessageCountsBatch();
+
+          const groupList = Object.entries(groups)
+            .filter(([, g]) => !isAdminGroup(g.folder))
+            .map(([chatId, g]) => ({
+              folder: g.folder,
+              name: g.name,
+              chatId,
+              persona: g.persona || 'default',
+              requireTrigger: g.requireTrigger !== false,
+              enableWebSearch: g.enableWebSearch !== false,
+              preferredPath: resolvePreferredPath(g),
+              geminiModel: g.geminiModel || 'auto',
+              messageCount: msgCounts.get(chatId) || 0,
+              activeTaskCount: taskCounts.get(g.folder) || 0,
+            }));
+
+          return {
+            name,
+            response: {
+              success: true,
+              groups: groupList,
+              count: groupList.length,
+            },
+          };
+        }
+
+        case 'get_group_detail': {
+          const invalid = validateGroupFolder(name, args.group_folder);
+          if (invalid) return invalid;
+          const { getGroupDetailContext } = await import('./admin-context.js');
+          const detail = getGroupDetailContext(args.group_folder);
+          return { name, response: { success: true, detail } };
+        }
+
+        case 'update_group_settings': {
+          const invalid = validateGroupFolder(name, args.group_folder);
+          if (invalid) return invalid;
+          const { getRegisteredGroups: getGroups } = await import('./state.js');
+          const { isAdminGroup: isAdminCheck } =
+            await import('./admin-auth.js');
+          const groups = getGroups();
+
+          if (isAdminCheck(args.group_folder)) {
+            return {
+              name,
+              response: {
+                success: false,
+                error: 'Cannot modify admin chat settings',
+              },
+            };
+          }
+
+          const entry = Object.entries(groups).find(
+            ([, g]) => g.folder === args.group_folder,
+          );
+          if (!entry) {
+            return {
+              name,
+              response: {
+                success: false,
+                error: `Group "${args.group_folder}" not found`,
+              },
+            };
+          }
+
+          let settings: Record<string, any>;
+          try {
+            settings = JSON.parse(args.settings);
+          } catch {
+            return {
+              name,
+              response: { success: false, error: 'Invalid JSON in settings' },
+            };
+          }
+
+          const [, targetGroup] = entry;
+          const ALLOWED_SETTINGS = [
+            'persona',
+            'requireTrigger',
+            'enableWebSearch',
+            'preferredPath',
+            'geminiModel',
+            'name',
+          ];
+          const BOOL_FIELDS = new Set(['requireTrigger', 'enableWebSearch']);
+          const applied: string[] = [];
+          for (const key of Object.keys(settings)) {
+            if (!ALLOWED_SETTINGS.includes(key)) continue;
+            let value = settings[key];
+            if (BOOL_FIELDS.has(key)) value = Boolean(value);
+            if (
+              key === 'preferredPath' &&
+              !['fast', 'container'].includes(value)
+            )
+              continue;
+            (targetGroup as any)[key] = value;
+            applied.push(key);
+          }
+
+          if (applied.length > 0) {
+            const { DATA_DIR: dataDir } = await import('./config.js');
+            const pathMod = await import('path');
+            const { saveJson: save } = await import('./utils.js');
+            save(pathMod.join(dataDir, 'registered_groups.json'), groups);
+          }
+
+          return {
+            name,
+            response: {
+              success: true,
+              applied,
+              group_folder: args.group_folder,
+            },
+          };
+        }
+
+        case 'read_group_prompt': {
+          const invalid = validateGroupFolder(name, args.group_folder);
+          if (invalid) return invalid;
+          const { readGroupGeminiMd } = await import('./group-manager.js');
+          const content = readGroupGeminiMd(args.group_folder);
+          return {
+            name,
+            response: {
+              success: true,
+              content: content || '(No GEMINI.md found)',
+            },
+          };
+        }
+
+        case 'write_group_prompt': {
+          const invalid = validateGroupFolder(name, args.group_folder);
+          if (invalid) return invalid;
+          const fsMod = await import('fs');
+          const pathMod = await import('path');
+          const { GROUPS_DIR: groupsDir } = await import('./config.js');
+          const filePath = pathMod.join(
+            groupsDir,
+            args.group_folder,
+            'GEMINI.md',
+          );
+          const dir = pathMod.dirname(filePath);
+
+          if (!fsMod.existsSync(dir)) {
+            return {
+              name,
+              response: {
+                success: false,
+                error: `Group folder "${args.group_folder}" does not exist`,
+              },
+            };
+          }
+
+          fsMod.writeFileSync(filePath, args.content, 'utf-8');
+
+          // Invalidate context cache for this group
+          try {
+            const { invalidateCache } = await import('./context-cache.js');
+            await invalidateCache(args.group_folder);
+          } catch {
+            /* best effort */
+          }
+
+          return {
+            name,
+            response: {
+              success: true,
+              group_folder: args.group_folder,
+              written: true,
+            },
+          };
+        }
+
+        case 'list_all_tasks': {
+          const { getAllTasks: getTasks } = await import('./db.js');
+          const tasks = getTasks();
+          return {
+            name,
+            response: {
+              success: true,
+              tasks: tasks.map((t) => ({
+                id: t.id,
+                group_folder: t.group_folder,
+                prompt: t.prompt.slice(0, 100),
+                schedule_type: t.schedule_type,
+                schedule_value: t.schedule_value,
+                status: t.status,
+                next_run: t.next_run,
+              })),
+              count: tasks.length,
+            },
+          };
+        }
+
+        case 'manage_cross_group_task': {
+          const {
+            getTaskById: lookupTask,
+            updateTask: modifyTask,
+            deleteTask: removeTask,
+          } = await import('./db.js');
+          const task = lookupTask(args.task_id);
+          if (!task) {
+            return {
+              name,
+              response: {
+                success: false,
+                error: `Task not found: ${args.task_id}`,
+              },
+            };
+          }
+
+          switch (args.action) {
+            case 'pause':
+              if (task.status !== 'active') {
+                return {
+                  name,
+                  response: {
+                    success: false,
+                    error: `Task is ${task.status}, not active`,
+                  },
+                };
+              }
+              modifyTask(args.task_id, { status: 'paused' });
+              return {
+                name,
+                response: {
+                  success: true,
+                  task_id: args.task_id,
+                  status: 'paused',
+                },
+              };
+            case 'resume':
+              if (task.status !== 'paused') {
+                return {
+                  name,
+                  response: {
+                    success: false,
+                    error: `Task is ${task.status}, not paused`,
+                  },
+                };
+              }
+              modifyTask(args.task_id, { status: 'active' });
+              return {
+                name,
+                response: {
+                  success: true,
+                  task_id: args.task_id,
+                  status: 'active',
+                },
+              };
+            case 'cancel':
+              removeTask(args.task_id);
+              return {
+                name,
+                response: {
+                  success: true,
+                  task_id: args.task_id,
+                  deleted: true,
+                },
+              };
+            default:
+              return {
+                name,
+                response: {
+                  success: false,
+                  error: `Unknown action: ${args.action}`,
+                },
+              };
+          }
+        }
+
+        case 'send_message_to_group': {
+          const invalid = validateGroupFolder(name, args.group_folder);
+          if (invalid) return invalid;
+          const { getRegisteredGroups: allGroups } = await import('./state.js');
+          const { isAdminGroup: isAdminFolderCheck } =
+            await import('./admin-auth.js');
+          const groups = allGroups();
+
+          if (isAdminFolderCheck(args.group_folder)) {
+            return {
+              name,
+              response: { success: false, error: 'Cannot send to admin chat' },
+            };
+          }
+
+          const entry = Object.entries(groups).find(
+            ([, g]) => g.folder === args.group_folder,
+          );
+          if (!entry) {
+            return {
+              name,
+              response: {
+                success: false,
+                error: `Group "${args.group_folder}" not found`,
+              },
+            };
+          }
+
+          const [targetChatId] = entry;
+          await context.sendMessage(targetChatId, args.message);
+          return {
+            name,
+            response: { success: true, sent_to: args.group_folder },
+          };
+        }
+
+        case 'register_group': {
+          if (!context.isMain) {
+            return {
+              name,
+              response: { success: false, error: 'Permission denied' },
+            };
+          }
+          if (context.registerGroup) {
+            context.registerGroup(args.chat_id, {
+              name: args.name,
+              folder: args.name.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase(),
+              trigger: `@${process.env.ASSISTANT_NAME || 'Andy'}`,
+              added_at: new Date().toISOString(),
+            });
+            return { name, response: { success: true, chat_id: args.chat_id } };
+          }
+          return {
+            name,
+            response: { success: false, error: 'Registrar not available' },
+          };
+        }
+
+        default: {
+          const pluginLoaderPath = '../app/src/plugin-loader.js';
+          const { dispatchPluginToolCall } = await import(pluginLoaderPath);
+          const pluginResult = await dispatchPluginToolCall(name, args, {
+            groupFolder,
+            chatJid,
+            isMain: context.isMain,
+            sendMessage: async (id: string, text: string) => {
+              if (context.bot) await context.bot.api.sendMessage(id, text);
+            },
+          });
+          if (pluginResult !== null) {
+            if (typeof pluginResult === 'string') {
+              try {
+                return { name, response: JSON.parse(pluginResult) };
+              } catch {
+                return {
+                  name,
+                  response: { success: true, data: { text: pluginResult } },
+                };
+              }
+            }
+            return { name, response: pluginResult };
+          }
+          return {
+            name,
+            response: {
+              success: false,
+              error: `Unknown function: ${name}. This function is not available. Respond with text directly.`,
+            },
+          };
+        }
       }
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      logger.error(
+        { functionName: name, err: errorMsg },
+        'Function call execution error',
+      );
+      return {
+        name,
+        response: { success: false, error: 'Function execution failed' },
+      };
     }
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    logger.error(
-      { functionName: name, err: errorMsg },
-      'Function call execution error',
-    );
-    return {
-      name,
-      response: { success: false, error: 'Function execution failed' },
-    };
-  }
   };
 
   const result = await executeSwitch();
@@ -1304,7 +1351,9 @@ export async function executeFunctionCall(
   // Audit: log success/error result
   try {
     const { insertToolCallLog } = await import('./db.js');
-    const isSuccess = result.response && (result.response as Record<string, unknown>).success !== false;
+    const isSuccess =
+      result.response &&
+      (result.response as Record<string, unknown>).success !== false;
     insertToolCallLog({
       group_folder: groupFolder,
       chat_jid: chatJid,
@@ -1324,7 +1373,10 @@ export async function executeFunctionCall(
   {
     const pluginLoaderPath = '../app/src/plugin-loader.js';
     const { runAfterToolCallHooks } = await import(pluginLoaderPath);
-    const afterCtx = { ...hookCtx, result: result.response as Record<string, unknown> };
+    const afterCtx = {
+      ...hookCtx,
+      result: result.response as Record<string, unknown>,
+    };
     const modifiedResponse = await runAfterToolCallHooks(afterCtx);
     if (modifiedResponse) {
       return { name, response: modifiedResponse };

@@ -1,3 +1,4 @@
+import { InputFile } from 'grammy';
 import { IpcHandler, IpcContext } from '../types.js';
 import { logger } from '../logger.js';
 import { GROUPS_DIR } from '../config.js';
@@ -36,9 +37,13 @@ export const GenerateImageHandler: IpcHandler = {
       }
 
       // Send the generated image to Telegram
-      await context.bot.sendPhoto(data.chatJid, result.imagePath, {
-        caption: `🎨 Generated: ${data.prompt.slice(0, 100)}`,
-      });
+      await context.bot.api.sendPhoto(
+        data.chatJid,
+        new InputFile(result.imagePath),
+        {
+          caption: `🎨 Generated: ${data.prompt.slice(0, 100)}`,
+        },
+      );
       logger.info(
         { chatJid: data.chatJid, prompt: data.prompt.slice(0, 50) },
         'Image generated and sent',

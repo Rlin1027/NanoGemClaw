@@ -44,7 +44,10 @@ describe('wrapToolResponse', () => {
   describe('success=true with string', () => {
     it('wraps string in data.message', () => {
       const result = wrapToolResponse(true, 'Task created');
-      expect(result).toEqual({ success: true, data: { message: 'Task created' } });
+      expect(result).toEqual({
+        success: true,
+        data: { message: 'Task created' },
+      });
     });
 
     it('does not include error on success', () => {

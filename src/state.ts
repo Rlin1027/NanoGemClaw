@@ -2,20 +2,20 @@
  * Shared State Management for NanoGemClaw
  * Centralizes all module-level mutable state and bot instance.
  */
-import TelegramBot from 'node-telegram-bot-api';
+import { Bot } from 'grammy';
 import { RegisteredGroup, Session } from './types.js';
 
 // ============================================================================
 // Bot Instance
 // ============================================================================
 
-let bot: TelegramBot;
+let bot: Bot;
 
-export function getBot(): TelegramBot {
+export function getBot(): Bot {
   return bot;
 }
 
-export function setBot(b: TelegramBot): void {
+export function setBot(b: Bot): void {
   bot = b;
 }
 

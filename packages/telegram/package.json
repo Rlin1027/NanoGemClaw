@@ -6,16 +6,12 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./helpers": "./src/telegram-helpers.ts",
     "./rate-limiter": "./src/telegram-rate-limiter.ts",
     "./consolidator": "./src/message-consolidator.ts"
   },
   "dependencies": {
     "@nanogemclaw/core": "*",
-    "node-telegram-bot-api": "^0.67.0"
+    "grammy": "^1.41.1"
   },
-  "devDependencies": {
-    "@types/node-telegram-bot-api": "^0.64.0"
-  },
-  "engines": { "node": ">=20" }
+"engines": { "node": ">=20" }
 }

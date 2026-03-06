@@ -30,7 +30,10 @@ vi.mock('../utils/pagination.js', () => ({
 vi.mock('cron-parser', () => ({
   CronExpressionParser: {
     parse: vi.fn(() => {
-      const dates = [new Date('2026-03-01T09:00:00Z'), new Date('2026-03-02T09:00:00Z')];
+      const dates = [
+        new Date('2026-03-01T09:00:00Z'),
+        new Date('2026-03-02T09:00:00Z'),
+      ];
       let idx = 0;
       return {
         next: vi.fn(() => {
@@ -87,7 +90,10 @@ describe('routes/tasks', () => {
     } as any);
     // Reset cron-parser mock to default working implementation
     vi.mocked(CronExpressionParser.parse).mockImplementation(() => {
-      const dates = [new Date('2026-03-01T09:00:00Z'), new Date('2026-03-02T09:00:00Z')];
+      const dates = [
+        new Date('2026-03-01T09:00:00Z'),
+        new Date('2026-03-02T09:00:00Z'),
+      ];
       let idx = 0;
       return {
         next: vi.fn(() => {
@@ -404,7 +410,9 @@ describe('routes/tasks', () => {
   // GET /api/task-runs
   describe('GET /api/task-runs', () => {
     it('returns activity logs with default days', async () => {
-      vi.mocked(dbModule.getTaskRunLogsWithDetails).mockReturnValue([{ id: 1 }] as any);
+      vi.mocked(dbModule.getTaskRunLogsWithDetails).mockReturnValue([
+        { id: 1 },
+      ] as any);
       const app = createTestApp(createTasksRouter(createTasksDeps()));
       const res = await request(app).get('/api/task-runs');
       expect(res.status).toBe(200);
@@ -417,7 +425,10 @@ describe('routes/tasks', () => {
       const app = createTestApp(createTasksRouter(createTasksDeps()));
       const res = await request(app).get('/api/task-runs?days=14');
       expect(res.status).toBe(200);
-      expect(dbModule.getTaskRunLogsWithDetails).toHaveBeenCalledWith(14, undefined);
+      expect(dbModule.getTaskRunLogsWithDetails).toHaveBeenCalledWith(
+        14,
+        undefined,
+      );
     });
 
     it('passes groupFolder param to db function', async () => {
@@ -425,7 +436,10 @@ describe('routes/tasks', () => {
       const app = createTestApp(createTasksRouter(createTasksDeps()));
       const res = await request(app).get('/api/task-runs?groupFolder=grp1');
       expect(res.status).toBe(200);
-      expect(dbModule.getTaskRunLogsWithDetails).toHaveBeenCalledWith(7, 'grp1');
+      expect(dbModule.getTaskRunLogsWithDetails).toHaveBeenCalledWith(
+        7,
+        'grp1',
+      );
     });
 
     it('returns 500 on db error', async () => {
@@ -447,7 +461,9 @@ describe('routes/tasks', () => {
     it('returns empty slots when no tasks', async () => {
       vi.mocked(dbModule.getTasksInDateRange).mockReturnValue([]);
       const app = createTestApp(createTasksRouter(createTasksDeps()));
-      const res = await request(app).get(`/api/tasks/week?start=${start}&end=${end}`);
+      const res = await request(app).get(
+        `/api/tasks/week?start=${start}&end=${end}`,
+      );
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
     });
@@ -477,7 +493,9 @@ describe('routes/tasks', () => {
         },
       ] as any);
       const app = createTestApp(createTasksRouter(createTasksDeps()));
-      const res = await request(app).get(`/api/tasks/week?start=${start}&end=${end}`);
+      const res = await request(app).get(
+        `/api/tasks/week?start=${start}&end=${end}`,
+      );
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body.data)).toBe(true);
       // mock returns 2 dates within range
@@ -499,7 +517,9 @@ describe('routes/tasks', () => {
         },
       ] as any);
       const app = createTestApp(createTasksRouter(createTasksDeps()));
-      const res = await request(app).get(`/api/tasks/week?start=${start}&end=${end}`);
+      const res = await request(app).get(
+        `/api/tasks/week?start=${start}&end=${end}`,
+      );
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body.data)).toBe(true);
       expect(res.body.data.length).toBeGreaterThan(0);
@@ -520,11 +540,16 @@ describe('routes/tasks', () => {
         },
       ] as any);
       const app = createTestApp(createTasksRouter(createTasksDeps()));
-      const res = await request(app).get(`/api/tasks/week?start=${start}&end=${end}`);
+      const res = await request(app).get(
+        `/api/tasks/week?start=${start}&end=${end}`,
+      );
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(1);
       expect(res.body.data[0]).toHaveProperty('task_id', 'task-once');
-      expect(res.body.data[0]).toHaveProperty('start_time', '2026-03-03T10:00:00.000Z');
+      expect(res.body.data[0]).toHaveProperty(
+        'start_time',
+        '2026-03-03T10:00:00.000Z',
+      );
     });
 
     it('skips interval tasks with invalid schedule_value', async () => {
@@ -540,7 +565,9 @@ describe('routes/tasks', () => {
         },
       ] as any);
       const app = createTestApp(createTasksRouter(createTasksDeps()));
-      const res = await request(app).get(`/api/tasks/week?start=${start}&end=${end}`);
+      const res = await request(app).get(
+        `/api/tasks/week?start=${start}&end=${end}`,
+      );
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
     });
@@ -561,7 +588,9 @@ describe('routes/tasks', () => {
         },
       ] as any);
       const app = createTestApp(createTasksRouter(createTasksDeps()));
-      const res = await request(app).get(`/api/tasks/week?start=${start}&end=${end}`);
+      const res = await request(app).get(
+        `/api/tasks/week?start=${start}&end=${end}`,
+      );
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
     });

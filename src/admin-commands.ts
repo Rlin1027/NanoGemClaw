@@ -4,6 +4,7 @@
 import path from 'path';
 import fs from 'fs';
 
+import { InputFile } from 'grammy';
 import { DATA_DIR, MAIN_GROUP_FOLDER } from './config.js';
 import { getAllTasks } from './db.js';
 import type { ConversationExport } from './db/messages.js';
@@ -337,7 +338,7 @@ async function handleExportCommand(
 
     const bot = getBot();
     if (mainChatId && bot) {
-      await bot.sendDocument(parseInt(mainChatId), tmpPath, {
+      await bot.api.sendDocument(mainChatId, new InputFile(tmpPath), {
         caption: `📤 Export: ${targetFolder} (${exportData.messageCount} messages)`,
       });
     }

@@ -1,7 +1,7 @@
 /**
  * Media Handler - Media download, extraction, and cleanup.
  */
-import TelegramBot from 'node-telegram-bot-api';
+import type { Message } from 'grammy/types';
 import fs from 'fs';
 import path from 'path';
 import https from 'https';
@@ -32,7 +32,7 @@ export interface MediaInfo {
 // Media Extraction
 // ============================================================================
 
-export function extractMediaInfo(msg: TelegramBot.Message): MediaInfo | null {
+export function extractMediaInfo(msg: Message): MediaInfo | null {
   if (msg.photo && msg.photo.length > 0) {
     // Get highest resolution photo
     const photo = msg.photo[msg.photo.length - 1];
@@ -87,7 +87,7 @@ export async function downloadMedia(
 ): Promise<string | null> {
   const bot = getBot();
   try {
-    const fileInfo = await bot.getFile(fileId);
+    const fileInfo = await bot.api.getFile(fileId);
     if (!fileInfo.file_path) return null;
 
     const mediaDir = path.join(GROUPS_DIR, groupFolder, 'media');

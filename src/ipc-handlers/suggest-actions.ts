@@ -71,7 +71,7 @@ export const SuggestActionsHandler: IpcHandler = {
 
     try {
       const messageText = payload.message || '選擇一個動作:';
-      await context.bot.sendMessage(targetChatId, messageText, {
+      await context.bot.api.sendMessage(targetChatId, messageText, {
         reply_markup: {
           inline_keyboard: keyboard,
         },

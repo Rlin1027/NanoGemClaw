@@ -299,14 +299,20 @@ describe('routes/groups', () => {
     });
 
     it('accepts ragFolderIds as array of strings', async () => {
-      const updater = vi.fn(() => ({ id: 'grp1', name: 'Test', folder: 'grp1' }));
+      const updater = vi.fn(() => ({
+        id: 'grp1',
+        name: 'Test',
+        folder: 'grp1',
+      }));
       const deps = createGroupsDeps({ groupUpdater: updater });
       const app = createTestApp(createGroupsRouter(deps));
       const res = await request(app)
         .put('/api/groups/grp1')
         .send({ ragFolderIds: ['folder-id-1', 'folder-id-2'] });
       expect(res.status).toBe(200);
-      expect(updater).toHaveBeenCalledWith('grp1', { ragFolderIds: ['folder-id-1', 'folder-id-2'] });
+      expect(updater).toHaveBeenCalledWith('grp1', {
+        ragFolderIds: ['folder-id-1', 'folder-id-2'],
+      });
     });
 
     it('rejects ragFolderIds with empty strings', async () => {
@@ -319,7 +325,11 @@ describe('routes/groups', () => {
     });
 
     it('accepts empty ragFolderIds array to clear config', async () => {
-      const updater = vi.fn(() => ({ id: 'grp1', name: 'Test', folder: 'grp1' }));
+      const updater = vi.fn(() => ({
+        id: 'grp1',
+        name: 'Test',
+        folder: 'grp1',
+      }));
       const deps = createGroupsDeps({ groupUpdater: updater });
       const app = createTestApp(createGroupsRouter(deps));
       const res = await request(app)

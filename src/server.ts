@@ -65,7 +65,9 @@ let chatJidResolver: ((folder: string) => string | null) | null = null;
 let mcpRouterDeps: import('./routes/mcp.js').McpRouterDeps | null = null;
 let mcpRouter: import('express').Router | null = null;
 
-export function setMcpRouterDeps(deps: import('./routes/mcp.js').McpRouterDeps) {
+export function setMcpRouterDeps(
+  deps: import('./routes/mcp.js').McpRouterDeps,
+) {
   mcpRouterDeps = deps;
   mcpRouter = null; // force re-create on next request
 }

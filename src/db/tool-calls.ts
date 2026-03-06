@@ -22,26 +22,26 @@ export interface ToolCallStats {
   by_tool: Array<{ tool_name: string; count: number }>;
 }
 
-export function insertToolCallLog(
-  log: Omit<ToolCallLog, 'id'>,
-): number {
+export function insertToolCallLog(log: Omit<ToolCallLog, 'id'>): number {
   const db = getDatabase();
-  const result = db.prepare(
-    `
+  const result = db
+    .prepare(
+      `
     INSERT INTO tool_call_logs (group_folder, chat_jid, tool_name, args_summary, result_status, duration_ms, injection_detected, injection_patterns, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
-  ).run(
-    log.group_folder,
-    log.chat_jid,
-    log.tool_name,
-    log.args_summary,
-    log.result_status,
-    log.duration_ms,
-    log.injection_detected ? 1 : 0,
-    log.injection_patterns,
-    log.created_at,
-  );
+    )
+    .run(
+      log.group_folder,
+      log.chat_jid,
+      log.tool_name,
+      log.args_summary,
+      log.result_status,
+      log.duration_ms,
+      log.injection_detected ? 1 : 0,
+      log.injection_patterns,
+      log.created_at,
+    );
   return result.lastInsertRowid as number;
 }
 
@@ -64,7 +64,8 @@ export function getToolCallLogs(
     conditions.push('injection_detected = 1');
   }
 
-  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const where =
+    conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
   const rows = db
     .prepare(

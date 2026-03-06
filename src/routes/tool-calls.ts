@@ -40,13 +40,17 @@ export function createToolCallsRouter(): Router {
     validate({ query: toolCallsQuerySchema }),
     async (req, res) => {
       try {
-        const { page, limit, group, injection } = req.query as unknown as z.infer<
-          typeof toolCallsQuerySchema
-        >;
+        const { page, limit, group, injection } =
+          req.query as unknown as z.infer<typeof toolCallsQuerySchema>;
         const offset = (page - 1) * limit;
 
         const { getToolCallLogs } = await import('../db.js');
-        const { rows, total } = getToolCallLogs(limit, offset, group, injection);
+        const { rows, total } = getToolCallLogs(
+          limit,
+          offset,
+          group,
+          injection,
+        );
 
         const records = rows.map((r) => ({
           id: r.id,
@@ -56,7 +60,8 @@ export function createToolCallsRouter(): Router {
           status: r.result_status,
           durationMs: r.duration_ms ?? 0,
           injectionDetected: r.injection_detected === 1,
-          errorMessage: r.result_status === 'error' ? r.args_summary : undefined,
+          errorMessage:
+            r.result_status === 'error' ? r.args_summary : undefined,
         }));
 
         res.json({
@@ -93,7 +98,9 @@ export function createToolCallsRouter(): Router {
           if (!isNaN(fromDate.getTime()) && !isNaN(toDate.getTime())) {
             days = Math.max(
               1,
-              Math.ceil((toDate.getTime() - fromDate.getTime()) / (24 * 60 * 60 * 1000)),
+              Math.ceil(
+                (toDate.getTime() - fromDate.getTime()) / (24 * 60 * 60 * 1000),
+              ),
             );
           }
         }

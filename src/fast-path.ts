@@ -154,7 +154,9 @@ function prioritizedTruncate(
  * Resolve the preferred execution path for a group.
  * Returns 'fast' (default) or 'container'.
  */
-export function resolvePreferredPath(group: RegisteredGroup): 'fast' | 'container' {
+export function resolvePreferredPath(
+  group: RegisteredGroup,
+): 'fast' | 'container' {
   return group.preferredPath ?? 'fast';
 }
 
@@ -351,7 +353,10 @@ You are in direct conversation mode. IMPORTANT RULES:
     const MAX_REPLY_CHARS = 1000;
     const trimmedHistory = cleanedHistory.map((msg) => {
       if (msg.role === 'model' && msg.text.length > MAX_REPLY_CHARS) {
-        return { ...msg, text: msg.text.slice(0, MAX_REPLY_CHARS) + '\n[...truncated]' };
+        return {
+          ...msg,
+          text: msg.text.slice(0, MAX_REPLY_CHARS) + '\n[...truncated]',
+        };
       }
       return msg;
     });
@@ -401,9 +406,13 @@ You are in direct conversation mode. IMPORTANT RULES:
     // Drive search (both indexed + live). Remove search_drive to prevent the model
     // from calling the unscoped Drive search tool repeatedly.
     if (group.ragFolderIds?.length) {
-      const hasSearchKnowledge = fnDeclarations.some((d: any) => d.name === 'search_knowledge');
+      const hasSearchKnowledge = fnDeclarations.some(
+        (d: any) => d.name === 'search_knowledge',
+      );
       if (hasSearchKnowledge) {
-        fnDeclarations = fnDeclarations.filter((d: any) => d.name !== 'search_drive');
+        fnDeclarations = fnDeclarations.filter(
+          (d: any) => d.name !== 'search_drive',
+        );
       }
     }
 

@@ -1,5 +1,5 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
-import type TelegramBot from 'node-telegram-bot-api';
+import type { Message } from 'grammy/types';
 
 // Mock all dependencies
 vi.mock('../config.js', () => ({
@@ -82,7 +82,13 @@ describe('message-handler.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetBot.mockReturnValue({
-      getFile: vi.fn().mockResolvedValue({ file_path: 'test.jpg' }),
+      api: {
+        sendMessage: vi.fn().mockResolvedValue({}),
+        editMessageText: vi.fn().mockResolvedValue({}),
+        sendChatAction: vi.fn().mockResolvedValue({}),
+        deleteMessage: vi.fn().mockResolvedValue({}),
+        getFile: vi.fn().mockResolvedValue({ file_path: 'test.jpg' }),
+      },
     });
     mockGetRegisteredGroups.mockReturnValue({});
     mockGetSessions.mockReturnValue({});

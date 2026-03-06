@@ -102,9 +102,7 @@ export function getGroupDetailContext(folder: string): string {
   parts.push(
     `- Web Search: ${group.enableWebSearch !== false ? 'enabled' : 'disabled'}`,
   );
-  parts.push(
-    `- Preferred Path: ${group.preferredPath ?? 'fast'}`,
-  );
+  parts.push(`- Preferred Path: ${group.preferredPath ?? 'fast'}`);
   parts.push(`- Model: ${group.geminiModel || 'auto'}`);
 
   // GEMINI.md content

@@ -60,7 +60,7 @@ export async function setTyping(
 
     // Send initial typing indicator
     try {
-      await bot.sendChatAction(parseInt(chatId), 'typing', {
+      await bot.api.sendChatAction(chatId, 'typing', {
         ...(messageThreadId ? { message_thread_id: messageThreadId } : {}),
       });
     } catch {
@@ -70,7 +70,7 @@ export async function setTyping(
     // Refresh typing indicator every 5 seconds (Telegram resets after ~5s)
     const interval = setInterval(async () => {
       try {
-        await bot.sendChatAction(parseInt(chatId), 'typing', {
+        await bot.api.sendChatAction(chatId, 'typing', {
           ...(messageThreadId ? { message_thread_id: messageThreadId } : {}),
         });
       } catch {
@@ -103,7 +103,7 @@ export async function sendMessage(
     );
 
     for (let i = 0; i < chunks.length; i++) {
-      await bot.sendMessage(parseInt(chatId), chunks[i], {
+      await bot.api.sendMessage(chatId, chunks[i], {
         ...(messageThreadId ? { message_thread_id: messageThreadId } : {}),
       });
       // Rate limiting: add delay between chunks to avoid Telegram limits
@@ -167,7 +167,7 @@ export async function sendMessageWithButtons(
       })),
     );
 
-    await bot.sendMessage(parseInt(chatId), text, {
+    await bot.api.sendMessage(chatId, text, {
       ...(messageThreadId ? { message_thread_id: messageThreadId } : {}),
       reply_markup: {
         inline_keyboard: inlineKeyboard,
@@ -289,4 +289,25 @@ function findSplitPoint(text: string, maxLen: number): number {
 
   // Priority 6: Hard cut (avoid breaking markdown)
   return maxLen;
+}
+
+// ============================================================================
+// Message Editing
+// ============================================================================
+
+export async function editMessageText(
+  chatId: string | number,
+  messageId: number,
+  text: string,
+  options?: Record<string, unknown>,
+): Promise<void> {
+  const bot = getBot();
+  try {
+    await bot.api.editMessageText(chatId, messageId, text, options as any);
+  } catch (err) {
+    logger.error(
+      { chatId, messageId, err: formatError(err) },
+      'Failed to edit message',
+    );
+  }
 }

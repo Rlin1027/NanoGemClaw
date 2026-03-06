@@ -278,9 +278,7 @@ describe('db/tool-calls', () => {
 
     it('should exclude old logs outside the days window', () => {
       const now = new Date().toISOString();
-      const old = new Date(
-        Date.now() - 30 * 24 * 60 * 60 * 1000,
-      ).toISOString();
+      const old = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
       insertToolCallLog({
         group_folder: 'group1',

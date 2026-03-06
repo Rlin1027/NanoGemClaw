@@ -429,7 +429,7 @@ async function gracefulShutdown(signal: string): Promise<void> {
 
     // Stop Telegram polling
     const bot = getBot();
-    await bot?.stopPolling();
+    await bot?.stop();
 
     // Stop backup schedule
     stopBackupSchedule();
