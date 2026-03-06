@@ -32,3 +32,6 @@ coverage/
 
 agents-sdk-docs
 docs/learnfromproject.md
+
+# Playwright MCP
+.playwright-mcp/

@@ -54,7 +54,7 @@ src/                     # Backend business logic
 ├── utils/               # safe-compare.ts (timingSafeEqual)
 └── __tests__/           # Vitest tests
 
-container/               # Agent execution environment
+container/               # Agent execution environment (Apple Container, NOT Docker)
 ├── Dockerfile           # Container image definition
 ├── build.sh             # Container build script
 ├── agent-runner/        # Agent runtime inside container
@@ -136,3 +136,13 @@ Optional: `GEMINI_MODEL` (default gemini-3-flash-preview), `CONTAINER_TIMEOUT`, 
 - Never commit `.env`, `*.keys.json`, or `store/` contents
 - Container mount security: allowlist at `~/.config/nanogemclaw/mount-allowlist.json` (outside project, never mounted)
 - Error responses use generic messages — never leak internal details
+
+## Container Runtime
+
+**使用 Apple Container（`/usr/local/bin/container`），不是 Docker。** Image 名稱：`nanogemclaw-agent`。
+
+- `container-mounts.ts` 建構 volume mounts，每次自動從 `~/.gemini/` 複製 `oauth_creds.json` + `settings.json` 到 `data/gemini-filtered/{group}/`
+- Container path 每次約 14-22 秒（spawn container + Gemini CLI + IPC 回傳）
+- Fast path 直接用 Gemini SDK，幾乎即時
+- `preferredPath` 設定在 `data/registered_groups.json`，預設 `'fast'`
+- 若 container path 失敗，先檢查主機端 `~/.gemini/oauth_creds.json` 是否有效（跑 `gemini` CLI 重新認證）
