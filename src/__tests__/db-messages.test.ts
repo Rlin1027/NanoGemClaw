@@ -31,10 +31,7 @@ import {
   initDatabase,
   closeDatabase,
   storeChatMetadata,
-  updateChatName,
   getAllChats,
-  getLastGroupSync,
-  setLastGroupSync,
   storeMessage,
   getNewMessages,
   getMessagesSince,
@@ -85,19 +82,6 @@ describe('db/messages', () => {
       expect(chat?.name).toBe(chatJid); // Name defaults to jid
     });
 
-    it('should update chat name', () => {
-      const chatJid = 'chat3@g.us';
-      const initialTimestamp = '2026-02-08T12:00:00Z';
-      const newName = 'Updated Chat Name';
-
-      storeChatMetadata(chatJid, initialTimestamp);
-      updateChatName(chatJid, newName);
-
-      const chats = getAllChats();
-      const chat = chats.find((c) => c.jid === chatJid);
-      expect(chat?.name).toBe(newName);
-    });
-
     it('should preserve newer timestamp on conflict', () => {
       const chatJid = 'chat4@g.us';
       const olderTimestamp = '2026-02-08T10:00:00Z';
@@ -122,34 +106,6 @@ describe('db/messages', () => {
       const chat1Index = chats.findIndex((c) => c.jid === chat1);
       const chat2Index = chats.findIndex((c) => c.jid === chat2);
       expect(chat2Index).toBeLessThan(chat1Index); // More recent chat should come first
-    });
-  });
-
-  describe('Group Sync Tracking', () => {
-    beforeEach(() => resetDatabase(TEST_STORE_DIR));
-
-    it('should return null when no sync has occurred', () => {
-      const lastSync = getLastGroupSync();
-      expect(lastSync).toBeNull();
-    });
-
-    it('should record and retrieve group sync timestamp', () => {
-      setLastGroupSync();
-      const lastSync = getLastGroupSync();
-      expect(lastSync).toBeTruthy();
-      expect(typeof lastSync).toBe('string');
-    });
-
-    it('should update group sync timestamp', async () => {
-      setLastGroupSync();
-      const firstSync = getLastGroupSync();
-
-      // Wait a bit and sync again
-      await new Promise((resolve) => setTimeout(resolve, 10));
-      setLastGroupSync();
-      const secondSync = getLastGroupSync();
-      expect(secondSync).not.toBe(firstSync);
-      expect(secondSync! > firstSync!).toBe(true);
     });
   });
 
