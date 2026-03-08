@@ -210,8 +210,33 @@ export function initDatabase(): void {
     }
   }
 
+  if (currentVersion < 5) {
+    db.exec('BEGIN');
+    try {
+      // Migration v5: Knowledge embeddings table for hybrid search
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS knowledge_embeddings (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          doc_id INTEGER NOT NULL,
+          chunk_index INTEGER NOT NULL,
+          chunk_text TEXT NOT NULL,
+          embedding BLOB NOT NULL,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (doc_id) REFERENCES knowledge_docs(id) ON DELETE CASCADE,
+          UNIQUE(doc_id, chunk_index)
+        );
+        CREATE INDEX IF NOT EXISTS idx_ke_doc ON knowledge_embeddings(doc_id);
+      `);
+      db.exec('PRAGMA user_version = 5');
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+  }
+
   // Future migrations go here:
-  // if (currentVersion < 5) { ... db.exec('PRAGMA user_version = 5'); }
+  // if (currentVersion < 6) { ... db.exec('PRAGMA user_version = 6'); }
 }
 
 /**

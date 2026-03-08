@@ -1,78 +1,173 @@
 /**
  * Fact Extractor — Extract structured facts from user messages.
  *
- * Uses regex pattern matching to identify facts like names, preferences,
- * pets, locations, etc. from both Chinese and English text.
- * Extracted facts are stored in the DB for injection into system prompts.
+ * When LLM extraction is enabled (FACT_EXTRACTION_LLM_ENABLED=true),
+ * uses Gemini to intelligently extract facts from conversations.
+ * Otherwise, acts as a no-op (preserving backward compatibility).
+ *
+ * Extracted facts are stored in the DB for injection into system prompts
+ * via the [USER FACTS] block in memory context.
  */
 
 import { upsertFact } from './db.js';
+import { generate } from './gemini-client.js';
+import { FACT_EXTRACTION } from './config.js';
 import { logger } from './logger.js';
 
 // ============================================================================
-// Pattern Definitions
+// Rate Limiting
 // ============================================================================
 
-interface ExtractionPattern {
-  /** Regex to match against user text */
-  pattern: RegExp;
-  /** Fact key to store under */
-  key: string;
-  /** Which capture group contains the value (1-indexed) */
-  valueGroup: number;
-  /** Confidence score for this pattern */
-  confidence: number;
+/** Per-group message counter for rate limiting */
+const messageCounters = new Map<string, number>();
+
+function shouldExtract(groupFolder: string): boolean {
+  const count = (messageCounters.get(groupFolder) || 0) + 1;
+  messageCounters.set(groupFolder, count);
+  return count % FACT_EXTRACTION.RATE === 0;
 }
 
-/**
- * Extraction patterns — add entries here to enable automatic fact extraction.
- * Currently empty (infrastructure reserved). Facts are captured via the
- * `remember_fact` Gemini tool instead.
- *
- * Example pattern:
- *   { pattern: /我叫([^\s,，。]{1,10})/u, key: 'user_name', valueGroup: 1, confidence: 0.9 }
- */
-const PATTERNS: ExtractionPattern[] = [];
+// ============================================================================
+// LLM Extraction Prompt
+// ============================================================================
+
+const EXTRACTION_PROMPT = `Extract any personal facts about the user from this message.
+Output a JSON array of objects: [{"key": "...", "value": "...", "confidence": 0.0-1.0}]
+
+Categories: name, nickname, age, birthday, location, timezone, occupation, pet, pet_name, food_preference, language_preference, hobby, family_member, daily_routine, project_context
+
+Rules:
+- Only extract facts explicitly stated, not implied
+- Use snake_case keys from the categories above, or create specific keys like "favorite_food", "work_location"
+- confidence: 0.9+ for explicit statements ("I'm John"), 0.7 for contextual ("going home to Taipei")
+- If no facts found, output: []
+- Output ONLY the JSON array, no other text`;
 
 // ============================================================================
-// Extraction
+// Main Function
 // ============================================================================
 
 /**
  * Extract facts from a user message and store them in the database.
- * Only facts with confidence >= 0.5 are stored.
+ * Fire-and-forget: errors are silently logged, never thrown.
+ *
+ * When FACT_EXTRACTION.ENABLED is false, this is a no-op.
  */
 export function extractFacts(text: string, groupFolder: string): void {
-  // Skip very short or very long messages (not useful for fact extraction)
-  if (text.length < 3 || text.length > 2000) return;
+  if (!FACT_EXTRACTION.ENABLED) return;
 
-  let extracted = 0;
+  // Skip messages that are too short, too long, or commands
+  if (text.length < FACT_EXTRACTION.MIN_LENGTH) return;
+  if (text.length > FACT_EXTRACTION.MAX_LENGTH) return;
+  if (text.startsWith('/')) return;
 
-  for (const { pattern, key, valueGroup, confidence } of PATTERNS) {
-    if (confidence < 0.5) continue;
+  // Rate limiting: extract from 1 in every N messages
+  if (!shouldExtract(groupFolder)) return;
 
-    const match = text.match(pattern);
-    if (!match || !match[valueGroup]) continue;
+  // Fire-and-forget async extraction
+  extractWithLLM(text, groupFolder).catch((err) => {
+    logger.debug(
+      { err: err instanceof Error ? err.message : String(err), groupFolder },
+      'LLM fact extraction failed',
+    );
+  });
+}
 
-    const value = match[valueGroup].trim();
-    // Skip very short or empty values
-    if (value.length < 1) continue;
+// ============================================================================
+// LLM Extraction
+// ============================================================================
 
-    try {
-      upsertFact(groupFolder, key, value, 'extracted', confidence);
-      extracted++;
-    } catch (err) {
+interface ExtractedFact {
+  key: string;
+  value: string;
+  confidence: number;
+}
+
+async function extractWithLLM(
+  text: string,
+  groupFolder: string,
+): Promise<void> {
+  const controller = new AbortController();
+  const timer = setTimeout(
+    () => controller.abort(),
+    FACT_EXTRACTION.TIMEOUT_MS,
+  );
+
+  try {
+    const response = await generate({
+      model: FACT_EXTRACTION.MODEL,
+      systemInstruction: EXTRACTION_PROMPT,
+      contents: [{ role: 'user', parts: [{ text }] }],
+    });
+
+    const responseText = (response.text || '').trim();
+    if (!responseText || responseText === '[]') return;
+
+    const facts = parseFacts(responseText);
+    let stored = 0;
+
+    for (const fact of facts) {
+      if (fact.confidence < 0.5) continue;
+      if (!fact.key || !fact.value) continue;
+
+      try {
+        upsertFact(
+          groupFolder,
+          fact.key,
+          fact.value,
+          'llm_extracted',
+          fact.confidence,
+        );
+        stored++;
+      } catch (err) {
+        logger.debug(
+          {
+            key: fact.key,
+            err: err instanceof Error ? err.message : String(err),
+          },
+          'Failed to upsert LLM-extracted fact',
+        );
+      }
+    }
+
+    if (stored > 0) {
       logger.debug(
-        { key, value, err: err instanceof Error ? err.message : String(err) },
-        'Failed to upsert extracted fact',
+        { groupFolder, stored, textLength: text.length },
+        'Facts extracted via LLM',
       );
     }
-  }
-
-  if (extracted > 0) {
-    logger.debug(
-      { groupFolder, extracted, textLength: text.length },
-      'Facts extracted from message',
-    );
+  } finally {
+    clearTimeout(timer);
   }
 }
+
+function parseFacts(text: string): ExtractedFact[] {
+  try {
+    // Try to extract JSON array from response (may have surrounding text)
+    const match = text.match(/\[[\s\S]*\]/);
+    if (!match) return [];
+
+    const parsed = JSON.parse(match[0]);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.filter(
+      (item: any) =>
+        typeof item === 'object' &&
+        item !== null &&
+        typeof item.key === 'string' &&
+        typeof item.value === 'string' &&
+        typeof item.confidence === 'number',
+    );
+  } catch {
+    logger.debug({ text: text.slice(0, 100) }, 'Failed to parse LLM facts');
+    return [];
+  }
+}
+
+/** Exposed for testing */
+export {
+  messageCounters as _messageCounters,
+  shouldExtract as _shouldExtract,
+  extractWithLLM as _extractWithLLM,
+  parseFacts as _parseFacts,
+};

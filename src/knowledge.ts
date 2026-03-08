@@ -2,7 +2,15 @@
 import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
-import { GROUPS_DIR } from './config.js';
+import { GROUPS_DIR, HYBRID_SEARCH } from './config.js';
+import {
+  chunkText,
+  embedText,
+  embeddingToBlob,
+  blobToEmbedding,
+  cosineSimilarity,
+} from './embeddings.js';
+import { logger } from './logger.js';
 
 /**
  * Sanitize a user-provided query for safe use in FTS5 MATCH expressions.
@@ -155,6 +163,16 @@ export function addKnowledgeDoc(
   `,
   ).run(docId, groupFolder, title, content);
 
+  // Fire-and-forget embedding generation for hybrid search
+  if (HYBRID_SEARCH.ENABLED) {
+    generateAndStoreEmbeddings(db, docId, content).catch((err) => {
+      logger.debug(
+        { docId, err: err instanceof Error ? err.message : String(err) },
+        'Failed to generate embeddings for new doc',
+      );
+    });
+  }
+
   return {
     id: docId,
     group_folder: groupFolder,
@@ -214,6 +232,17 @@ export function updateKnowledgeDoc(
     existing.filename,
   );
   fs.writeFileSync(filePath, content, 'utf-8');
+
+  // Re-generate embeddings for hybrid search
+  if (HYBRID_SEARCH.ENABLED) {
+    db.prepare('DELETE FROM knowledge_embeddings WHERE doc_id = ?').run(docId);
+    generateAndStoreEmbeddings(db, docId, content).catch((err) => {
+      logger.debug(
+        { docId, err: err instanceof Error ? err.message : String(err) },
+        'Failed to regenerate embeddings for updated doc',
+      );
+    });
+  }
 
   return {
     ...existing,
@@ -361,7 +390,8 @@ export function searchKnowledge(
 
 /**
  * Get relevant knowledge for prompt injection.
- * Searches and concatenates matching documents up to maxChars limit.
+ * When hybrid search is enabled, combines FTS5 and embedding results
+ * using Reciprocal Rank Fusion (RRF). Otherwise, uses FTS5 only.
  */
 export function getRelevantKnowledge(
   db: Database.Database,
@@ -371,11 +401,12 @@ export function getRelevantKnowledge(
 ): string {
   const sanitizedQuery = sanitizeFTS5Query(query);
 
-  // Single query: JOIN full document content with FTS results
-  const results = db
+  // FTS5 search: get ranked doc IDs
+  const ftsResults = db
     .prepare(
       `
     SELECT
+      d.id,
       d.title,
       d.content
     FROM knowledge_fts fts
@@ -386,18 +417,29 @@ export function getRelevantKnowledge(
   `,
     )
     .all(groupFolder, sanitizedQuery) as Array<{
+    id: number;
     title: string;
     content: string;
   }>;
 
-  if (results.length === 0) {
+  let rankedResults: Array<{ id: number; title: string; content: string }>;
+
+  // If hybrid search is enabled and embeddings exist, merge with RRF
+  if (HYBRID_SEARCH.ENABLED) {
+    const embeddingResults = searchByEmbedding(db, query, groupFolder, 20);
+    rankedResults = mergeWithRRF(ftsResults, embeddingResults, db);
+  } else {
+    rankedResults = ftsResults;
+  }
+
+  if (rankedResults.length === 0) {
     return '';
   }
 
   const chunks: string[] = [];
   let totalChars = 0;
 
-  for (const doc of results) {
+  for (const doc of rankedResults) {
     const header = `\n# ${doc.title}\n\n`;
     const chunkSize = header.length + doc.content.length;
 
@@ -414,4 +456,203 @@ export function getRelevantKnowledge(
   }
 
   return chunks.join('\n');
+}
+
+// ============================================================================
+// Hybrid Search: Embedding-based retrieval + RRF merging
+// ============================================================================
+
+/**
+ * Search knowledge by embedding similarity.
+ * Returns doc IDs ranked by cosine similarity to the query embedding.
+ */
+function searchByEmbedding(
+  db: Database.Database,
+  query: string,
+  groupFolder: string,
+  limit: number,
+): Array<{ docId: number; score: number }> {
+  // We need the query embedding — but embedText is async.
+  // Since getRelevantKnowledge is sync, we check for a pre-computed embedding
+  // passed via the embedding cache, or return empty if not available.
+  // The actual embedding search is done asynchronously in the caller when possible.
+  // For now, do a synchronous scan of stored embeddings.
+
+  const allEmbeddings = db
+    .prepare(
+      `
+    SELECT ke.doc_id, ke.embedding
+    FROM knowledge_embeddings ke
+    JOIN knowledge_docs d ON d.id = ke.doc_id
+    WHERE d.group_folder = ?
+  `,
+    )
+    .all(groupFolder) as Array<{ doc_id: number; embedding: Buffer }>;
+
+  if (allEmbeddings.length === 0) return [];
+
+  // We need a synchronous query embedding — use cached if available
+  const queryEmbedding = getCachedQueryEmbedding(query);
+  if (!queryEmbedding) return [];
+
+  // Compute similarity and aggregate best score per doc
+  const docScores = new Map<number, number>();
+  for (const row of allEmbeddings) {
+    const emb = blobToEmbedding(row.embedding);
+    const score = cosineSimilarity(queryEmbedding, emb);
+    const existing = docScores.get(row.doc_id) || 0;
+    if (score > existing) {
+      docScores.set(row.doc_id, score);
+    }
+  }
+
+  return Array.from(docScores.entries())
+    .map(([docId, score]) => ({ docId, score }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+}
+
+/**
+ * Merge FTS5 and embedding results using Reciprocal Rank Fusion.
+ * RRF score = 1/(k + rankFTS) + 1/(k + rankEmbed)
+ */
+function mergeWithRRF(
+  ftsResults: Array<{ id: number; title: string; content: string }>,
+  embeddingResults: Array<{ docId: number; score: number }>,
+  db: Database.Database,
+): Array<{ id: number; title: string; content: string }> {
+  const k = HYBRID_SEARCH.RRF_K;
+  const rrfScores = new Map<number, number>();
+
+  // FTS ranks
+  for (let i = 0; i < ftsResults.length; i++) {
+    const docId = ftsResults[i].id;
+    rrfScores.set(docId, (rrfScores.get(docId) || 0) + 1 / (k + i + 1));
+  }
+
+  // Embedding ranks
+  for (let i = 0; i < embeddingResults.length; i++) {
+    const docId = embeddingResults[i].docId;
+    rrfScores.set(docId, (rrfScores.get(docId) || 0) + 1 / (k + i + 1));
+  }
+
+  // Sort by combined RRF score
+  const sortedIds = Array.from(rrfScores.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([id]) => id);
+
+  // Build result with full doc content
+  const ftsMap = new Map(ftsResults.map((r) => [r.id, r]));
+  const results: Array<{ id: number; title: string; content: string }> = [];
+
+  for (const docId of sortedIds) {
+    const fromFts = ftsMap.get(docId);
+    if (fromFts) {
+      results.push(fromFts);
+    } else {
+      // Doc only found via embedding — fetch from DB
+      const doc = db
+        .prepare('SELECT id, title, content FROM knowledge_docs WHERE id = ?')
+        .get(docId) as
+        | { id: number; title: string; content: string }
+        | undefined;
+      if (doc) results.push(doc);
+    }
+  }
+
+  return results;
+}
+
+// ============================================================================
+// Embedding Generation & Caching
+// ============================================================================
+
+/** In-memory cache for query embeddings (async pre-computation) */
+const queryEmbeddingCache = new Map<string, number[]>();
+
+/** Cache a query embedding for synchronous retrieval in searchByEmbedding */
+export function cacheQueryEmbedding(query: string, embedding: number[]): void {
+  // Keep cache small
+  if (queryEmbeddingCache.size >= 50) {
+    const oldest = queryEmbeddingCache.keys().next().value!;
+    queryEmbeddingCache.delete(oldest);
+  }
+  queryEmbeddingCache.set(query, embedding);
+}
+
+function getCachedQueryEmbedding(query: string): number[] | null {
+  return queryEmbeddingCache.get(query) || null;
+}
+
+/**
+ * Pre-compute and cache the query embedding for hybrid search.
+ * Call this before getRelevantKnowledge() to enable embedding search.
+ */
+export async function precomputeQueryEmbedding(query: string): Promise<void> {
+  if (!HYBRID_SEARCH.ENABLED) return;
+  const embedding = await embedText(query);
+  if (embedding) {
+    cacheQueryEmbedding(query, embedding);
+  }
+}
+
+/**
+ * Generate embeddings for a document's chunks and store in DB.
+ */
+export async function generateAndStoreEmbeddings(
+  db: Database.Database,
+  docId: number,
+  content: string,
+): Promise<void> {
+  const chunks = chunkText(content);
+  const now = new Date().toISOString();
+
+  const insertStmt = db.prepare(`
+    INSERT OR REPLACE INTO knowledge_embeddings (doc_id, chunk_index, chunk_text, embedding, created_at)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+
+  for (let i = 0; i < chunks.length; i++) {
+    const embedding = await embedText(chunks[i].text);
+    if (embedding) {
+      insertStmt.run(docId, i, chunks[i].text, embeddingToBlob(embedding), now);
+    }
+  }
+}
+
+/**
+ * Re-index all existing knowledge documents with embeddings.
+ * Useful for first-time enabling of hybrid search.
+ */
+export async function reindexAllEmbeddings(
+  db: Database.Database,
+): Promise<{ indexed: number; failed: number }> {
+  const docs = db
+    .prepare('SELECT id, content FROM knowledge_docs')
+    .all() as Array<{ id: number; content: string }>;
+
+  let indexed = 0;
+  let failed = 0;
+
+  for (const doc of docs) {
+    try {
+      // Clear existing embeddings for this doc
+      db.prepare('DELETE FROM knowledge_embeddings WHERE doc_id = ?').run(
+        doc.id,
+      );
+      await generateAndStoreEmbeddings(db, doc.id, doc.content);
+      indexed++;
+    } catch (err) {
+      logger.debug(
+        {
+          docId: doc.id,
+          err: err instanceof Error ? err.message : String(err),
+        },
+        'Failed to index embeddings for doc',
+      );
+      failed++;
+    }
+  }
+
+  return { indexed, failed };
 }

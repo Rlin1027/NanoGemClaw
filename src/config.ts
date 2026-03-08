@@ -259,6 +259,57 @@ export const FAST_PATH = {
 } as const;
 
 /**
+ * Query Rewriting configuration — rewrites user queries using conversation
+ * context before FTS search for better knowledge retrieval accuracy.
+ */
+export const QUERY_REWRITE = {
+  /** Enable query rewriting (default: true) */
+  ENABLED: process.env.QUERY_REWRITE_ENABLED !== 'false',
+  /** Model for query rewriting (lightweight, fast) */
+  MODEL: process.env.QUERY_REWRITE_MODEL || 'gemini-3.1-flash-lite-preview',
+  /** Number of recent conversation messages to include */
+  MAX_HISTORY: 5,
+  /** Timeout for rewrite API call (ms) */
+  TIMEOUT_MS: 3000,
+  /** Maximum cache entries for rewritten queries */
+  CACHE_SIZE: 100,
+} as const;
+
+/**
+ * LLM-based Fact Extraction configuration — automatically extracts
+ * structured facts from user messages using Gemini.
+ */
+export const FACT_EXTRACTION = {
+  /** Enable LLM-based fact extraction (default: false, opt-in) */
+  ENABLED: process.env.FACT_EXTRACTION_LLM_ENABLED === 'true',
+  /** Model for fact extraction (lightweight, fast) */
+  MODEL: process.env.FACT_EXTRACTION_MODEL || 'gemini-3.1-flash-lite-preview',
+  /** Extract from 1 in every N user messages */
+  RATE: 3,
+  /** Timeout for extraction API call (ms) */
+  TIMEOUT_MS: 5000,
+  /** Minimum message length to attempt extraction */
+  MIN_LENGTH: 20,
+  /** Maximum message length to attempt extraction */
+  MAX_LENGTH: 2000,
+} as const;
+
+/**
+ * Hybrid Search configuration — combines FTS5 with embedding-based
+ * semantic search using Reciprocal Rank Fusion.
+ */
+export const HYBRID_SEARCH = {
+  /** Enable hybrid search (default: false, opt-in — requires GEMINI_API_KEY) */
+  ENABLED: process.env.HYBRID_SEARCH_ENABLED === 'true',
+  /** Chunk size for embedding generation (chars) */
+  CHUNK_SIZE: 1000,
+  /** RRF constant k (higher = more weight to top ranks) */
+  RRF_K: 60,
+  /** Embedding model */
+  EMBED_MODEL: 'gemini-embedding-001',
+} as const;
+
+/**
  * Allowed environment variables to pass to containers
  */
 /**

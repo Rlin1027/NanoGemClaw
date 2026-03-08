@@ -154,7 +154,9 @@ function prioritizedTruncate(
  * Resolve the preferred execution path for a group.
  * Returns 'fast' (default) or 'container'.
  */
-export function resolvePreferredPath(group: RegisteredGroup): 'fast' | 'container' {
+export function resolvePreferredPath(
+  group: RegisteredGroup,
+): 'fast' | 'container' {
   return group.preferredPath ?? 'fast';
 }
 
@@ -287,13 +289,27 @@ You are in direct conversation mode. IMPORTANT RULES:
     }
 
     // Fetch query-relevant knowledge (NOT cached — varies per query)
+    // Uses query rewriter to resolve pronouns/context from conversation history
     let knowledgeContent = '';
     try {
       const { getDatabase } = await import('./db.js');
-      const { getRelevantKnowledge } = await import('./knowledge.js');
+      const { getRelevantKnowledge, precomputeQueryEmbedding } =
+        await import('./knowledge.js');
+      const { rewriteQuery } = await import('./query-rewriter.js');
       const db = getDatabase();
-      const queryText = input.prompt.replace(/<[^>]*>/g, '').slice(0, 200);
-      knowledgeContent = getRelevantKnowledge(db, queryText, input.groupFolder);
+      const queryText = await rewriteQuery(
+        input.prompt,
+        input.conversationHistory || [],
+      );
+      if (queryText) {
+        // Pre-compute embedding for hybrid search (if enabled)
+        await precomputeQueryEmbedding(queryText);
+        knowledgeContent = getRelevantKnowledge(
+          db,
+          queryText,
+          input.groupFolder,
+        );
+      }
     } catch {
       // Knowledge search may fail if no docs exist
     }
