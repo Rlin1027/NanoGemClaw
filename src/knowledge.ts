@@ -466,7 +466,8 @@ export async function getRelevantKnowledge(
 
 /**
  * Search knowledge by embedding similarity.
- * Generates query embedding on the fly (async) and compares against stored embeddings.
+ * Uses a min-heap for top-k selection (O(n log k) instead of O(n log n))
+ * and reads Float32Array directly from BLOB to avoid intermediate array allocation.
  */
 async function searchByEmbedding(
   db: Database.Database,
@@ -491,21 +492,84 @@ async function searchByEmbedding(
   const queryEmbedding = await embedText(query);
   if (!queryEmbedding) return [];
 
-  // Compute similarity and aggregate best score per doc
+  // Precompute query norm once
+  let queryNormSq = 0;
+  for (let i = 0; i < queryEmbedding.length; i++) {
+    queryNormSq += queryEmbedding[i] * queryEmbedding[i];
+  }
+  const queryNorm = Math.sqrt(queryNormSq);
+  if (queryNorm === 0) return [];
+
+  // Score each chunk, aggregate best score per doc
   const docScores = new Map<number, number>();
   for (const row of allEmbeddings) {
-    const emb = blobToEmbedding(row.embedding);
-    const score = cosineSimilarity(queryEmbedding, emb);
+    // Read Float32Array directly from Buffer without intermediate Array copy
+    const buf = row.embedding;
+    const emb = new Float32Array(
+      buf.buffer,
+      buf.byteOffset,
+      buf.byteLength / 4,
+    );
+
+    // Inline dot product and norm to avoid function call overhead
+    let dot = 0;
+    let embNormSq = 0;
+    for (let i = 0; i < emb.length; i++) {
+      dot += queryEmbedding[i] * emb[i];
+      embNormSq += emb[i] * emb[i];
+    }
+    const denom = queryNorm * Math.sqrt(embNormSq);
+    const score = denom === 0 ? 0 : dot / denom;
+
     const existing = docScores.get(row.doc_id) || 0;
     if (score > existing) {
       docScores.set(row.doc_id, score);
     }
   }
 
-  return Array.from(docScores.entries())
-    .map(([docId, score]) => ({ docId, score }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit);
+  // Use partial sort via min-heap for top-k (efficient when limit << n)
+  const entries = Array.from(docScores.entries());
+  if (entries.length <= limit) {
+    return entries
+      .map(([docId, score]) => ({ docId, score }))
+      .sort((a, b) => b.score - a.score);
+  }
+
+  // Min-heap of size `limit` — keeps top-k highest scores
+  const heap: Array<{ docId: number; score: number }> = [];
+  for (const [docId, score] of entries) {
+    if (heap.length < limit) {
+      heap.push({ docId, score });
+      // Bubble up
+      let i = heap.length - 1;
+      while (i > 0) {
+        const parent = (i - 1) >> 1;
+        if (heap[i].score < heap[parent].score) {
+          [heap[i], heap[parent]] = [heap[parent], heap[i]];
+          i = parent;
+        } else break;
+      }
+    } else if (score > heap[0].score) {
+      // Replace root (minimum) and sift down
+      heap[0] = { docId, score };
+      let i = 0;
+      while (true) {
+        let smallest = i;
+        const left = 2 * i + 1;
+        const right = 2 * i + 2;
+        if (left < heap.length && heap[left].score < heap[smallest].score)
+          smallest = left;
+        if (right < heap.length && heap[right].score < heap[smallest].score)
+          smallest = right;
+        if (smallest === i) break;
+        [heap[i], heap[smallest]] = [heap[smallest], heap[i]];
+        i = smallest;
+      }
+    }
+  }
+
+  // Extract in descending order
+  return heap.sort((a, b) => b.score - a.score);
 }
 
 /**
