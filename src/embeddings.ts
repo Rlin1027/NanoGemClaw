@@ -37,42 +37,77 @@ export function cosineSimilarity(a: number[], b: number[]): number {
 // ============================================================================
 
 /**
- * Split text into chunks at paragraph boundaries, combining adjacent
- * paragraphs until the combined length approaches maxChars.
+ * Split text into overlapping chunks at paragraph boundaries.
+ * Overlap preserves cross-chunk context for better embedding quality.
+ * When multiple chunks exist, trailing paragraphs from the previous chunk
+ * are prepended to the next chunk up to overlapChars.
  */
 export function chunkText(
   text: string,
   maxChars = HYBRID_SEARCH.CHUNK_SIZE,
+  overlapChars = HYBRID_SEARCH.CHUNK_OVERLAP,
 ): Array<{ text: string; startOffset: number }> {
   const paragraphs = text
     .split(/\n{2,}/)
     .map((p) => p.trim())
     .filter(Boolean);
-  const chunks: Array<{ text: string; startOffset: number }> = [];
 
-  let current = '';
+  // Phase 1: Group paragraphs into non-overlapping windows
+  const windows: Array<{ paragraphs: string[]; startOffset: number }> = [];
+  let current: string[] = [];
+  let currentLen = 0;
   let startOffset = 0;
   let cursor = 0;
 
   for (const para of paragraphs) {
-    const candidate = current ? `${current}\n\n${para}` : para;
-    if (candidate.length > maxChars && current.length > 0) {
-      chunks.push({ text: current, startOffset });
+    const addLen = current.length > 0 ? para.length + 2 : para.length;
+    if (currentLen + addLen > maxChars && current.length > 0) {
+      windows.push({ paragraphs: [...current], startOffset });
       startOffset = cursor;
-      current = para;
+      current = [para];
+      currentLen = para.length;
     } else {
-      current = candidate;
+      current.push(para);
+      currentLen += addLen;
     }
     cursor += para.length + 2;
   }
 
   if (current.length > 0) {
-    chunks.push({ text: current, startOffset });
+    windows.push({ paragraphs: current, startOffset });
+  }
+
+  // Phase 2: Add overlap from previous window's trailing paragraphs
+  const chunks: Array<{ text: string; startOffset: number }> = [];
+  for (let i = 0; i < windows.length; i++) {
+    let chunkText = windows[i].paragraphs.join('\n\n');
+    let chunkOffset = windows[i].startOffset;
+
+    if (i > 0 && overlapChars > 0) {
+      // Collect trailing paragraphs from previous window up to overlapChars
+      const prevParas = windows[i - 1].paragraphs;
+      const overlapParts: string[] = [];
+      let overlapLen = 0;
+      for (let j = prevParas.length - 1; j >= 0; j--) {
+        const addLen =
+          overlapParts.length > 0 ? prevParas[j].length + 2 : prevParas[j].length;
+        if (overlapLen + addLen > overlapChars) break;
+        overlapParts.unshift(prevParas[j]);
+        overlapLen += addLen;
+      }
+      if (overlapParts.length > 0) {
+        chunkText = overlapParts.join('\n\n') + '\n\n' + chunkText;
+        // startOffset stays at the non-overlap portion for dedup purposes
+      }
+    }
+
+    chunks.push({ text: chunkText, startOffset: chunkOffset });
   }
 
   // Fallback: hard-split if no blank lines found
   if (chunks.length === 0 && text.length > 0) {
-    for (let i = 0; i < text.length; i += maxChars) {
+    const step = Math.max(maxChars - overlapChars, 1);
+    for (let i = 0; i < text.length; i += step) {
       chunks.push({ text: text.slice(i, i + maxChars), startOffset: i });
     }
   }

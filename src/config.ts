@@ -303,6 +303,8 @@ export const HYBRID_SEARCH = {
   ENABLED: process.env.HYBRID_SEARCH_ENABLED !== 'false',
   /** Chunk size for embedding generation (chars) */
   CHUNK_SIZE: 1000,
+  /** Overlap between consecutive chunks (chars) — preserves cross-chunk context */
+  CHUNK_OVERLAP: 200,
   /** RRF constant k (higher = more weight to top ranks) */
   RRF_K: 60,
   /** Embedding model */

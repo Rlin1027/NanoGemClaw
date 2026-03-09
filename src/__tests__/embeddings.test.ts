@@ -112,6 +112,42 @@ describe('embeddings', () => {
         expect(result[1].startOffset).toBeGreaterThan(0);
       }
     });
+
+    it('includes overlap from previous chunk', () => {
+      const text = 'Alpha paragraph.\n\nBeta paragraph.\n\nGamma paragraph.';
+      // maxChars=20 forces each paragraph into its own window
+      // overlapChars=50 should prepend previous paragraph to next chunk
+      const result = chunkText(text, 20, 50);
+
+      expect(result.length).toBe(3);
+      // First chunk has no overlap
+      expect(result[0].text).toBe('Alpha paragraph.');
+      // Second chunk should include overlap from first
+      expect(result[1].text).toContain('Alpha paragraph.');
+      expect(result[1].text).toContain('Beta paragraph.');
+      // Third chunk should include overlap from second
+      expect(result[2].text).toContain('Beta paragraph.');
+      expect(result[2].text).toContain('Gamma paragraph.');
+    });
+
+    it('skips overlap when overlapChars is 0', () => {
+      const text = 'AAA.\n\nBBB.\n\nCCC.';
+      const result = chunkText(text, 5, 0);
+
+      expect(result.length).toBe(3);
+      expect(result[0].text).toBe('AAA.');
+      expect(result[1].text).toBe('BBB.');
+      expect(result[2].text).toBe('CCC.');
+    });
+
+    it('single long paragraph without breaks stays as one chunk', () => {
+      // No paragraph breaks — paragraph splitting produces 1 window
+      const text = 'abcdefghij'; // 10 chars, single paragraph
+      const result = chunkText(text, 6, 2);
+
+      expect(result.length).toBe(1);
+      expect(result[0].text).toBe('abcdefghij');
+    });
   });
 
   describe('BLOB serialization', () => {
