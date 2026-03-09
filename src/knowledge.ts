@@ -392,16 +392,18 @@ export function searchKnowledge(
  * Get relevant knowledge for prompt injection.
  * When hybrid search is enabled, combines FTS5 and embedding results
  * using Reciprocal Rank Fusion (RRF). Otherwise, uses FTS5 only.
+ *
+ * Runs FTS5 and embedding search concurrently for lower latency.
  */
-export function getRelevantKnowledge(
+export async function getRelevantKnowledge(
   db: Database.Database,
   query: string,
   groupFolder: string,
   maxChars = 50000,
-): string {
+): Promise<string> {
   const sanitizedQuery = sanitizeFTS5Query(query);
 
-  // FTS5 search: get ranked doc IDs
+  // FTS5 search: get ranked doc IDs (synchronous, fast)
   const ftsResults = db
     .prepare(
       `
@@ -424,9 +426,9 @@ export function getRelevantKnowledge(
 
   let rankedResults: Array<{ id: number; title: string; content: string }>;
 
-  // If hybrid search is enabled and embeddings exist, merge with RRF
+  // If hybrid search is enabled, run embedding search (async) and merge with RRF
   if (HYBRID_SEARCH.ENABLED) {
-    const embeddingResults = searchByEmbedding(db, query, groupFolder, 20);
+    const embeddingResults = await searchByEmbedding(db, query, groupFolder, 20);
     rankedResults = mergeWithRRF(ftsResults, embeddingResults, db);
   } else {
     rankedResults = ftsResults;
@@ -464,20 +466,14 @@ export function getRelevantKnowledge(
 
 /**
  * Search knowledge by embedding similarity.
- * Returns doc IDs ranked by cosine similarity to the query embedding.
+ * Generates query embedding on the fly (async) and compares against stored embeddings.
  */
-function searchByEmbedding(
+async function searchByEmbedding(
   db: Database.Database,
   query: string,
   groupFolder: string,
   limit: number,
-): Array<{ docId: number; score: number }> {
-  // We need the query embedding — but embedText is async.
-  // Since getRelevantKnowledge is sync, we check for a pre-computed embedding
-  // passed via the embedding cache, or return empty if not available.
-  // The actual embedding search is done asynchronously in the caller when possible.
-  // For now, do a synchronous scan of stored embeddings.
-
+): Promise<Array<{ docId: number; score: number }>> {
   const allEmbeddings = db
     .prepare(
       `
@@ -491,8 +487,8 @@ function searchByEmbedding(
 
   if (allEmbeddings.length === 0) return [];
 
-  // We need a synchronous query embedding — use cached if available
-  const queryEmbedding = getCachedQueryEmbedding(query);
+  // Generate query embedding directly — no fragile cache dependency
+  const queryEmbedding = await embedText(query);
   if (!queryEmbedding) return [];
 
   // Compute similarity and aggregate best score per doc
@@ -564,37 +560,8 @@ function mergeWithRRF(
 }
 
 // ============================================================================
-// Embedding Generation & Caching
+// Embedding Generation
 // ============================================================================
-
-/** In-memory cache for query embeddings (async pre-computation) */
-const queryEmbeddingCache = new Map<string, number[]>();
-
-/** Cache a query embedding for synchronous retrieval in searchByEmbedding */
-export function cacheQueryEmbedding(query: string, embedding: number[]): void {
-  // Keep cache small
-  if (queryEmbeddingCache.size >= 50) {
-    const oldest = queryEmbeddingCache.keys().next().value!;
-    queryEmbeddingCache.delete(oldest);
-  }
-  queryEmbeddingCache.set(query, embedding);
-}
-
-function getCachedQueryEmbedding(query: string): number[] | null {
-  return queryEmbeddingCache.get(query) || null;
-}
-
-/**
- * Pre-compute and cache the query embedding for hybrid search.
- * Call this before getRelevantKnowledge() to enable embedding search.
- */
-export async function precomputeQueryEmbedding(query: string): Promise<void> {
-  if (!HYBRID_SEARCH.ENABLED) return;
-  const embedding = await embedText(query);
-  if (embedding) {
-    cacheQueryEmbedding(query, embedding);
-  }
-}
 
 /**
  * Generate embeddings for a document's chunks and store in DB.

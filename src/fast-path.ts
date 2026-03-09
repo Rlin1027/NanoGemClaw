@@ -293,8 +293,7 @@ You are in direct conversation mode. IMPORTANT RULES:
     const knowledgePromise = (async () => {
       try {
         const { getDatabase } = await import('./db.js');
-        const { getRelevantKnowledge, precomputeQueryEmbedding } =
-          await import('./knowledge.js');
+        const { getRelevantKnowledge } = await import('./knowledge.js');
         const { rewriteQuery } = await import('./query-rewriter.js');
         const db = getDatabase();
         const queryText = await rewriteQuery(
@@ -302,9 +301,7 @@ You are in direct conversation mode. IMPORTANT RULES:
           input.conversationHistory || [],
         );
         if (queryText) {
-          // Pre-compute embedding for hybrid search (if enabled)
-          await precomputeQueryEmbedding(queryText);
-          return getRelevantKnowledge(
+          return await getRelevantKnowledge(
             db,
             queryText,
             input.groupFolder,
