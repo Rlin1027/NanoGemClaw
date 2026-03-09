@@ -280,8 +280,8 @@ export const QUERY_REWRITE = {
  * structured facts from user messages using Gemini.
  */
 export const FACT_EXTRACTION = {
-  /** Enable LLM-based fact extraction (default: false, opt-in) */
-  ENABLED: process.env.FACT_EXTRACTION_LLM_ENABLED === 'true',
+  /** Enable LLM-based fact extraction (default: true) */
+  ENABLED: process.env.FACT_EXTRACTION_LLM_ENABLED !== 'false',
   /** Model for fact extraction (lightweight, fast) */
   MODEL: process.env.FACT_EXTRACTION_MODEL || 'gemini-3.1-flash-lite-preview',
   /** Extract from 1 in every N user messages */
@@ -299,8 +299,8 @@ export const FACT_EXTRACTION = {
  * semantic search using Reciprocal Rank Fusion.
  */
 export const HYBRID_SEARCH = {
-  /** Enable hybrid search (default: false, opt-in — requires GEMINI_API_KEY) */
-  ENABLED: process.env.HYBRID_SEARCH_ENABLED === 'true',
+  /** Enable hybrid search (default: true) */
+  ENABLED: process.env.HYBRID_SEARCH_ENABLED !== 'false',
   /** Chunk size for embedding generation (chars) */
   CHUNK_SIZE: 1000,
   /** RRF constant k (higher = more weight to top ranks) */
