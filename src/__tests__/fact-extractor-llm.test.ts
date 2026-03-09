@@ -7,6 +7,8 @@ vi.hoisted(() => {
 
 const mockGenerate = vi.fn();
 const mockUpsertFact = vi.fn();
+const mockGetFacts = vi.fn(() => []);
+const mockDeleteFact = vi.fn();
 
 vi.mock('../gemini-client.js', () => ({
   generate: (...args: any[]) => mockGenerate(...args),
@@ -14,6 +16,11 @@ vi.mock('../gemini-client.js', () => ({
 
 vi.mock('../db.js', () => ({
   upsertFact: (...args: any[]) => mockUpsertFact(...args),
+}));
+
+vi.mock('../db/facts.js', () => ({
+  getFacts: (...args: any[]) => mockGetFacts(...args),
+  deleteFact: (...args: any[]) => mockDeleteFact(...args),
 }));
 
 vi.mock('../logger.js', () => ({
@@ -156,6 +163,70 @@ describe('fact-extractor (LLM)', () => {
 
       expect(mockUpsertFact).not.toHaveBeenCalled();
     });
+
+    it('includes existing facts in LLM prompt for contradiction detection', async () => {
+      mockGetFacts.mockReturnValue([
+        { key: 'location', value: 'Taipei', source: 'llm_extracted', confidence: 0.9 },
+      ]);
+      mockGenerate.mockResolvedValue({
+        text: JSON.stringify([
+          { key: 'location', value: 'Kaohsiung', confidence: 0.9 },
+        ]),
+      });
+
+      await _extractWithLLM('I moved to Kaohsiung last month', 'grp1');
+
+      // Should include KNOWN FACTS in the prompt
+      expect(mockGenerate).toHaveBeenCalledOnce();
+      const callArgs = mockGenerate.mock.calls[0][0];
+      expect(callArgs.contents[0].parts[0].text).toContain('KNOWN FACTS');
+      expect(callArgs.contents[0].parts[0].text).toContain('location: Taipei');
+
+      expect(mockUpsertFact).toHaveBeenCalledWith(
+        'grp1',
+        'location',
+        'Kaohsiung',
+        'llm_extracted',
+        0.9,
+      );
+    });
+
+    it('deletes superseded fact with different key', async () => {
+      mockGetFacts.mockReturnValue([
+        { key: 'work_location', value: 'Taipei', source: 'llm_extracted', confidence: 0.8 },
+      ]);
+      mockGenerate.mockResolvedValue({
+        text: JSON.stringify([
+          { key: 'location', value: 'Kaohsiung', confidence: 0.9, supersedes: 'work_location' },
+        ]),
+      });
+
+      await _extractWithLLM('I moved everything to Kaohsiung', 'grp1');
+
+      expect(mockDeleteFact).toHaveBeenCalledWith('grp1', 'work_location');
+      expect(mockUpsertFact).toHaveBeenCalledWith(
+        'grp1',
+        'location',
+        'Kaohsiung',
+        'llm_extracted',
+        0.9,
+      );
+    });
+
+    it('does not delete when supersedes matches the same key', async () => {
+      mockGetFacts.mockReturnValue([]);
+      mockGenerate.mockResolvedValue({
+        text: JSON.stringify([
+          { key: 'name', value: 'Bob', confidence: 0.9, supersedes: 'name' },
+        ]),
+      });
+
+      await _extractWithLLM('Actually call me Bob now', 'grp1');
+
+      // Same key — upsert handles it, no explicit delete needed
+      expect(mockDeleteFact).not.toHaveBeenCalled();
+      expect(mockUpsertFact).toHaveBeenCalledOnce();
+    });
   });
 
   describe('_parseFacts', () => {
@@ -189,6 +260,22 @@ describe('fact-extractor (LLM)', () => {
 
     it('returns empty array for empty response', () => {
       expect(_parseFacts('')).toEqual([]);
+    });
+
+    it('parses supersedes field when present', () => {
+      const result = _parseFacts(
+        '[{"key": "location", "value": "Kaohsiung", "confidence": 0.9, "supersedes": "work_location"}]',
+      );
+      expect(result).toEqual([
+        { key: 'location', value: 'Kaohsiung', confidence: 0.9, supersedes: 'work_location' },
+      ]);
+    });
+
+    it('omits supersedes when not present', () => {
+      const result = _parseFacts(
+        '[{"key": "name", "value": "Alice", "confidence": 0.9}]',
+      );
+      expect(result[0]).not.toHaveProperty('supersedes');
     });
   });
 });
