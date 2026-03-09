@@ -235,8 +235,37 @@ export function initDatabase(): void {
     }
   }
 
+  if (currentVersion < 6) {
+    db.exec('BEGIN');
+    try {
+      // Migration v6: Retrieval stats for RAG quality feedback loop
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS retrieval_stats (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          group_folder TEXT NOT NULL,
+          query TEXT NOT NULL,
+          fts_count INTEGER NOT NULL DEFAULT 0,
+          embedding_count INTEGER NOT NULL DEFAULT 0,
+          fts_only_count INTEGER NOT NULL DEFAULT 0,
+          embedding_only_count INTEGER NOT NULL DEFAULT 0,
+          overlap_count INTEGER NOT NULL DEFAULT 0,
+          total_results INTEGER NOT NULL DEFAULT 0,
+          latency_ms INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_rs_group ON retrieval_stats(group_folder);
+        CREATE INDEX IF NOT EXISTS idx_rs_created ON retrieval_stats(created_at);
+      `);
+      db.exec('PRAGMA user_version = 6');
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+  }
+
   // Future migrations go here:
-  // if (currentVersion < 6) { ... db.exec('PRAGMA user_version = 6'); }
+  // if (currentVersion < 7) { ... db.exec('PRAGMA user_version = 7'); }
 }
 
 /**

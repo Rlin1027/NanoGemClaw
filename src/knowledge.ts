@@ -401,6 +401,7 @@ export async function getRelevantKnowledge(
   groupFolder: string,
   maxChars = 50000,
 ): Promise<string> {
+  const startTime = Date.now();
   const sanitizedQuery = sanitizeFTS5Query(query);
 
   // FTS5 search: get ranked doc IDs (synchronous, fast)
@@ -425,13 +426,43 @@ export async function getRelevantKnowledge(
   }>;
 
   let rankedResults: Array<{ id: number; title: string; content: string }>;
+  let embeddingResults: Array<{ docId: number; score: number }> = [];
 
   // If hybrid search is enabled, run embedding search (async) and merge with RRF
   if (HYBRID_SEARCH.ENABLED) {
-    const embeddingResults = await searchByEmbedding(db, query, groupFolder, 20);
+    embeddingResults = await searchByEmbedding(db, query, groupFolder, 20);
     rankedResults = mergeWithRRF(ftsResults, embeddingResults, db);
   } else {
     rankedResults = ftsResults;
+  }
+
+  // Record retrieval stats for quality feedback loop (fire-and-forget)
+  try {
+    const ftsIds = new Set(ftsResults.map((r) => r.id));
+    const embIds = new Set(embeddingResults.map((r) => r.docId));
+    const ftsOnlyCount = [...ftsIds].filter((id) => !embIds.has(id)).length;
+    const embOnlyCount = [...embIds].filter((id) => !ftsIds.has(id)).length;
+    const overlapCount = [...ftsIds].filter((id) => embIds.has(id)).length;
+
+    db.prepare(
+      `INSERT INTO retrieval_stats
+       (group_folder, query, fts_count, embedding_count, fts_only_count,
+        embedding_only_count, overlap_count, total_results, latency_ms, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      groupFolder,
+      query.slice(0, 500),
+      ftsResults.length,
+      embeddingResults.length,
+      ftsOnlyCount,
+      embOnlyCount,
+      overlapCount,
+      rankedResults.length,
+      Date.now() - startTime,
+      new Date().toISOString(),
+    );
+  } catch {
+    // Stats recording should never break retrieval
   }
 
   if (rankedResults.length === 0) {
@@ -686,4 +717,47 @@ export async function reindexAllEmbeddings(
   }
 
   return { indexed, failed };
+}
+
+// ============================================================================
+// Retrieval Stats
+// ============================================================================
+
+export interface RetrievalStatsAggregated {
+  totalQueries: number;
+  avgFtsCount: number;
+  avgEmbeddingCount: number;
+  avgFtsOnlyCount: number;
+  avgEmbeddingOnlyCount: number;
+  avgOverlapCount: number;
+  avgLatencyMs: number;
+  emptyResultQueries: number;
+}
+
+/**
+ * Get aggregated retrieval stats for a group over a time period.
+ * Useful for understanding FTS vs embedding contribution and tuning RRF.
+ */
+export function getRetrievalStats(
+  db: Database.Database,
+  groupFolder: string,
+  sinceDate?: string,
+): RetrievalStatsAggregated {
+  const since = sinceDate || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const row = db
+    .prepare(
+      `SELECT
+         COUNT(*) as totalQueries,
+         COALESCE(AVG(fts_count), 0) as avgFtsCount,
+         COALESCE(AVG(embedding_count), 0) as avgEmbeddingCount,
+         COALESCE(AVG(fts_only_count), 0) as avgFtsOnlyCount,
+         COALESCE(AVG(embedding_only_count), 0) as avgEmbeddingOnlyCount,
+         COALESCE(AVG(overlap_count), 0) as avgOverlapCount,
+         COALESCE(AVG(latency_ms), 0) as avgLatencyMs,
+         SUM(CASE WHEN total_results = 0 THEN 1 ELSE 0 END) as emptyResultQueries
+       FROM retrieval_stats
+       WHERE group_folder = ? AND created_at >= ?`,
+    )
+    .get(groupFolder, since) as RetrievalStatsAggregated;
+  return row;
 }
