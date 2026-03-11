@@ -266,6 +266,10 @@ export const HYBRID_SEARCH = {
   RRF_K: 60,
   /** Embedding model used for semantic retrieval */
   EMBED_MODEL: 'gemini-embedding-001',
+  /** Maximum embedding rows to load per query (bounds memory usage) */
+  MAX_EMBEDDING_SCAN: 500,
+  /** Minimum cosine similarity to include in results */
+  MIN_SIMILARITY: 0.3,
 } as const;
 
 /**

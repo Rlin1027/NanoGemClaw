@@ -10,8 +10,6 @@ import {
   embedBatch,
   embedText,
   embeddingToBlob,
-  blobToEmbedding,
-  cosineSimilarity,
 } from './embeddings.js';
 import { logger } from './logger.js';
 
@@ -45,6 +43,21 @@ export interface KnowledgeSearcher {
   remove(docId: number): void;
 }
 
+/** Cosine similarity between a number[] query and a Float32Array doc embedding (zero-copy). */
+function cosineSimilarityF32(a: number[], b: Float32Array): number {
+  if (a.length !== b.length || a.length === 0) return 0;
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  const denom = Math.sqrt(normA) * Math.sqrt(normB);
+  return denom === 0 ? 0 : dot / denom;
+}
+
 const SAFE_FILENAME_RE = /^[a-zA-Z0-9_-]+\.md$/;
 
 export function initKnowledgeIndex(db: Database.Database): void {
@@ -57,6 +70,12 @@ export function initKnowledgeIndex(db: Database.Database): void {
       tokenize='trigram'
     );
   `);
+
+  const { count } = db
+    .prepare('SELECT COUNT(*) as count FROM knowledge_fts')
+    .get() as { count: number };
+
+  if (count > 0) return; // Already indexed from a previous run
 
   const existingDocs = db
     .prepare('SELECT id, group_folder, title, content FROM knowledge_docs')
@@ -72,13 +91,13 @@ export function initKnowledgeIndex(db: Database.Database): void {
     VALUES (?, ?, ?, ?)
   `);
 
-  for (const doc of existingDocs) {
-    try {
+  const insertAll = db.transaction(() => {
+    for (const doc of existingDocs) {
       insertFts.run(doc.id, doc.group_folder, doc.title, doc.content);
-    } catch {
-      // Already indexed
     }
-  }
+  });
+
+  insertAll();
 }
 
 export function addKnowledgeDoc(
@@ -183,8 +202,7 @@ export function updateKnowledgeDoc(
   fs.writeFileSync(filePath, content, 'utf-8');
 
   if (HYBRID_SEARCH.ENABLED) {
-    db.prepare('DELETE FROM knowledge_embeddings WHERE doc_id = ?').run(docId);
-    void generateAndStoreEmbeddings(db, docId, content).catch((err) => {
+    void generateAndStoreEmbeddings(db, docId, content, true).catch((err) => {
       logger.debug(
         { docId, err: err instanceof Error ? err.message : String(err) },
         'Failed to regenerate embeddings for updated doc',
@@ -379,18 +397,22 @@ async function searchByEmbedding(
   groupFolder: string,
   limit: number,
 ): Promise<Array<{ docId: number; score: number }>> {
-  const allEmbeddings = db
+  const rows = db
     .prepare(
       `
     SELECT ke.doc_id, ke.embedding
     FROM knowledge_embeddings ke
     JOIN knowledge_docs d ON d.id = ke.doc_id
     WHERE d.group_folder = ?
+    LIMIT ?
   `,
     )
-    .all(groupFolder) as Array<{ doc_id: number; embedding: Buffer }>;
+    .all(groupFolder, HYBRID_SEARCH.MAX_EMBEDDING_SCAN) as Array<{
+    doc_id: number;
+    embedding: Buffer;
+  }>;
 
-  if (allEmbeddings.length === 0) {
+  if (rows.length === 0) {
     return [];
   }
 
@@ -399,12 +421,16 @@ async function searchByEmbedding(
     return [];
   }
 
+  const minSim = HYBRID_SEARCH.MIN_SIMILARITY;
   const docScores = new Map<number, number>();
-  for (const row of allEmbeddings) {
-    const score = cosineSimilarity(
-      queryEmbedding,
-      blobToEmbedding(row.embedding),
+  for (const row of rows) {
+    const emb = new Float32Array(
+      row.embedding.buffer,
+      row.embedding.byteOffset,
+      row.embedding.byteLength / 4,
     );
+    const score = cosineSimilarityF32(queryEmbedding, emb);
+    if (score < minSim) continue;
     const existing = docScores.get(row.doc_id) || 0;
     if (score > existing) {
       docScores.set(row.doc_id, score);
@@ -464,22 +490,34 @@ export async function generateAndStoreEmbeddings(
   db: Database.Database,
   docId: number,
   content: string,
+  replaceExisting = false,
 ): Promise<void> {
   const chunks = chunkText(content);
   if (chunks.length === 0) return;
 
   const embeddings = await embedBatch(chunks.map((chunk) => chunk.text));
   const now = new Date().toISOString();
+
+  // Atomic: delete old + insert new in a single transaction to avoid query gap
   const insertStmt = db.prepare(`
     INSERT OR REPLACE INTO knowledge_embeddings (doc_id, chunk_index, chunk_text, embedding, created_at)
     VALUES (?, ?, ?, ?, ?)
   `);
 
-  for (let i = 0; i < chunks.length; i++) {
-    const embedding = embeddings[i];
-    if (!embedding) continue;
-    insertStmt.run(docId, i, chunks[i].text, embeddingToBlob(embedding), now);
-  }
+  const writeAll = db.transaction(() => {
+    if (replaceExisting) {
+      db.prepare('DELETE FROM knowledge_embeddings WHERE doc_id = ?').run(
+        docId,
+      );
+    }
+    for (let i = 0; i < chunks.length; i++) {
+      const embedding = embeddings[i];
+      if (!embedding) continue;
+      insertStmt.run(docId, i, chunks[i].text, embeddingToBlob(embedding), now);
+    }
+  });
+
+  writeAll();
 }
 
 export async function reindexAllEmbeddings(

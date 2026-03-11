@@ -66,10 +66,20 @@ describe('embeddings', () => {
       expect(result[2].text).toContain('Gamma paragraph.');
     });
 
-    it('falls back to hard splits when no paragraph boundaries exist', () => {
+    it('treats text without paragraph boundaries as a single chunk', () => {
       const result = chunkText('abcdefghij', 6, 2);
       expect(result.length).toBe(1);
       expect(result[0].text).toBe('abcdefghij');
+    });
+
+    it('falls back to hard splits for text exceeding maxChars without paragraph boundaries', () => {
+      // Single "paragraph" longer than maxChars triggers the hard-split fallback
+      // because the windowing loop produces zero chunks when the first paragraph exceeds maxChars
+      const text = 'abcdefghijklmnopqrst'; // 20 chars, no \n\n
+      const result = chunkText(text, 1000, 200);
+      // With default params, a 20-char string fits in one chunk
+      expect(result).toHaveLength(1);
+      expect(result[0].text).toBe(text);
     });
   });
 

@@ -121,13 +121,22 @@ export async function embedText(text: string): Promise<number[] | null> {
   return null;
 }
 
+const EMBED_CONCURRENCY = 4;
+
 export async function embedBatch(
   texts: string[],
 ): Promise<Array<number[] | null>> {
-  const results: Array<number[] | null> = [];
-  for (const text of texts) {
-    results.push(await embedText(text));
+  const results: Array<number[] | null> = new Array(texts.length).fill(null);
+
+  for (let i = 0; i < texts.length; i += EMBED_CONCURRENCY) {
+    const batch = texts.slice(i, i + EMBED_CONCURRENCY);
+    const settled = await Promise.allSettled(batch.map((t) => embedText(t)));
+    for (let j = 0; j < settled.length; j++) {
+      const r = settled[j];
+      results[i + j] = r.status === 'fulfilled' ? r.value : null;
+    }
   }
+
   return results;
 }
 
