@@ -288,27 +288,37 @@ You are in direct conversation mode. IMPORTANT RULES:
 8. NEVER call cancel_task, pause_task, or resume_task UNLESS the user's current message contains an explicit action verb like 取消/刪除/暫停/恢復/停止`;
     }
 
-    // Fetch query-relevant knowledge (NOT cached — varies per query)
-    let knowledgeContent = '';
-    try {
-      const { getDatabase } = await import('./db.js');
-      const { getRelevantKnowledge } = await import('./knowledge.js');
-      const db = getDatabase();
-      const queryText = input.prompt.replace(/<[^>]*>/g, '').slice(0, 200);
-      knowledgeContent = getRelevantKnowledge(db, queryText, input.groupFolder);
-    } catch {
-      // Knowledge search may fail if no docs exist
-    }
+    const knowledgePromise = (async () => {
+      try {
+        const { getDatabase } = await import('./db.js');
+        const { getRelevantKnowledge } = await import('./knowledge.js');
+        const { rewriteQuery } = await import('./query-rewriter.js');
+        const db = getDatabase();
+        const queryText = await rewriteQuery(
+          input.prompt,
+          input.conversationHistory || [],
+        );
+        if (!queryText) return '';
+        return await getRelevantKnowledge(db, queryText, input.groupFolder);
+      } catch {
+        return '';
+      }
+    })();
 
     // Cache ONLY static content (system prompt + memory summary).
     // Knowledge is query-dependent and must NOT be cached.
-    const cachedContent = await getOrCreateCache(
+    const cachePromise = getOrCreateCache(
       input.groupFolder,
       model,
       systemInstruction,
       undefined,
       input.memoryContext,
     );
+
+    const [knowledgeContent, cachedContent] = await Promise.all([
+      knowledgePromise,
+      cachePromise,
+    ]);
 
     // Filter out model messages that are purely function-call artifacts
     // to prevent Gemini from replaying previous function call patterns

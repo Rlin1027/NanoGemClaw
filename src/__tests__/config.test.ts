@@ -25,6 +25,8 @@ import {
   WEBHOOK,
   TASK_TRACKING,
   MEMORY,
+  QUERY_REWRITE,
+  HYBRID_SEARCH,
   MOUNT_ALLOWLIST_PATH,
   STORE_DIR,
   GROUPS_DIR,
@@ -217,6 +219,26 @@ describe('config.ts', () => {
     it('should parse events from env', () => {
       expect(WEBHOOK.EVENTS).toEqual(['error', 'alert']);
       expect(Array.isArray(WEBHOOK.EVENTS)).toBe(true);
+    });
+  });
+
+  describe('QUERY_REWRITE', () => {
+    it('should have correct default values', () => {
+      expect(QUERY_REWRITE.ENABLED).toBe(true);
+      expect(QUERY_REWRITE.MODEL).toBe('gemini-3.1-flash-lite-preview');
+      expect(QUERY_REWRITE.MAX_HISTORY).toBe(5);
+      expect(QUERY_REWRITE.TIMEOUT_MS).toBe(3000);
+      expect(QUERY_REWRITE.CACHE_SIZE).toBe(100);
+    });
+  });
+
+  describe('HYBRID_SEARCH', () => {
+    it('should have correct default values', () => {
+      expect(HYBRID_SEARCH.ENABLED).toBe(true);
+      expect(HYBRID_SEARCH.CHUNK_SIZE).toBe(1000);
+      expect(HYBRID_SEARCH.CHUNK_OVERLAP).toBe(200);
+      expect(HYBRID_SEARCH.RRF_K).toBe(60);
+      expect(HYBRID_SEARCH.EMBED_MODEL).toBe('gemini-embedding-001');
     });
   });
 

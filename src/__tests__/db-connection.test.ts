@@ -29,7 +29,7 @@ vi.mock('../config.js', () => ({
 }));
 
 // Import db functions after mocking
-import { initDatabase, closeDatabase } from '../db.js';
+import { initDatabase, closeDatabase, getDatabase } from '../db.js';
 import { resetDatabase, cleanupTestDir } from './helpers/db-test-setup.js';
 
 describe('db/connection', () => {
@@ -56,6 +56,16 @@ describe('db/connection', () => {
 
     it('should close database without errors', () => {
       expect(() => closeDatabase()).not.toThrow();
+    });
+
+    it('should create knowledge_embeddings table', () => {
+      const db = getDatabase();
+      const table = db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'knowledge_embeddings'",
+        )
+        .get() as { name?: string } | undefined;
+      expect(table?.name).toBe('knowledge_embeddings');
     });
   });
 });

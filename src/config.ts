@@ -237,6 +237,38 @@ Keep the summary under 500 words. Output in the same language as the conversatio
 } as const;
 
 /**
+ * Query rewriting configuration for knowledge retrieval.
+ */
+export const QUERY_REWRITE = {
+  /** Enable query rewriting before local knowledge retrieval */
+  ENABLED: process.env.QUERY_REWRITE_ENABLED !== 'false',
+  /** Lightweight model used for query optimization */
+  MODEL: process.env.QUERY_REWRITE_MODEL || 'gemini-3.1-flash-lite-preview',
+  /** Number of recent conversation messages to consider */
+  MAX_HISTORY: 5,
+  /** Timeout for a single rewrite call (ms) */
+  TIMEOUT_MS: 3000,
+  /** Maximum cache entries for rewritten queries */
+  CACHE_SIZE: 100,
+} as const;
+
+/**
+ * Hybrid search configuration for local knowledge retrieval.
+ */
+export const HYBRID_SEARCH = {
+  /** Enable FTS + embedding retrieval for local knowledge docs */
+  ENABLED: process.env.HYBRID_SEARCH_ENABLED !== 'false',
+  /** Chunk size for knowledge embeddings */
+  CHUNK_SIZE: 1000,
+  /** Overlap between adjacent chunks to preserve boundary context */
+  CHUNK_OVERLAP: 200,
+  /** Reciprocal Rank Fusion constant */
+  RRF_K: 60,
+  /** Embedding model used for semantic retrieval */
+  EMBED_MODEL: 'gemini-embedding-001',
+} as const;
+
+/**
  * Fast Path configuration - Direct Gemini API calls with streaming
  */
 export const FAST_PATH = {

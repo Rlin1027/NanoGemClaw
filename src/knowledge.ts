@@ -1,13 +1,19 @@
-// src/knowledge.ts
 import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
-import { GROUPS_DIR } from './config.js';
+
 import { escapeFts5Query } from '@nanogemclaw/core';
 
-// ============================================================================
-// Types
-// ============================================================================
+import { GROUPS_DIR, HYBRID_SEARCH } from './config.js';
+import {
+  chunkText,
+  embedBatch,
+  embedText,
+  embeddingToBlob,
+  blobToEmbedding,
+  cosineSimilarity,
+} from './embeddings.js';
+import { logger } from './logger.js';
 
 export interface KnowledgeDoc {
   id: number;
@@ -29,7 +35,6 @@ export interface KnowledgeSearchResult {
   rank: number;
 }
 
-/** Abstract interface for future embedding/vector replacement */
 export interface KnowledgeSearcher {
   search(
     query: string,
@@ -40,22 +45,9 @@ export interface KnowledgeSearcher {
   remove(docId: number): void;
 }
 
-// ============================================================================
-// Constants
-// ============================================================================
-
 const SAFE_FILENAME_RE = /^[a-zA-Z0-9_-]+\.md$/;
 
-// ============================================================================
-// FTS5 Index Management
-// ============================================================================
-
-/**
- * Initialize FTS5 virtual table for full-text search.
- * Creates the table if missing and populates from existing docs.
- */
 export function initKnowledgeIndex(db: Database.Database): void {
-  // Create FTS5 virtual table with trigram tokenizer (better for Chinese)
   db.exec(`
     CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts USING fts5(
       doc_id UNINDEXED,
@@ -66,7 +58,6 @@ export function initKnowledgeIndex(db: Database.Database): void {
     );
   `);
 
-  // Populate FTS index from existing knowledge_docs rows
   const existingDocs = db
     .prepare('SELECT id, group_folder, title, content FROM knowledge_docs')
     .all() as Array<{
@@ -90,14 +81,6 @@ export function initKnowledgeIndex(db: Database.Database): void {
   }
 }
 
-// ============================================================================
-// CRUD Operations
-// ============================================================================
-
-/**
- * Add a new knowledge document.
- * Validates filename, writes to disk, inserts into DB and FTS index.
- */
 export function addKnowledgeDoc(
   db: Database.Database,
   groupFolder: string,
@@ -105,7 +88,6 @@ export function addKnowledgeDoc(
   title: string,
   content: string,
 ): KnowledgeDoc {
-  // Validate filename
   if (!SAFE_FILENAME_RE.test(filename)) {
     throw new Error(
       'Invalid filename. Only alphanumeric, dash, underscore, and .md extension allowed.',
@@ -115,15 +97,12 @@ export function addKnowledgeDoc(
   const now = new Date().toISOString();
   const sizeChars = content.length;
 
-  // Ensure knowledge directory exists
   const knowledgeDir = path.join(GROUPS_DIR, groupFolder, 'knowledge');
   fs.mkdirSync(knowledgeDir, { recursive: true });
 
-  // Write markdown file to disk
   const filePath = path.join(knowledgeDir, filename);
   fs.writeFileSync(filePath, content, 'utf-8');
 
-  // Insert into DB
   const result = db
     .prepare(
       `
@@ -135,13 +114,21 @@ export function addKnowledgeDoc(
 
   const docId = result.lastInsertRowid as number;
 
-  // Insert into FTS index
   db.prepare(
     `
     INSERT INTO knowledge_fts (doc_id, group_folder, title, content)
     VALUES (?, ?, ?, ?)
   `,
   ).run(docId, groupFolder, title, content);
+
+  if (HYBRID_SEARCH.ENABLED) {
+    void generateAndStoreEmbeddings(db, docId, content).catch((err) => {
+      logger.debug(
+        { docId, err: err instanceof Error ? err.message : String(err) },
+        'Failed to generate embeddings for new doc',
+      );
+    });
+  }
 
   return {
     id: docId,
@@ -155,17 +142,12 @@ export function addKnowledgeDoc(
   };
 }
 
-/**
- * Update an existing knowledge document.
- * Updates DB, FTS index, and disk file.
- */
 export function updateKnowledgeDoc(
   db: Database.Database,
   docId: number,
   title: string,
   content: string,
 ): KnowledgeDoc | null {
-  // Get existing doc to find file location
   const existing = db
     .prepare('SELECT * FROM knowledge_docs WHERE id = ?')
     .get(docId) as KnowledgeDoc | undefined;
@@ -176,7 +158,6 @@ export function updateKnowledgeDoc(
   const now = new Date().toISOString();
   const sizeChars = content.length;
 
-  // Update DB
   db.prepare(
     `
     UPDATE knowledge_docs
@@ -185,7 +166,6 @@ export function updateKnowledgeDoc(
   `,
   ).run(title, content, sizeChars, now, docId);
 
-  // Update FTS index
   db.prepare(
     `
     UPDATE knowledge_fts
@@ -194,7 +174,6 @@ export function updateKnowledgeDoc(
   `,
   ).run(title, content, docId);
 
-  // Update disk file
   const filePath = path.join(
     GROUPS_DIR,
     existing.group_folder,
@@ -202,6 +181,16 @@ export function updateKnowledgeDoc(
     existing.filename,
   );
   fs.writeFileSync(filePath, content, 'utf-8');
+
+  if (HYBRID_SEARCH.ENABLED) {
+    db.prepare('DELETE FROM knowledge_embeddings WHERE doc_id = ?').run(docId);
+    void generateAndStoreEmbeddings(db, docId, content).catch((err) => {
+      logger.debug(
+        { docId, err: err instanceof Error ? err.message : String(err) },
+        'Failed to regenerate embeddings for updated doc',
+      );
+    });
+  }
 
   return {
     ...existing,
@@ -212,15 +201,10 @@ export function updateKnowledgeDoc(
   };
 }
 
-/**
- * Delete a knowledge document.
- * Removes from DB, FTS index, and disk.
- */
 export function deleteKnowledgeDoc(
   db: Database.Database,
   docId: number,
 ): boolean {
-  // Get doc to find file location
   const doc = db
     .prepare('SELECT * FROM knowledge_docs WHERE id = ?')
     .get(docId) as KnowledgeDoc | undefined;
@@ -228,13 +212,10 @@ export function deleteKnowledgeDoc(
     return false;
   }
 
-  // Delete from FTS index
   db.prepare('DELETE FROM knowledge_fts WHERE doc_id = ?').run(docId);
-
-  // Delete from DB
+  db.prepare('DELETE FROM knowledge_embeddings WHERE doc_id = ?').run(docId);
   db.prepare('DELETE FROM knowledge_docs WHERE id = ?').run(docId);
 
-  // Delete from disk
   const filePath = path.join(
     GROUPS_DIR,
     doc.group_folder,
@@ -250,9 +231,6 @@ export function deleteKnowledgeDoc(
   return true;
 }
 
-/**
- * Get all knowledge documents for a group.
- */
 export function getKnowledgeDocs(
   db: Database.Database,
   groupFolder: string,
@@ -268,9 +246,6 @@ export function getKnowledgeDocs(
     .all(groupFolder) as KnowledgeDoc[];
 }
 
-/**
- * Get knowledge documents for a group with pagination.
- */
 export function getKnowledgeDocsPaginated(
   db: Database.Database,
   groupFolder: string,
@@ -295,9 +270,6 @@ export function getKnowledgeDocsPaginated(
   return { rows, total };
 }
 
-/**
- * Get a single knowledge document by ID.
- */
 export function getKnowledgeDoc(
   db: Database.Database,
   docId: number,
@@ -308,24 +280,15 @@ export function getKnowledgeDoc(
   return doc || null;
 }
 
-// ============================================================================
-// Search & Retrieval
-// ============================================================================
-
-/**
- * Search knowledge documents using FTS5.
- * Returns results with snippets and relevance ranking.
- */
 export function searchKnowledge(
   db: Database.Database,
   query: string,
   groupFolder: string,
   limit = 10,
 ): KnowledgeSearchResult[] {
-  // Sanitize FTS5 query - wrap in quotes to treat as literal phrase
   const sanitizedQuery = escapeFts5Query(query);
 
-  const results = db
+  return db
     .prepare(
       `
     SELECT
@@ -343,27 +306,21 @@ export function searchKnowledge(
   `,
     )
     .all(groupFolder, sanitizedQuery, limit) as KnowledgeSearchResult[];
-
-  return results;
 }
 
-/**
- * Get relevant knowledge for prompt injection.
- * Searches and concatenates matching documents up to maxChars limit.
- */
-export function getRelevantKnowledge(
+export async function getRelevantKnowledge(
   db: Database.Database,
   query: string,
   groupFolder: string,
   maxChars = 50000,
-): string {
+): Promise<string> {
   const sanitizedQuery = escapeFts5Query(query);
 
-  // Single query: JOIN full document content with FTS results
-  const results = db
+  const ftsResults = db
     .prepare(
       `
     SELECT
+      d.id,
       d.title,
       d.content
     FROM knowledge_fts fts
@@ -374,18 +331,30 @@ export function getRelevantKnowledge(
   `,
     )
     .all(groupFolder, sanitizedQuery) as Array<{
+    id: number;
     title: string;
     content: string;
   }>;
 
-  if (results.length === 0) {
+  let rankedResults = ftsResults;
+  if (HYBRID_SEARCH.ENABLED) {
+    const embeddingResults = await searchByEmbedding(
+      db,
+      query,
+      groupFolder,
+      20,
+    );
+    rankedResults = mergeWithRRF(ftsResults, embeddingResults, db);
+  }
+
+  if (rankedResults.length === 0) {
     return '';
   }
 
   const chunks: string[] = [];
   let totalChars = 0;
 
-  for (const doc of results) {
+  for (const doc of rankedResults) {
     const header = `\n# ${doc.title}\n\n`;
     const chunkSize = header.length + doc.content.length;
 
@@ -402,4 +371,145 @@ export function getRelevantKnowledge(
   }
 
   return chunks.join('\n');
+}
+
+async function searchByEmbedding(
+  db: Database.Database,
+  query: string,
+  groupFolder: string,
+  limit: number,
+): Promise<Array<{ docId: number; score: number }>> {
+  const allEmbeddings = db
+    .prepare(
+      `
+    SELECT ke.doc_id, ke.embedding
+    FROM knowledge_embeddings ke
+    JOIN knowledge_docs d ON d.id = ke.doc_id
+    WHERE d.group_folder = ?
+  `,
+    )
+    .all(groupFolder) as Array<{ doc_id: number; embedding: Buffer }>;
+
+  if (allEmbeddings.length === 0) {
+    return [];
+  }
+
+  const queryEmbedding = await embedText(query);
+  if (!queryEmbedding) {
+    return [];
+  }
+
+  const docScores = new Map<number, number>();
+  for (const row of allEmbeddings) {
+    const score = cosineSimilarity(
+      queryEmbedding,
+      blobToEmbedding(row.embedding),
+    );
+    const existing = docScores.get(row.doc_id) || 0;
+    if (score > existing) {
+      docScores.set(row.doc_id, score);
+    }
+  }
+
+  return Array.from(docScores.entries())
+    .map(([docId, score]) => ({ docId, score }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+}
+
+function mergeWithRRF(
+  ftsResults: Array<{ id: number; title: string; content: string }>,
+  embeddingResults: Array<{ docId: number; score: number }>,
+  db: Database.Database,
+): Array<{ id: number; title: string; content: string }> {
+  const k = HYBRID_SEARCH.RRF_K;
+  const rrfScores = new Map<number, number>();
+
+  for (let i = 0; i < ftsResults.length; i++) {
+    const docId = ftsResults[i].id;
+    rrfScores.set(docId, (rrfScores.get(docId) || 0) + 1 / (k + i + 1));
+  }
+
+  for (let i = 0; i < embeddingResults.length; i++) {
+    const docId = embeddingResults[i].docId;
+    rrfScores.set(docId, (rrfScores.get(docId) || 0) + 1 / (k + i + 1));
+  }
+
+  const sortedIds = Array.from(rrfScores.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([id]) => id);
+
+  const ftsMap = new Map(ftsResults.map((r) => [r.id, r]));
+  const results: Array<{ id: number; title: string; content: string }> = [];
+
+  for (const docId of sortedIds) {
+    const fromFts = ftsMap.get(docId);
+    if (fromFts) {
+      results.push(fromFts);
+      continue;
+    }
+
+    const doc = db
+      .prepare('SELECT id, title, content FROM knowledge_docs WHERE id = ?')
+      .get(docId) as { id: number; title: string; content: string } | undefined;
+    if (doc) {
+      results.push(doc);
+    }
+  }
+
+  return results;
+}
+
+export async function generateAndStoreEmbeddings(
+  db: Database.Database,
+  docId: number,
+  content: string,
+): Promise<void> {
+  const chunks = chunkText(content);
+  if (chunks.length === 0) return;
+
+  const embeddings = await embedBatch(chunks.map((chunk) => chunk.text));
+  const now = new Date().toISOString();
+  const insertStmt = db.prepare(`
+    INSERT OR REPLACE INTO knowledge_embeddings (doc_id, chunk_index, chunk_text, embedding, created_at)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+
+  for (let i = 0; i < chunks.length; i++) {
+    const embedding = embeddings[i];
+    if (!embedding) continue;
+    insertStmt.run(docId, i, chunks[i].text, embeddingToBlob(embedding), now);
+  }
+}
+
+export async function reindexAllEmbeddings(
+  db: Database.Database,
+): Promise<{ indexed: number; failed: number }> {
+  const docs = db
+    .prepare('SELECT id, content FROM knowledge_docs')
+    .all() as Array<{ id: number; content: string }>;
+
+  let indexed = 0;
+  let failed = 0;
+
+  for (const doc of docs) {
+    try {
+      db.prepare('DELETE FROM knowledge_embeddings WHERE doc_id = ?').run(
+        doc.id,
+      );
+      await generateAndStoreEmbeddings(db, doc.id, doc.content);
+      indexed++;
+    } catch (err) {
+      logger.debug(
+        {
+          docId: doc.id,
+          err: err instanceof Error ? err.message : String(err),
+        },
+        'Failed to index embeddings for doc',
+      );
+      failed++;
+    }
+  }
+
+  return { indexed, failed };
 }
