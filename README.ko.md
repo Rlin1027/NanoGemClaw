@@ -39,7 +39,7 @@
 | **Bot Framework**    | node-telegram-bot-api| grammY (type-safe, event-driven)                                      |
 | **Messaging**        | WhatsApp (Baileys)   | Telegram Bot API                                                      |
 | **Cost**             | Claude Max ($100/mo) | Free tier (60 req/min)                                                |
-| **Architecture**     | Monolith             | Modular monorepo (8 packages + 7 plugins)                             |
+| **Architecture**     | Monolith             | Modular monorepo (7 workspace packages + app + 7 plugins)             |
 | **Extensibility**    | Hardcoded            | Plugin system with lifecycle hooks                                    |
 | **Google Ecosystem** | -                    | Drive, Calendar, Tasks, Knowledge RAG                                 |
 | **Notifications**    | -                    | Discord daily/weekly reports                                          |
@@ -55,7 +55,7 @@
 
 ## 주요 기능
 
-- **모듈식 Monorepo** - 8개의 npm workspace 패키지입니다. 개별 패키지를 자신의 프로젝트에서 사용하거나 전체 스택을 배포할 수 있습니다.
+- **모듈식 Monorepo** - 7개의 npm workspace 패키지와 `app/` 진입 계층으로 구성됩니다. 개별 패키지를 재사용하거나 전체 스택을 배포할 수 있습니다.
 - **grammY Bot Framework** - node-telegram-bot-api에서 grammY로 마이그레이션했으며, 타입 안전하고 이벤트 기반의 Telegram 통합을 지원하며 속도 제한 및 메시지 통합 기능을 제공합니다.
 - **MCP Client Bridge** - Model Context Protocol의 도구별 화이트리스트 기능을 제공하며, 모든 도구 입력에 대한 통합 Zod 스키마 검증을 수행합니다.
 - **스마트 메시지 라우팅** - `preferredPath` 지능형 라우팅은 쿼리 유형에 따라 빠른 경로(직접 Gemini API)와 컨테이너 실행 중에서 선택하며, 매끄러운 폴백을 제공합니다.
@@ -69,6 +69,7 @@
 - **Browser Automation** - 에이전트는 복잡한 웹 작업을 위해 `agent-browser`(Playwright)를 사용합니다.
 - **Knowledge Base** - 그룹별 문서 저장소로 SQLite FTS5 전체 텍스트 검색 및 보안을 위한 주입 스캔을 제공합니다.
 - **Hybrid Drive RAG** - 2계층 검색: 즉시 조회를 위한 사전 인덱싱된 임베딩(물리적 파일 접근 방식) + 광범위한 커버리지를 위한 라이브 드라이브 검색입니다. NotebookLM과 동일한 지식 폴더를 공유합니다.
+- **Temporal Memory Compaction** - short/medium/long 3계층 메모리에 대해 Gemini 기반 compaction, regex fact extraction, scheduler 주도의 context budget 관리를 제공합니다.
 - **Scheduled Tasks** - 자연 언어 일정 예약("매일 오전 8시")으로 cron, 간격 및 일회성 지원을 제공합니다.
 - **Google Calendar(Read/Write)** - Google Calendar API를 통해 이벤트를 생성, 업데이트, 삭제하고 가용성을 확인합니다. iCal에 대한 읽기 전용 액세스 폴백을 제공합니다.
 - **Google Tasks** - 완전한 CRUD 작업과 NanoGemClaw 예약 작업과 Google Tasks 간의 양방향 동기화를 지원합니다.
@@ -80,7 +81,12 @@
 - **Container Isolation** - 모든 그룹은 시간 초과 및 출력 크기 제한이 있는 자체 샌드박스(Apple Container 또는 Docker)에서 실행됩니다.
 - **Web Dashboard** - 로그 스트리밍, 메모리 편집기, 분석, Google 계정 관리, Drive 브라우저, Discord 설정, MCP 관리를 포함한 12개 모듈의 실시간 명령 센터입니다.
 - **i18n(100% 커버리지)** - 8개 언어(영어, 繁體中文, 簡體中文, 日本語, 한국어, Español, Português, Русский) 완벽한 인터페이스 지원을 제공합니다.
-- **Test Coverage** - 92% 문장 커버리지, 84% 분기 커버리지(35개 이상의 테스트 파일, ~950개 테스트)로 Vitest와 포괄적인 통합 테스트를 지원합니다.
+- **Test Coverage** - fast path, hybrid RAG, scheduling, temporal memory 흐름을 포함한 Vitest 단위/통합 테스트를 폭넓게 갖추고 있습니다.
+
+## Recent Development
+
+- **2026-03-16** - Intelligence Layer 핵심 추가: 3계층 temporal memory, Gemini-powered compaction, fact extraction, scheduler 기반 context budget 관리.
+- **2026-03-11** - hybrid Drive RAG 검색 추가: query rewriting, embedding 검색 강화, similarity threshold, 통합 테스트 보강.
 
 ---
 
@@ -93,7 +99,6 @@ nanogemclaw/
 │   ├── db/            # @nanogemclaw/db        — SQLite 영속성 (better-sqlite3)
 │   ├── gemini/        # @nanogemclaw/gemini    — Gemini API 클라이언트, 컨텍스트 캐시, 도구
 │   ├── telegram/      # @nanogemclaw/telegram  — 봇 헬퍼, 레이트 리미터, 통합기
-│   ├── server/        # @nanogemclaw/server    — Express + Socket.IO 대시보드 API
 │   ├── plugin-api/    # @nanogemclaw/plugin-api — 플러그인 인터페이스 & 라이프사이클 타입
 │   ├── event-bus/     # @nanogemclaw/event-bus  — 타입화된 pub/sub 이벤트 시스템
 │   └── dashboard/     # React + Vite 프론트엔드 SPA (private)
@@ -121,7 +126,6 @@ nanogemclaw/
 | `@nanogemclaw/db`         | FTS5 검색이 있는 SQLite 데이터베이스 계층                   | 보통      |
 | `@nanogemclaw/gemini`     | Gemini API 클라이언트, context caching, MCP 함수 호출 | **높음**    |
 | `@nanogemclaw/telegram`   | grammY bot 도우미, 속도 제한기, 메시지 통합기   | 보통      |
-| `@nanogemclaw/server`     | Express 대시보드 서버 + Socket.IO 실시간 이벤트    | 보통      |
 | `@nanogemclaw/plugin-api` | 플러그인 인터페이스 정의 및 라이프사이클 타입         | **높음**    |
 | `@nanogemclaw/event-bus`  | 플러그인 간 통신을 위한 타입화된 pub/sub 이벤트 시스템 | 보통      |
 
@@ -444,7 +448,6 @@ graph LR
 | `@nanogemclaw/db`         | `connection.ts`, `messages.ts`, `tasks.ts`, `stats.ts`, `preferences.ts`                     |
 | `@nanogemclaw/gemini`     | `gemini-client.ts`, `context-cache.ts`, `mcp-client-bridge.ts`, `gemini-tools.ts`           |
 | `@nanogemclaw/telegram`   | `grammY-helpers.ts`, `telegram-rate-limiter.ts`, `message-consolidator.ts`                   |
-| `@nanogemclaw/server`     | `server.ts`, `routes/` (auth, groups, tasks, knowledge, calendar, skills, config, analytics) |
 | `@nanogemclaw/plugin-api` | `NanoPlugin`, `PluginApi`, `GeminiToolContribution`, `HookContributions`                     |
 | `@nanogemclaw/event-bus`  | `EventBus`, `NanoEventMap`, typed pub/sub singleton                                          |
 
@@ -534,9 +537,9 @@ DASHBOARD_HOST=0.0.0.0 npm start
 ```bash
 npm run dev               # Start with tsx (hot reload)
 npm run typecheck         # TypeScript type check (backend)
-npm test                  # Run all tests (Vitest, 35 files, ~950 tests)
+npm test                  # Run all tests (Vitest unit + integration suites)
 npm run test:watch        # Watch mode
-npm run test:coverage     # Coverage report (92% statements, 84% branches)
+npm run test:coverage     # Coverage report
 npm run format:check      # Prettier check
 ```
 

@@ -39,7 +39,7 @@
 | **Bot 框架**    | node-telegram-bot-api| grammY（类型安全、事件驱动）                                      |
 | **消息平台**        | WhatsApp (Baileys)   | Telegram Bot API                                                      |
 | **成本**             | Claude Max（$100/月） | 免费层（60 请求/分钟）                                                |
-| **架构**     | 单体应用             | 模块化 monorepo（8 个包 + 7 个插件）                             |
+| **架构**     | 单体应用             | 模块化 monorepo（7 个 workspace 包 + app + 7 个插件）                             |
 | **可扩展性**    | 硬编码              | 具有生命周期钩子的插件系统                                    |
 | **Google 生态系统** | -                    | Drive、Calendar、Tasks、Knowledge RAG                 |
 | **通知**    | -                    | Discord 每日/每周报告                                          |
@@ -55,7 +55,7 @@
 
 ## 主要功能
 
-- **模块化 Monorepo** - 8 个 npm 工作区包。可在自己的项目中使用单个包或部署完整堆栈。
+- **模块化 Monorepo** - 7 个 npm workspace 包，加上 `app/` 入口层。既可以单独复用包，也可以部署完整堆栈。
 - **grammY Bot 框架** - 从 node-telegram-bot-api 迁移到 grammY，实现类型安全、事件驱动的 Telegram 集成，支持速率限制和消息合并。
 - **MCP 客户端桥接** - 按工具白名单的 Model Context Protocol，支持统一的 Zod 架构验证。
 - **智能消息路由** - `preferredPath` 在快速路径（直接 Gemini API）和容器执行之间智能选择，支持无缝回退。
@@ -69,6 +69,7 @@
 - **浏览器自动化** - Agent 使用 `agent-browser`（Playwright）进行复杂 Web 任务。
 - **知识库** - 每组文档存储，支持 SQLite FTS5 全文搜索和安全注入扫描。
 - **混合 Drive RAG** - 双层检索：通过物理文件方法预索引嵌入以实现即时查找 + 实时 Drive 搜索以获得更广泛的覆盖。与 NotebookLM 共享同一知识文件夹。
+- **时间分层记忆压缩** - 三层 short/medium/long memory，结合 Gemini 驱动的 compaction、正则 fact extraction，以及由调度器管理的 context budget。
 - **计划任务** - 自然语言计划（"每天早上 8 点"），支持 cron、间隔和一次性执行。
 - **Google Calendar（读/写）** - 通过 Google Calendar API 创建、更新、删除事件并检查可用性。回退到 iCal 以进行只读访问。
 - **Google Tasks** - 完整 CRUD 操作，支持 NanoGemClaw 计划任务与 Google Tasks 的双向同步。
@@ -80,7 +81,12 @@
 - **容器隔离** - 每个组在自己的沙箱（Apple Container 或 Docker）中运行，支持超时和输出大小限制。
 - **Web 仪表板** - 12 模块实时命令中心，支持日志流、内存编辑器、分析、Google 帐户管理、Drive 浏览器、Discord 设置和 MCP 管理。
 - **国际化（100% 覆盖）** - 完整支持 8 种语言：英语、繁体中文、简体中文、日语、韩语、西班牙语、葡萄牙语和俄语。
-- **测试覆盖** - 92% 语句覆盖率，84% 分支覆盖率（35+ 测试文件，~950 个测试），使用 Vitest 和全面集成测试。
+- **测试覆盖** - 使用 Vitest 提供完整的单元与集成测试，覆盖 fast path、hybrid RAG、调度，以及 temporal memory 工作流。
+
+## 近期开发
+
+- **2026-03-16** - 加入 Intelligence Layer 核心：三层 temporal memory、Gemini-powered compaction、fact extraction，以及由 scheduler 驱动的 context budget 管理。
+- **2026-03-11** - 完成 hybrid Drive RAG 检索：包含 query rewriting、embedding 搜索加固、similarity threshold，以及集成测试补强。
 
 ---
 
@@ -93,7 +99,6 @@ nanogemclaw/
 │   ├── db/            # @nanogemclaw/db        — SQLite 持久化（better-sqlite3）
 │   ├── gemini/        # @nanogemclaw/gemini    — Gemini API 客户端、上下文缓存、MCP 工具
 │   ├── telegram/      # @nanogemclaw/telegram  — grammY bot 帮助、速率限制器、合并器
-│   ├── server/        # @nanogemclaw/server    — Express + Socket.IO 仪表板 API
 │   ├── plugin-api/    # @nanogemclaw/plugin-api — 插件接口和生命周期类型
 │   ├── event-bus/     # @nanogemclaw/event-bus  — 类型化 pub/sub 事件系统
 │   └── dashboard/     # React + Vite 前端 SPA（私有）
@@ -121,7 +126,6 @@ nanogemclaw/
 | `@nanogemclaw/db`         | SQLite 数据库层，支持 FTS5 搜索                   | 中等      |
 | `@nanogemclaw/gemini`     | Gemini API 客户端、上下文缓存、MCP 函数调用 | **高**    |
 | `@nanogemclaw/telegram`   | grammY bot 帮助、速率限制、消息合并器   | 中等      |
-| `@nanogemclaw/server`     | Express 仪表板服务器 + Socket.IO 实时事件    | 中等      |
 | `@nanogemclaw/plugin-api` | 插件接口定义和生命周期类型         | **高**    |
 | `@nanogemclaw/event-bus`  | 类型化 pub/sub 事件系统，用于插件间通信 | 中等      |
 
@@ -444,7 +448,6 @@ graph LR
 | `@nanogemclaw/db`         | `connection.ts`、`messages.ts`、`tasks.ts`、`stats.ts`、`preferences.ts`                     |
 | `@nanogemclaw/gemini`     | `gemini-client.ts`、`context-cache.ts`、`mcp-client-bridge.ts`、`gemini-tools.ts`           |
 | `@nanogemclaw/telegram`   | `grammY-helpers.ts`、`telegram-rate-limiter.ts`、`message-consolidator.ts`                   |
-| `@nanogemclaw/server`     | `server.ts`、`routes/`（认证、组、任务、知识、日历、技能、配置、分析） |
 | `@nanogemclaw/plugin-api` | `NanoPlugin`、`PluginApi`、`GeminiToolContribution`、`HookContributions`                     |
 | `@nanogemclaw/event-bus`  | `EventBus`、`NanoEventMap`、类型化 pub/sub 单例                                          |
 
@@ -534,9 +537,9 @@ DASHBOARD_HOST=0.0.0.0 npm start
 ```bash
 npm run dev               # 使用 tsx 启动（热重载）
 npm run typecheck         # TypeScript 类型检查（后端）
-npm test                  # 运行所有测试（Vitest，35 个文件，~950 个测试）
+npm test                  # 运行所有测试（Vitest 单元 + 集成测试）
 npm run test:watch        # 监视模式
-npm run test:coverage     # 覆盖率报告（92% 语句、84% 分支）
+npm run test:coverage     # 覆盖率报告
 npm run format:check      # Prettier 检查
 ```
 

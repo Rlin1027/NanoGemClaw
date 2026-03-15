@@ -39,7 +39,7 @@
 | **Marco de bot**        | node-telegram-bot-api| grammY (type-safe, event-driven)                                      |
 | **Mensajería**         | WhatsApp (Baileys)   | Telegram Bot API                                                      |
 | **Costo**              | Claude Max ($100/mes) | Nivel gratuito (60 req/min)                                          |
-| **Arquitectura**       | Monolito             | Monorepo modular (8 paquetes + 7 plugins)                            |
+| **Arquitectura**       | Monolito             | Monorepo modular (7 paquetes workspace + app + 7 plugins)            |
 | **Extensibilidad**    | Codificado           | Sistema de plugins con hooks de ciclo de vida                         |
 | **Ecosistema Google** | -                    | Drive, Calendar, Tasks, Knowledge RAG                                 |
 | **Notificaciones**    | -                    | Informes diarios/semanales de Discord                                 |
@@ -55,7 +55,7 @@
 
 ## Características principales
 
-- **Monorepo modular** - 8 paquetes de espacio de trabajo npm. Utiliza paquetes individuales en tus propios proyectos o implementa la pila completa.
+- **Monorepo modular** - 7 paquetes npm workspace más la capa de entrada `app/`. Puedes reutilizar paquetes individuales o desplegar la pila completa.
 - **grammY Bot Framework** - Migrado de node-telegram-bot-api a grammY para integración de Telegram type-safe y dirigida por eventos con limitación de velocidad y consolidación de mensajes.
 - **Puente cliente MCP** - Lista blanca por herramienta para Model Context Protocol, con validación de esquema Zod unificada en todas las entradas de herramientas.
 - **Enrutamiento inteligente de mensajes** - El enrutamiento `preferredPath` selecciona entre ruta rápida (API de Gemini directo) y ejecución de contenedor basada en el tipo de consulta, con fallback perfecto.
@@ -68,7 +68,8 @@
 - **Generación de imágenes** - Crea imágenes usando **Imagen 3** a través de lenguaje natural.
 - **Automatización del navegador** - Los agentes utilizan `agent-browser` (Playwright) para tareas web complejas.
 - **Base de conocimiento** - Almacén de documentos por grupo con búsqueda de texto completo SQLite FTS5 y escaneo de inyección para seguridad.
-- **RAG de conducción híbrida** - Recuperación de dos capas: incrustaciones pre-indexadas a través del enfoque de archivo físico para búsqueda instantánea + búsqueda en vivo de Drive para cobertura más amplia. Comparte la misma carpeta de conocimiento con NotebookLM.
+- **RAG híbrido de Drive** - Recuperación de dos capas: embeddings preindexados mediante un enfoque de archivo físico para búsqueda instantánea + búsqueda en vivo de Drive para cobertura más amplia. Comparte la misma carpeta de conocimiento con NotebookLM.
+- **Compactación de memoria temporal** - Memoria en tres capas (short/medium/long) con compactación impulsada por Gemini, extracción de hechos con regex y control del presupuesto de contexto guiado por el scheduler.
 - **Tareas programadas** - Programación en lenguaje natural ("cada día a las 8 am") con soporte cron, intervalo y de una sola vez.
 - **Google Calendar (Lectura/Escritura)** - Crea, actualiza, elimina eventos y verifica disponibilidad a través de la API de Google Calendar. Se revierte a iCal para acceso de solo lectura.
 - **Google Tasks** - Operaciones CRUD completas con sincronización bidireccional entre tareas programadas de NanoGemClaw y Google Tasks.
@@ -80,7 +81,12 @@
 - **Aislamiento de contenedor** - Cada grupo se ejecuta en su propia zona de pruebas (Apple Container o Docker) con límites de tiempo de espera y tamaño de salida.
 - **Panel de control web** - Centro de comando en tiempo real de 12 módulos con transmisión de registros, editor de memoria, análisis, gestión de cuentas de Google, navegador Drive, configuración de Discord y gestión de MCP.
 - **i18n (cobertura 100%)** - Soporte completo de interfaz para 8 idiomas: inglés, chino tradicional, chino simplificado, japonés, coreano, español, portugués y ruso.
-- **Cobertura de pruebas** - Cobertura de sentencias del 92%, cobertura de ramas del 84% (35+ archivos de prueba, ~950 pruebas) con Vitest y pruebas de integración completas.
+- **Cobertura de pruebas** - Cobertura amplia con Vitest para pruebas unitarias e integrales en fast path, RAG híbrido, scheduling y flujos de memoria temporal.
+
+## Desarrollo reciente
+
+- **2026-03-16** - Se añadió el núcleo de la Intelligence Layer: memoria temporal en tres capas, compactación con Gemini, extracción de hechos y gestión del presupuesto de contexto impulsada por scheduler.
+- **2026-03-11** - Se completó la recuperación híbrida de Drive RAG con query rewriting, endurecimiento de búsqueda por embeddings, umbrales de similitud y cobertura de pruebas de integración.
 
 ---
 
@@ -93,7 +99,6 @@ nanogemclaw/
 │   ├── db/            # @nanogemclaw/db        — Persistencia SQLite (better-sqlite3)
 │   ├── gemini/        # @nanogemclaw/gemini    — Cliente API de Gemini, caché de contexto, herramientas MCP
 │   ├── telegram/      # @nanogemclaw/telegram  — Ayudantes de grammY bot, limitador de velocidad, consolidador
-│   ├── server/        # @nanogemclaw/server    — Express + Socket.IO API del panel de control
 │   ├── plugin-api/    # @nanogemclaw/plugin-api — Interfaz de plugin y tipos de ciclo de vida
 │   ├── event-bus/     # @nanogemclaw/event-bus  — Sistema de eventos pub/sub tipado
 │   └── dashboard/     # React + Vite SPA del frontend (privado)
@@ -121,7 +126,6 @@ nanogemclaw/
 | `@nanogemclaw/db`         | Capa de base de datos SQLite con búsqueda FTS5           | Medio                  |
 | `@nanogemclaw/gemini`     | Cliente API de Gemini, almacenamiento en caché de contexto, llamada de función MCP | **Alto**    |
 | `@nanogemclaw/telegram`   | Ayudantes de bot grammY, limitador de velocidad, consolidador de mensajes   | Medio      |
-| `@nanogemclaw/server`     | Servidor del panel de control Express + Socket.IO + API tiempo real | Medio      |
 | `@nanogemclaw/plugin-api` | Definiciones de interfaz de plugin y tipos de ciclo de vida | **Alto**    |
 | `@nanogemclaw/event-bus`  | Sistema de eventos pub/sub tipado para comunicación entre plugins | Medio      |
 
@@ -444,7 +448,6 @@ graph LR
 | `@nanogemclaw/db`         | `connection.ts`, `messages.ts`, `tasks.ts`, `stats.ts`, `preferences.ts`                     |
 | `@nanogemclaw/gemini`     | `gemini-client.ts`, `context-cache.ts`, `mcp-client-bridge.ts`, `gemini-tools.ts`           |
 | `@nanogemclaw/telegram`   | `grammY-helpers.ts`, `telegram-rate-limiter.ts`, `message-consolidator.ts`                   |
-| `@nanogemclaw/server`     | `server.ts`, `routes/` (auth, groups, tasks, knowledge, calendar, skills, config, analytics) |
 | `@nanogemclaw/plugin-api` | `NanoPlugin`, `PluginApi`, `GeminiToolContribution`, `HookContributions`                     |
 | `@nanogemclaw/event-bus`  | `EventBus`, `NanoEventMap`, typed pub/sub singleton                                          |
 
@@ -534,9 +537,9 @@ Admite superposición de búsqueda global `Cmd+K` / `Ctrl+K`.
 ```bash
 npm run dev               # Iniciar con tsx (recarga en caliente)
 npm run typecheck         # Verificación de tipo TypeScript (backend)
-npm test                  # Ejecutar todas las pruebas (Vitest, 35 archivos, ~950 pruebas)
+npm test                  # Ejecutar todas las pruebas (Vitest unitarias + integración)
 npm run test:watch        # Modo de observación
-npm run test:coverage     # Informe de cobertura (92% sentencias, 84% ramas)
+npm run test:coverage     # Informe de cobertura
 npm run format:check      # Verificación de Prettier
 ```
 

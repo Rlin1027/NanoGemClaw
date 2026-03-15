@@ -39,7 +39,7 @@
 | **Bot Framework**    | node-telegram-bot-api| grammY (type-safe, event-driven)                                      |
 | **Messaging**        | WhatsApp (Baileys)   | Telegram Bot API                                                      |
 | **Cost**             | Claude Max ($100/mo) | Free tier (60 req/min)                                                |
-| **Architecture**     | Monolith             | Modular monorepo (8 packages + 7 plugins)                             |
+| **Architecture**     | Monolith             | Modular monorepo (7 workspace packages + app + 7 plugins)             |
 | **Extensibility**    | Hardcoded            | Plugin system with lifecycle hooks                                    |
 | **Google Ecosystem** | -                    | Drive, Calendar, Tasks, Knowledge RAG                                 |
 | **Notifications**    | -                    | Discord daily/weekly reports                                          |
@@ -55,7 +55,7 @@
 
 ## Key Features
 
-- **Modular Monorepo** - 8 npm workspace packages. Use individual packages in your own projects or deploy the full stack.
+- **Modular Monorepo** - 7 npm workspace packages plus the `app/` entrypoint. Use individual packages in your own projects or deploy the full stack.
 - **grammY Bot Framework** - Migrated from node-telegram-bot-api to grammY for type-safe, event-driven Telegram integration with rate limiting and message consolidation.
 - **MCP Client Bridge** - Per-tool whitelist for Model Context Protocol, with unified Zod schema validation across all tool inputs.
 - **Smart Message Routing** - `preferredPath` intelligent routing selects between fast path (direct Gemini API) and container execution based on query type, with seamless fallback.
@@ -69,6 +69,7 @@
 - **Browser Automation** - Agents use `agent-browser` (Playwright) for complex web tasks.
 - **Knowledge Base** - Per-group document store with SQLite FTS5 full-text search and injection scanning for security.
 - **Hybrid Drive RAG** - Two-layer retrieval: pre-indexed embeddings via physical file approach for instant lookup + live Drive search for broader coverage. Share the same knowledge folder with NotebookLM.
+- **Temporal Memory Compaction** - Three-layer short/medium/long memory with Gemini-powered compaction, regex-based fact extraction, and scheduler-driven context budget management.
 - **Scheduled Tasks** - Natural language scheduling ("every day at 8am") with cron, interval, and one-time support.
 - **Google Calendar (Read/Write)** - Create, update, delete events and check availability via Google Calendar API. Falls back to iCal for read-only access.
 - **Google Tasks** - Full CRUD operations with bidirectional sync between NanoGemClaw scheduled tasks and Google Tasks.
@@ -80,7 +81,12 @@
 - **Container Isolation** - Every group runs in its own sandbox (Apple Container or Docker) with timeout and output size limits.
 - **Web Dashboard** - 12-module real-time command center with log streaming, memory editor, analytics, Google account management, Drive browser, Discord settings, and MCP management.
 - **i18n (100% Coverage)** - Full interface support for 8 languages: English, Traditional Chinese, Simplified Chinese, Japanese, Korean, Spanish, Portuguese, and Russian.
-- **Test Coverage** - 92% statement coverage, 84% branch coverage (35+ test files, ~950 tests) with Vitest and comprehensive integration testing.
+- **Test Coverage** - Comprehensive Vitest unit and integration coverage across fast path, hybrid RAG, scheduling, and temporal memory workflows.
+
+## Recent Development
+
+- **2026-03-16** - Added the Intelligence Layer core: three-layer temporal memory, Gemini-powered compaction, fact extraction, and scheduler-driven context budget management.
+- **2026-03-11** - Landed hybrid Drive RAG retrieval with query rewriting, embedding search hardening, similarity thresholds, and integration-test coverage.
 
 ---
 
@@ -93,7 +99,6 @@ nanogemclaw/
 │   ├── db/            # @nanogemclaw/db        — SQLite persistence (better-sqlite3)
 │   ├── gemini/        # @nanogemclaw/gemini    — Gemini API client, context cache, MCP tools
 │   ├── telegram/      # @nanogemclaw/telegram  — grammY bot helpers, rate limiter, consolidator
-│   ├── server/        # @nanogemclaw/server    — Express + Socket.IO dashboard API
 │   ├── plugin-api/    # @nanogemclaw/plugin-api — Plugin interface & lifecycle types
 │   ├── event-bus/     # @nanogemclaw/event-bus  — Typed pub/sub event system
 │   └── dashboard/     # React + Vite frontend SPA (private)
@@ -121,7 +126,6 @@ nanogemclaw/
 | `@nanogemclaw/db`         | SQLite database layer with FTS5 search                   | Medium      |
 | `@nanogemclaw/gemini`     | Gemini API client, context caching, MCP function calling | **High**    |
 | `@nanogemclaw/telegram`   | grammY bot helpers, rate limiter, message consolidator   | Medium      |
-| `@nanogemclaw/server`     | Express dashboard server + Socket.IO real-time events    | Medium      |
 | `@nanogemclaw/plugin-api` | Plugin interface definitions and lifecycle types         | **High**    |
 | `@nanogemclaw/event-bus`  | Typed pub/sub event system for inter-plugin communication | Medium      |
 
@@ -444,7 +448,6 @@ graph LR
 | `@nanogemclaw/db`         | `connection.ts`, `messages.ts`, `tasks.ts`, `stats.ts`, `preferences.ts`                     |
 | `@nanogemclaw/gemini`     | `gemini-client.ts`, `context-cache.ts`, `mcp-client-bridge.ts`, `gemini-tools.ts`           |
 | `@nanogemclaw/telegram`   | `grammY-helpers.ts`, `telegram-rate-limiter.ts`, `message-consolidator.ts`                   |
-| `@nanogemclaw/server`     | `server.ts`, `routes/` (auth, groups, tasks, knowledge, calendar, skills, config, analytics) |
 | `@nanogemclaw/plugin-api` | `NanoPlugin`, `PluginApi`, `GeminiToolContribution`, `HookContributions`                     |
 | `@nanogemclaw/event-bus`  | `EventBus`, `NanoEventMap`, typed pub/sub singleton                                          |
 
@@ -534,9 +537,9 @@ Supports `Cmd+K` / `Ctrl+K` global search overlay.
 ```bash
 npm run dev               # Start with tsx (hot reload)
 npm run typecheck         # TypeScript type check (backend)
-npm test                  # Run all tests (Vitest, 35 files, ~950 tests)
+npm test                  # Run all tests (Vitest unit + integration suites)
 npm run test:watch        # Watch mode
-npm run test:coverage     # Coverage report (92% statements, 84% branches)
+npm run test:coverage     # Coverage report
 npm run format:check      # Prettier check
 ```
 

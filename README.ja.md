@@ -39,7 +39,7 @@
 | **ボットフレームワーク**    | node-telegram-bot-api| grammY（タイプセーフ、イベント駆動）                                      |
 | **メッセージング**        | WhatsApp (Baileys)   | Telegram Bot API                                                      |
 | **コスト**             | Claude Max ($100/月) | 無料枠（60 req/分）                                                |
-| **アーキテクチャ**     | モノリシック             | モジュール型モノレポ（8パッケージ + 7プラグイン）                             |
+| **アーキテクチャ**     | モノリシック             | モジュール型モノレポ（7 workspace パッケージ + app + 7プラグイン）                             |
 | **拡張性**    | ハードコード            | ライフサイクルフック付きプラグインシステム                                    |
 | **Google エコシステム** | -                    | Drive、Calendar、Tasks、Knowledge RAG                                 |
 | **通知**    | -                    | Discord 日次/週次レポート                                          |
@@ -55,7 +55,7 @@
 
 ## 主な機能
 
-- **モジュール型モノレポ** - 8つの npm ワークスペースパッケージ。個別パッケージを自分のプロジェクトで使用することも、フルスタックをデプロイすることもできます。
+- **モジュール型モノレポ** - 7 個の npm workspace パッケージに `app/` エントリポイントを加えた構成です。個別パッケージの再利用も、フルスタックの導入もできます。
 - **grammY ボットフレームワーク** - node-telegram-bot-api から grammY に移行。タイプセーフでイベント駆動のTelegram統合、レート制限とメッセージ統合を実装。
 - **MCP クライアントブリッジ** - ツール単位のホワイトリスト付き Model Context Protocol。すべてのツール入力に統一された Zod スキーマ検証。
 - **スマートメッセージルーティング** - `preferredPath` インテリジェントルーティングはクエリタイプに基づいてファストパス（直接 Gemini API）とコンテナ実行を選択し、シームレスなフォールバックを実現。
@@ -69,6 +69,7 @@
 - **ブラウザ自動化** - エージェントは複雑なウェブタスクに `agent-browser`（Playwright）を使用。
 - **知識ベース** - グループごとのドキュメントストア。SQLite FTS5 フルテキスト検索とセキュリティのためのインジェクションスキャン付き。
 - **ハイブリッド Drive RAG** - 2層検索：瞬時に検索可能な物理ファイルアプローチによる事前インデックス埋め込み + より広い範囲に対応するライブ Drive 検索。NotebookLM と同じ知識フォルダを共有可能。
+- **時間階層メモリ圧縮** - short/medium/long の3層メモリに対して、Gemini による compaction、正規表現ベースの fact extraction、scheduler 主導の context budget 管理を提供します。
 - **スケジュール済みタスク** - 自然言語スケジューリング（「毎日午前8時」）。cron、インターバル、1回限りのサポート。
 - **Google Calendar（読取/書込）** - Google Calendar API 経由でイベントを作成、更新、削除し、空き状況を確認。読み取り専用アクセスの場合は iCal にフォールバック。
 - **Google Tasks** - 完全な CRUD 操作。NanoGemClaw スケジュール済みタスクと Google Tasks の双方向同期。
@@ -80,7 +81,12 @@
 - **コンテナ隔離** - すべてのグループは独自のサンドボックス（Apple Container または Docker）で実行。タイムアウトと出力サイズの制限付き。
 - **ウェブダッシュボード** - 12モジュール リアルタイムコマンドセンター。ログストリーミング、メモリエディタ、分析、Google アカウント管理、Drive ブラウザ、Discord 設定、MCP 管理。
 - **i18n（100% カバレッジ）** - 8言語の完全インターフェースサポート：英語、繁体字中国語、簡体字中国語、日本語、韓国語、スペイン語、ポルトガル語、ロシア語。
-- **テストカバレッジ** - Vitest とセンシティブな統合テストで 92% のステートメントカバレッジ、84% のブランチカバレッジ（35+ テストファイル、約950 テスト）。
+- **テストカバレッジ** - fast path、hybrid RAG、スケジューリング、temporal memory フローを対象に、Vitest の単体テストと統合テストを広く整備しています。
+
+## 最近の開発
+
+- **2026-03-16** - Intelligence Layer のコアを追加。3層 temporal memory、Gemini-powered compaction、fact extraction、scheduler による context budget 管理を実装しました。
+- **2026-03-11** - hybrid Drive RAG 検索を実装。query rewriting、embedding 検索の強化、similarity threshold、統合テストを追加しました。
 
 ---
 
@@ -93,7 +99,6 @@ nanogemclaw/
 │   ├── db/            # @nanogemclaw/db        — SQLite 永続化（better-sqlite3）
 │   ├── gemini/        # @nanogemclaw/gemini    — Gemini API クライアント、コンテキストキャッシュ、MCP ツール
 │   ├── telegram/      # @nanogemclaw/telegram  — grammY ボットヘルパー、レート制限、統合機
-│   ├── server/        # @nanogemclaw/server    — Express + Socket.IO ダッシュボード API
 │   ├── plugin-api/    # @nanogemclaw/plugin-api — プラグインインターフェース & ライフサイクル型
 │   ├── event-bus/     # @nanogemclaw/event-bus  — 型付き pub/sub イベントシステム
 │   └── dashboard/     # React + Vite フロントエンド SPA（プライベート）
@@ -121,7 +126,6 @@ nanogemclaw/
 | `@nanogemclaw/db`         | SQLite データベースレイヤー（FTS5 検索付き）                   | 中程度      |
 | `@nanogemclaw/gemini`     | Gemini API クライアント、コンテキストキャッシング、MCP 関数呼び出し | **高い**    |
 | `@nanogemclaw/telegram`   | grammY ボットヘルパー、レート制限、メッセージ統合   | 中程度      |
-| `@nanogemclaw/server`     | Express ダッシュボードサーバー + Socket.IO リアルタイムイベント    | 中程度      |
 | `@nanogemclaw/plugin-api` | プラグインインターフェース定義とライフサイクル型         | **高い**    |
 | `@nanogemclaw/event-bus`  | 型付き pub/sub イベントシステム（プラグイン間通信用） | 中程度      |
 
@@ -444,7 +448,6 @@ graph LR
 | `@nanogemclaw/db`         | `connection.ts`、`messages.ts`、`tasks.ts`、`stats.ts`、`preferences.ts`                     |
 | `@nanogemclaw/gemini`     | `gemini-client.ts`、`context-cache.ts`、`mcp-client-bridge.ts`、`gemini-tools.ts`           |
 | `@nanogemclaw/telegram`   | `grammY-helpers.ts`、`telegram-rate-limiter.ts`、`message-consolidator.ts`                   |
-| `@nanogemclaw/server`     | `server.ts`、`routes/`（auth、groups、tasks、knowledge、calendar、skills、config、analytics） |
 | `@nanogemclaw/plugin-api` | `NanoPlugin`、`PluginApi`、`GeminiToolContribution`、`HookContributions`                     |
 | `@nanogemclaw/event-bus`  | `EventBus`、`NanoEventMap`、型付き pub/sub シングルトン                                          |
 
@@ -534,9 +537,9 @@ DASHBOARD_HOST=0.0.0.0 npm start
 ```bash
 npm run dev               # tsx で開始（ホットリロード）
 npm run typecheck         # TypeScript 型チェック（バックエンド）
-npm test                  # すべてのテスト実行（Vitest、35ファイル、約950テスト）
+npm test                  # すべてのテスト実行（Vitest の単体 + 統合テスト）
 npm run test:watch        # ウォッチモード
-npm run test:coverage     # カバレッジレポート（92% ステートメント、84% ブランチ）
+npm run test:coverage     # カバレッジレポート
 npm run format:check      # Prettier チェック
 ```
 

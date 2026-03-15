@@ -39,7 +39,7 @@
 | **機器人框架**    | node-telegram-bot-api| grammY (type-safe, event-driven)                                      |
 | **通訊平台**        | WhatsApp (Baileys)   | Telegram Bot API                                                      |
 | **成本**             | Claude Max ($100/月) | 免費方案（60 req/min）                                                |
-| **架構**     | 單體式             | 模組化單元回購（8 個套件 + 7 個外掛）                             |
+| **架構**     | 單體式             | 模組化 monorepo（7 個 workspace 套件 + app + 7 個外掛）                             |
 | **可擴展性**    | 硬編碼            | 具有生命週期鉤子的外掛系統                                    |
 | **Google 生態系統** | -                    | Drive、Calendar、Tasks、Knowledge RAG                                 |
 | **通知**    | -                    | Discord 每日/每週報告                                          |
@@ -55,7 +55,7 @@
 
 ## 主要功能
 
-- **模組化單元回購** - 8 個 npm 工作區套件。在自己的專案中使用個別套件，或部署完整堆疊。
+- **模組化 Monorepo** - 7 個 npm workspace 套件，加上 `app/` 入口層。你可以單獨重用套件，或部署整套系統。
 - **grammY 機器人框架** - 從 node-telegram-bot-api 遷移至 grammY，提供類型安全、事件驅動的 Telegram 整合、速率限制和訊息合併。
 - **MCP 客戶端橋接** - Model Context Protocol 的每個工具白名單，採用統一的 Zod 架構驗證。
 - **智能訊息路由** - `preferredPath` 在快速路徑（直接 Gemini API）和容器執行之間智能選擇，具備無縫回退機制。
@@ -69,6 +69,7 @@
 - **瀏覽器自動化** - 代理使用 `agent-browser`（Playwright）進行複雜網頁任務。
 - **知識庫** - 每個群組的文件儲存，採用 SQLite FTS5 全文搜尋和安全檢注掃描。
 - **混合 Drive RAG** - 兩層檢索：透過物理檔案方法預先索引的嵌入（即時查詢）+ 實時 Drive 搜尋（更廣泛的涵蓋範圍）。與 NotebookLM 共享相同的知識資料夾。
+- **時間分層記憶壓縮** - 三層 short/medium/long memory，結合 Gemini 驅動的 compaction、regex 事實抽取，以及排程器管理的 context budget。
 - **排程任務** - 自然語言排程（「每天早上 8 點」），支援 cron、間隔和一次性執行。
 - **Google Calendar（讀/寫）** - 透過 Google Calendar API 建立、更新、刪除事件並檢查可用時間。無法存取時回退至 iCal（唯讀）。
 - **Google Tasks** - 完整的 CRUD 操作，NanoGemClaw 排程任務與 Google Tasks 之間的雙向同步。
@@ -80,7 +81,12 @@
 - **容器隔離** - 每個群組在自己的沙盒（Apple Container 或 Docker）中運行，具備逾時和輸出大小限制。
 - **Web 儀表板** - 12 個模組的實時命令中心，具備日誌串流、記憶編輯器、分析、Google 帳戶管理、Drive 瀏覽器、Discord 設定和 MCP 管理。
 - **i18n（100% 涵蓋）** - 完整的介面支援 8 種語言：英文、繁體中文、簡體中文、日文、韓文、西班牙文、葡萄牙文和俄文。
-- **測試涵蓋範圍** - 92% 語句涵蓋範圍、84% 分支涵蓋範圍（35+ 測試檔案，~950 個測試），採用 Vitest 和全面的整合測試。
+- **測試覆蓋** - 以 Vitest 提供完整的單元與整合測試，涵蓋 fast path、hybrid RAG、排程，以及 temporal memory 流程。
+
+## 近期開發
+
+- **2026-03-16** - 加入 Intelligence Layer 核心：三層 temporal memory、Gemini-powered compaction、fact extraction，以及由 scheduler 驅動的 context budget 管理。
+- **2026-03-11** - 完成 hybrid Drive RAG 檢索：包含 query rewriting、embedding 搜尋強化、similarity threshold，以及整合測試補強。
 
 ---
 
@@ -93,7 +99,6 @@ nanogemclaw/
 │   ├── db/            # @nanogemclaw/db        — SQLite 持久化（better-sqlite3）
 │   ├── gemini/        # @nanogemclaw/gemini    — Gemini API 客戶端、上下文快取、MCP 工具
 │   ├── telegram/      # @nanogemclaw/telegram  — grammY 機器人幫手、速率限制器、合併器
-│   ├── server/        # @nanogemclaw/server    — Express + Socket.IO 儀表板 API
 │   ├── plugin-api/    # @nanogemclaw/plugin-api — 外掛介面和生命週期類型
 │   ├── event-bus/     # @nanogemclaw/event-bus  — 類型化 pub/sub 事件系統
 │   └── dashboard/     # React + Vite 前端 SPA（私有）
@@ -121,7 +126,6 @@ nanogemclaw/
 | `@nanogemclaw/db`         | SQLite 資料庫層，具備 FTS5 搜尋                   | 中等      |
 | `@nanogemclaw/gemini`     | Gemini API 客戶端、上下文快取、MCP 函數調用 | **高**    |
 | `@nanogemclaw/telegram`   | grammY 機器人幫手、速率限制器、訊息合併器   | 中等      |
-| `@nanogemclaw/server`     | Express 儀表板伺服器 + Socket.IO 即時事件    | 中等      |
 | `@nanogemclaw/plugin-api` | 外掛介面定義和生命週期類型         | **高**    |
 | `@nanogemclaw/event-bus`  | 類型化 pub/sub 事件系統，用於外掛間通訊 | 中等      |
 
@@ -444,7 +448,6 @@ graph LR
 | `@nanogemclaw/db`         | `connection.ts`、`messages.ts`、`tasks.ts`、`stats.ts`、`preferences.ts`                     |
 | `@nanogemclaw/gemini`     | `gemini-client.ts`、`context-cache.ts`、`mcp-client-bridge.ts`、`gemini-tools.ts`           |
 | `@nanogemclaw/telegram`   | `grammY-helpers.ts`、`telegram-rate-limiter.ts`、`message-consolidator.ts`                   |
-| `@nanogemclaw/server`     | `server.ts`、`routes/`（auth、groups、tasks、knowledge、calendar、skills、config、analytics） |
 | `@nanogemclaw/plugin-api` | `NanoPlugin`、`PluginApi`、`GeminiToolContribution`、`HookContributions`                     |
 | `@nanogemclaw/event-bus`  | `EventBus`、`NanoEventMap`、類型化 pub/sub 單例                                          |
 
@@ -534,9 +537,9 @@ DASHBOARD_HOST=0.0.0.0 npm start
 ```bash
 npm run dev               # 以 tsx 啟動（熱重新載入）
 npm run typecheck         # TypeScript 類型檢查（後端）
-npm test                  # 執行所有測試（Vitest、35 個檔案、~950 個測試）
+npm test                  # 執行所有測試（Vitest 單元 + 整合測試）
 npm run test:watch        # 監視模式
-npm run test:coverage     # 涵蓋範圍報告（92% 語句、84% 分支）
+npm run test:coverage     # 覆蓋率報告
 npm run format:check      # Prettier 檢查
 ```
 

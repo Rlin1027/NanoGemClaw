@@ -39,7 +39,7 @@
 | **Bot Framework**    | node-telegram-bot-api| grammY (типобезопасный, управляемый событиями)                        |
 | **Обмен сообщениями**| WhatsApp (Baileys)   | Telegram Bot API                                                      |
 | **Стоимость**        | Claude Max ($100/мес)| Бесплатный уровень (60 запр/мин)                                      |
-| **Архитектура**      | Монолит              | Модульный монорепо (8 пакетов + 7 плагинов)                          |
+| **Архитектура**      | Монолит              | Модульный монорепо (7 workspace-пакетов + app + 7 плагинов)          |
 | **Расширяемость**    | Встроена в код       | Система плагинов с хуками жизненного цикла                           |
 | **Google Ecosystem** | -                    | Drive, Calendar, Tasks, Knowledge RAG                                 |
 | **Уведомления**      | -                    | Ежедневные/еженедельные отчёты Discord                               |
@@ -55,7 +55,7 @@
 
 ## Ключевые возможности
 
-- **Модульный Монорепо** — 8 npm workspace пакетов. Используйте отдельные пакеты в собственных проектах или разверните полный стек.
+- **Модульный монорепо** — 7 npm workspace-пакетов плюс входной слой `app/`. Можно переиспользовать отдельные пакеты или развернуть полный стек.
 - **Фреймворк grammY Bot** — Миграция с node-telegram-bot-api на grammY для типобезопасной, управляемой событиями интеграции Telegram с ограничением скорости и консолидацией сообщений.
 - **MCP Client Bridge** — Белый список инструментов на инструмент для Model Context Protocol с единой валидацией Zod схемы для всех входов инструментов.
 - **Умная маршрутизация сообщений** — `preferredPath` интеллектуальная маршрутизация выбирает между быстрым путём (прямой Gemini API) и выполнением контейнера на основе типа запроса с плавной переходом на резервное.
@@ -69,6 +69,7 @@
 - **Browser Automation** — Агенты используют `agent-browser` (Playwright) для сложных веб-задач.
 - **База знаний** — Хранилище документов на группу с полнотекстовым поиском SQLite FTS5 и сканированием инъекций для безопасности.
 - **Hybrid Drive RAG** — Двухслойное получение: предварительно индексированные embeddings через физический подход к файлам для мгновенного поиска + живой поиск Drive для более широкого охвата. Поделитесь той же папкой знаний с NotebookLM.
+- **Temporal Memory Compaction** — Трёхслойная память short/medium/long с Gemini-powered compaction, regex-based fact extraction и управлением context budget через scheduler.
 - **Запланированные задачи** — Естественное языковое планирование («каждый день в 8 утра») с поддержкой cron, interval и one-time.
 - **Google Calendar (Read/Write)** — Создавайте, обновляйте, удаляйте события и проверяйте доступность через Google Calendar API. Переход на резервное iCal для доступа только для чтения.
 - **Google Tasks** — Полные операции CRUD с двусторонней синхронизацией между запланированными задачами NanoGemClaw и Google Tasks.
@@ -80,7 +81,12 @@
 - **Container Isolation** — Каждая группа работает в своей собственной песочнице (Apple Container или Docker) с ограничениями по времени ожидания и размеру вывода.
 - **Web Dashboard** — 12-модульный центр управления в реальном времени с потоковой передачей логов, редактором памяти, аналитикой, управлением учётной записью Google, браузером Drive, параметрами Discord и управлением MCP.
 - **i18n (100% Coverage)** — Полная поддержка интерфейса для 8 языков: английский, традиционный китайский, упрощённый китайский, японский, корейский, испанский, португальский и русский.
-- **Test Coverage** — 92% покрытие выражений, 84% покрытие ветвей (35+ файлов тестов, ~950 тестов) с Vitest и комплексным интеграционным тестированием.
+- **Test Coverage** — Широкое покрытие Vitest для unit и integration тестов fast path, hybrid RAG, scheduling и temporal memory сценариев.
+
+## Последние изменения
+
+- **2026-03-16** — Добавлено ядро Intelligence Layer: трёхслойная temporal memory, Gemini-powered compaction, fact extraction и управление context budget через scheduler.
+- **2026-03-11** — Добавлен hybrid Drive RAG: query rewriting, усиленный embedding search, similarity thresholds и покрытие integration-тестами.
 
 ---
 
@@ -93,7 +99,6 @@ nanogemclaw/
 │   ├── db/            # @nanogemclaw/db        — SQLite сохранение (better-sqlite3)
 │   ├── gemini/        # @nanogemclaw/gemini    — Gemini API клиент, кэш контекста, MCP инструменты
 │   ├── telegram/      # @nanogemclaw/telegram  — grammY bot помощники, rate limiter, consolidator
-│   ├── server/        # @nanogemclaw/server    — Express + Socket.IO dashboard API
 │   ├── plugin-api/    # @nanogemclaw/plugin-api — Plugin интерфейс & типы жизненного цикла
 │   ├── event-bus/     # @nanogemclaw/event-bus  — Типизированная система pub/sub событий
 │   └── dashboard/     # React + Vite frontend SPA (приватный)
@@ -121,7 +126,6 @@ nanogemclaw/
 | `@nanogemclaw/db`         | Слой базы данных SQLite с поиском FTS5                   | Medium      |
 | `@nanogemclaw/gemini`     | Gemini API клиент, кэширование контекста, вызов функций MCP | **High**    |
 | `@nanogemclaw/telegram`   | grammY bot помощники, rate limiter, consolidator сообщений   | Medium      |
-| `@nanogemclaw/server`     | Express dashboard сервер + Socket.IO события в реальном времени    | Medium      |
 | `@nanogemclaw/plugin-api` | Определения интерфейса плагина и типы жизненного цикла         | **High**    |
 | `@nanogemclaw/event-bus`  | Типизированная система pub/sub событий для связи между плагинами | Medium      |
 
@@ -444,7 +448,6 @@ graph LR
 | `@nanogemclaw/db`         | `connection.ts`, `messages.ts`, `tasks.ts`, `stats.ts`, `preferences.ts`                     |
 | `@nanogemclaw/gemini`     | `gemini-client.ts`, `context-cache.ts`, `mcp-client-bridge.ts`, `gemini-tools.ts`           |
 | `@nanogemclaw/telegram`   | `grammY-helpers.ts`, `telegram-rate-limiter.ts`, `message-consolidator.ts`                   |
-| `@nanogemclaw/server`     | `server.ts`, `routes/` (auth, groups, tasks, knowledge, calendar, skills, config, analytics) |
 | `@nanogemclaw/plugin-api` | `NanoPlugin`, `PluginApi`, `GeminiToolContribution`, `HookContributions`                     |
 | `@nanogemclaw/event-bus`  | `EventBus`, `NanoEventMap`, типизированный pub/sub singleton                                          |
 
@@ -534,9 +537,9 @@ DASHBOARD_HOST=0.0.0.0 npm start
 ```bash
 npm run dev               # Запуск с tsx (горячая перезагрузка)
 npm run typecheck         # TypeScript проверка типов (backend)
-npm test                  # Запуск всех тестов (Vitest, 35 файлов, ~950 тестов)
+npm test                  # Запуск всех тестов (Vitest unit + integration suites)
 npm run test:watch        # Watch режим
-npm run test:coverage     # Отчёт о покрытии (92% выражений, 84% ветвей)
+npm run test:coverage     # Отчёт о покрытии
 npm run format:check      # Prettier проверка
 ```
 
