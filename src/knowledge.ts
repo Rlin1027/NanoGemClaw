@@ -12,6 +12,10 @@ import {
   embeddingToBlob,
 } from './embeddings.js';
 import { logger } from './logger.js';
+import { trackSearchQuery } from './memory-metrics.js';
+import { getDatabase } from './db/connection.js';
+import type { Fact } from './db/facts.js';
+import { getEventBus } from '@nanogemclaw/event-bus';
 
 export interface KnowledgeDoc {
   id: number;
@@ -366,6 +370,7 @@ export async function getRelevantKnowledge(
   }
 
   if (rankedResults.length === 0) {
+    trackSearchQuery(groupFolder, query, 0, false);
     return '';
   }
 
@@ -388,6 +393,7 @@ export async function getRelevantKnowledge(
     totalChars += chunkSize;
   }
 
+  trackSearchQuery(groupFolder, query, rankedResults.length, chunks.length > 0);
   return chunks.join('\n');
 }
 
@@ -550,4 +556,127 @@ export async function reindexAllEmbeddings(
   }
 
   return { indexed, failed };
+}
+
+// ============================================================================
+// Fact Conflict Detection
+// ============================================================================
+
+export interface ConflictResolution {
+  hasConflict: boolean;
+  existingFact?: Fact;
+  resolution: 'superseded' | 'merged' | 'kept';
+}
+
+/**
+ * Detect if a new fact conflicts with an existing stored fact for the same key.
+ *
+ * Resolution strategy:
+ *   - Same key with different value → newer fact wins (existing marked 'superseded')
+ *   - Same key with identical value → 'kept' (no conflict, idempotent)
+ *   - No existing fact → 'kept' (nothing to conflict with)
+ *
+ * Heuristic for contradicting values:
+ *   - Different string value for the same key is treated as a conflict
+ *   - Opposing sentiment words (yes/no, true/false, like/dislike) also conflict
+ */
+export function detectFactConflict(
+  groupFolder: string,
+  newFact: { key: string; value: string },
+): ConflictResolution {
+  const db = getDatabase();
+
+  const existing = db
+    .prepare('SELECT * FROM facts WHERE group_folder = ? AND key = ?')
+    .get(groupFolder, newFact.key) as Fact | undefined;
+
+  if (!existing) {
+    return { hasConflict: false, resolution: 'kept' };
+  }
+
+  // Normalize for comparison
+  const existingVal = existing.value.trim().toLowerCase();
+  const newVal = newFact.value.trim().toLowerCase();
+
+  if (existingVal === newVal) {
+    return { hasConflict: false, existingFact: existing, resolution: 'kept' };
+  }
+
+  // Values differ — newer wins, existing will be superseded
+  return {
+    hasConflict: true,
+    existingFact: existing,
+    resolution: 'superseded',
+  };
+}
+
+/**
+ * Store a fact with conflict detection.
+ * If an existing fact for the same key has a different value, it is marked
+ * as superseded in its metadata before the new value is written.
+ *
+ * Returns the conflict resolution result for logging/auditing.
+ */
+export function storeFactWithConflictCheck(
+  groupFolder: string,
+  key: string,
+  value: string,
+  source = 'extracted',
+  confidence = 0.8,
+): ConflictResolution {
+  const conflict = detectFactConflict(groupFolder, { key, value });
+
+  if (conflict.hasConflict && conflict.existingFact) {
+    // Mark old fact as superseded in metadata before overwriting
+    const db = getDatabase();
+    const now = new Date().toISOString();
+    const prevMeta = conflict.existingFact.source;
+    db.prepare(
+      `UPDATE facts
+       SET source = ?, updated_at = ?
+       WHERE group_folder = ? AND key = ?`,
+    ).run(
+      `superseded:${prevMeta}:${now}`,
+      now,
+      groupFolder,
+      key,
+    );
+
+    logger.debug(
+      {
+        groupFolder,
+        key,
+        oldValue: conflict.existingFact.value,
+        newValue: value,
+      },
+      'Fact conflict: existing value superseded by newer fact',
+    );
+
+    // Emit conflict event for cross-plugin awareness
+    try {
+      const bus = getEventBus();
+      bus.emit('memory:fact-conflict', {
+        groupFolder,
+        key,
+        resolution: conflict.resolution,
+      });
+    } catch {
+      // Event bus may not be initialized in tests
+    }
+  }
+
+  // Write the new fact (upsert)
+  const db = getDatabase();
+  const now = new Date().toISOString();
+  db.prepare(
+    `INSERT INTO facts (group_folder, key, value, source, confidence, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(group_folder, key) DO UPDATE SET
+       value = excluded.value,
+       source = excluded.source,
+       confidence = excluded.confidence,
+       updated_at = excluded.updated_at`,
+  ).run(groupFolder, key, value, source, confidence, now, now);
+
+  return conflict;
 }

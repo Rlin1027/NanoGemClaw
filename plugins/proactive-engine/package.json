@@ -1,0 +1,12 @@
+{
+  "name": "nanogemclaw-plugin-proactive-engine",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@nanogemclaw/plugin-api": "*",
+    "@nanogemclaw/event-bus": "*"
+  },
+  "engines": { "node": ">=20" }
+}

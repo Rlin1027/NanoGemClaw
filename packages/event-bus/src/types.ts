@@ -75,6 +75,23 @@ export interface NanoEventMap {
     signalType: string;
     message: string;
   };
+  'proactive:feedback-received': {
+    groupFolder: string;
+    signalType: string;
+    score: number;
+    responseTimeMs: number;
+  };
+  'memory:fact-conflict': {
+    groupFolder: string;
+    key: string;
+    resolution: string;
+  };
+  'profiler:sentiment-updated': {
+    groupFolder: string;
+    previousMood: string;
+    currentMood: string;
+    shift: string;
+  };
   'system:ready': Record<string, never>;
   'system:shutdown': Record<string, never>;
 }

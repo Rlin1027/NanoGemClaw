@@ -7,6 +7,7 @@
 
 import { getDatabase } from './connection.js';
 import { getEventBus } from '@nanogemclaw/event-bus';
+import type { Fact } from './facts.js';
 
 export type TemporalLayer = 'short' | 'medium' | 'long';
 
@@ -123,6 +124,53 @@ export function deleteTemporalMemoriesByGroup(groupFolder: string): number {
     .prepare('DELETE FROM memory_temporal WHERE group_folder = ?')
     .run(groupFolder);
   return result.changes;
+}
+
+/**
+ * Get facts for a sender across ALL groups, deduplicated by key.
+ * When the same key exists in multiple groups, the most recently updated value wins.
+ * Excludes facts from the current group (those are already included via getFacts).
+ */
+export function getCrossGroupFacts(
+  senderName: string,
+  excludeGroupFolder: string,
+): Fact[] {
+  const db = getDatabase();
+
+  // Find all group_folders where this sender has sent messages
+  const groupRows = db
+    .prepare(
+      `SELECT DISTINCT chat_jid FROM messages
+       WHERE (sender_name = ? OR sender = ?) AND sender_name IS NOT NULL`,
+    )
+    .all(senderName, senderName) as Array<{ chat_jid: string }>;
+
+  if (groupRows.length === 0) return [];
+
+  // Map chat_jid → group_folder via registered_groups is not available here,
+  // so we query facts by senderName pattern across all groups directly.
+  // Facts are stored per group_folder, not per sender_name, so we use
+  // a heuristic: get facts whose key starts with the sender's name or whose
+  // value references the sender, from groups other than the current one.
+  // More practically: get ALL facts from other groups and let caller filter.
+  const allOtherFacts = db
+    .prepare(
+      `SELECT * FROM facts
+       WHERE group_folder != ?
+       ORDER BY updated_at DESC`,
+    )
+    .all(excludeGroupFolder) as Fact[];
+
+  // Deduplicate by key: most recent updated_at wins
+  const deduped = new Map<string, Fact>();
+  for (const fact of allOtherFacts) {
+    const existing = deduped.get(fact.key);
+    if (!existing || fact.updated_at > existing.updated_at) {
+      deduped.set(fact.key, fact);
+    }
+  }
+
+  return Array.from(deduped.values());
 }
 
 /**

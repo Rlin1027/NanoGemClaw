@@ -6,8 +6,8 @@
  * Extracted facts are stored in the DB for injection into system prompts.
  */
 
-import { upsertFact } from './db.js';
 import { logger } from './logger.js';
+import { storeFactWithConflictCheck } from './knowledge.js';
 
 // ============================================================================
 // Pattern Definitions
@@ -142,7 +142,7 @@ export function extractFacts(text: string, groupFolder: string): void {
     if (value.length < 1) continue;
 
     try {
-      upsertFact(groupFolder, key, value, 'extracted', confidence);
+      storeFactWithConflictCheck(groupFolder, key, value, 'extracted', confidence);
       extracted++;
     } catch (err) {
       logger.debug(

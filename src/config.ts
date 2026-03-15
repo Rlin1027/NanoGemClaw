@@ -281,6 +281,16 @@ export const HYBRID_SEARCH = {
 } as const;
 
 /**
+ * Cross-group memory sharing — share sender facts across groups
+ */
+export const CROSS_GROUP_MEMORY = {
+  /** Enable cross-group fact sharing for the same sender */
+  ENABLED: process.env.CROSS_GROUP_MEMORY_ENABLED === 'true',
+  /** Maximum cross-group facts to inject (keeps context lean) */
+  MAX_FACTS: 10,
+} as const;
+
+/**
  * Memory Compounder configuration — temporal memory layers
  */
 export const MEMORY_COMPOUNDER = {

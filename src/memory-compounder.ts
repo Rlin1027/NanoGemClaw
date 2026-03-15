@@ -27,6 +27,7 @@ export { getTemporalContext } from './db/temporal-memory.js';
 import { getMessagesSince } from './db/messages.js';
 import { getFacts } from './db/facts.js';
 import { logger } from './logger.js';
+import { recordCompressionScore } from './memory-metrics.js';
 import type { RegisteredGroup } from './types.js';
 
 // ============================================================================
@@ -203,6 +204,8 @@ Output in the group's primary language. Keep under ${COMPOUNDER.MAX_MEDIUM_CONTE
         compactedFrom: 'short',
       });
 
+      recordCompressionScore(group.folder, 'medium', shortTerm.content, content);
+
       logger.info(
         { group: group.name, len: content.length },
         'Medium-term memory compacted',
@@ -289,6 +292,8 @@ Output in the group's primary language. Keep under ${COMPOUNDER.MAX_LONG_CONTENT
         model: COMPOUNDER.PRO_MODEL,
         compactedFrom: 'medium',
       });
+
+      recordCompressionScore(group.folder, 'long', mediumTerm.content, content);
 
       // Auto-update GEMINI.md with group profile
       await updateGeminiMdProfile(group.folder, content);

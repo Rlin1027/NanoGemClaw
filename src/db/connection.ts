@@ -289,6 +289,31 @@ export function initDatabase(): void {
       throw err;
     }
   }
+
+  if (currentVersion < 8) {
+    db.exec('BEGIN');
+    try {
+      // Migration v8: Memory metrics for compression quality, search hit rates, context utilization
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS memory_metrics (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          group_folder TEXT NOT NULL,
+          metric_type TEXT NOT NULL,
+          value REAL NOT NULL,
+          metadata_json TEXT,
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_memory_metrics_group ON memory_metrics(group_folder);
+        CREATE INDEX IF NOT EXISTS idx_memory_metrics_type ON memory_metrics(group_folder, metric_type);
+        CREATE INDEX IF NOT EXISTS idx_memory_metrics_created ON memory_metrics(created_at);
+      `);
+      db.exec('PRAGMA user_version = 8');
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+  }
 }
 
 /**

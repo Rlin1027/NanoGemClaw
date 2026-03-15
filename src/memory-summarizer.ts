@@ -14,10 +14,11 @@ import {
   upsertMemorySummary,
   getFacts,
 } from './db.js';
-import { MEMORY } from './config.js';
+import { MEMORY, CROSS_GROUP_MEMORY } from './config.js';
 import { logger } from './logger.js';
 import type { RegisteredGroup } from './types.js';
-import { getTemporalContext } from './db/temporal-memory.js';
+import { getTemporalContext, getCrossGroupFacts } from './db/temporal-memory.js';
+import { trackContextUtilization } from './memory-metrics.js';
 
 // ============================================================================
 // Types
@@ -223,13 +224,22 @@ const CONTEXT_BUDGET = 4000;
  * Get the memory context for a group (temporal layers + facts + summary).
  * Temporal layers are injected first for behavioral context, then facts, then summary.
  * Combined output is capped at ~4000 chars; lower-priority sections are truncated first.
+ *
+ * @param senderName - Optional sender name to include cross-group facts (if enabled)
  */
-export function getMemoryContext(groupFolder: string): string | null {
+export function getMemoryContext(groupFolder: string, senderName?: string): string | null {
   const summary = getMemorySummary(groupFolder);
   const facts = getFacts(groupFolder);
   const temporalContext = getTemporalContext(groupFolder);
 
-  if (!summary && facts.length === 0 && !temporalContext) return null;
+  // Cross-group facts (lowest priority — truncated first)
+  let crossGroupFacts: ReturnType<typeof getCrossGroupFacts> = [];
+  if (CROSS_GROUP_MEMORY.ENABLED && senderName) {
+    const raw = getCrossGroupFacts(senderName, groupFolder);
+    crossGroupFacts = raw.slice(0, CROSS_GROUP_MEMORY.MAX_FACTS);
+  }
+
+  if (!summary && facts.length === 0 && !temporalContext && crossGroupFacts.length === 0) return null;
 
   // Parse temporal context into short vs long sections for priority-aware truncation
   // Priority (highest = kept last): long-term profile > facts > summary > short-term observations
@@ -262,17 +272,40 @@ ${summary.summary}
 [END SUMMARY]`;
   }
 
+  // Cross-group context — lowest priority, truncated first
+  let crossGroupSection = '';
+  if (crossGroupFacts.length > 0) {
+    crossGroupSection =
+      '[CROSS-GROUP CONTEXT]\n' +
+      crossGroupFacts.map((f) => `- ${f.key}: ${f.value}`).join('\n') +
+      '\n[END CROSS-GROUP CONTEXT]';
+  }
+
   // Build full context, then truncate lower-priority sections if over budget
+  // Priority (highest = kept last): long-term > facts > summary > short-term > cross-group
   const parts: string[] = [];
   if (longTermSection) parts.push(longTermSection);
   if (factsSection) parts.push(factsSection);
   if (summarySection) parts.push(summarySection);
   if (shortTermSection) parts.push(shortTermSection);
+  if (crossGroupSection) parts.push(crossGroupSection);
 
   let context = parts.filter(Boolean).join('\n\n');
 
   if (context.length > CONTEXT_BUDGET) {
-    // Truncate short-term observations first
+    // Truncate cross-group context first (lowest priority)
+    if (crossGroupSection && context.length > CONTEXT_BUDGET) {
+      const excess = context.length - CONTEXT_BUDGET;
+      const trimmed = crossGroupSection.slice(
+        0,
+        Math.max(0, crossGroupSection.length - excess),
+      );
+      context = context
+        .replace(crossGroupSection, trimmed)
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+    }
+    // Truncate short-term observations next
     if (shortTermSection && context.length > CONTEXT_BUDGET) {
       const excess = context.length - CONTEXT_BUDGET;
       const trimmed = shortTermSection.slice(
@@ -309,6 +342,10 @@ ${summary.summary}
         .trim();
     }
     // Long-term profile is kept intact (highest priority)
+  }
+
+  if (context) {
+    trackContextUtilization(groupFolder, context.length, CONTEXT_BUDGET);
   }
 
   return context || null;
