@@ -6,3 +6,4 @@ export * from './stats.js';
 export * from './preferences.js';
 export * from './facts.js';
 export * from './tool-calls.js';
+export * from './temporal-memory.js';

@@ -263,6 +263,32 @@ export function initDatabase(): void {
       throw err;
     }
   }
+
+  if (currentVersion < 7) {
+    db.exec('BEGIN');
+    try {
+      // Migration v7: Temporal memory layers for Memory Compounder
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS memory_temporal (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          group_folder TEXT NOT NULL,
+          layer TEXT NOT NULL CHECK(layer IN ('short', 'medium', 'long')),
+          content TEXT NOT NULL,
+          metadata TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          UNIQUE(group_folder, layer)
+        );
+        CREATE INDEX IF NOT EXISTS idx_memory_temporal_group ON memory_temporal(group_folder);
+        CREATE INDEX IF NOT EXISTS idx_memory_temporal_layer ON memory_temporal(group_folder, layer);
+      `);
+      db.exec('PRAGMA user_version = 7');
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+  }
 }
 
 /**

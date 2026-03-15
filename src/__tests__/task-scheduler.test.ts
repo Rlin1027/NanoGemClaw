@@ -97,6 +97,8 @@ vi.mock('../config.js', () => ({
   },
   TIMEZONE: 'UTC',
   DATA_DIR: '/tmp/test-data',
+  SYSTEM_TASK_PREFIX: '_system_',
+  isSystemTask: (folder: string) => folder.startsWith('_system_'),
 }));
 
 vi.mock('fs', () => ({

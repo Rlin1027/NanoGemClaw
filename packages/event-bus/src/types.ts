@@ -55,6 +55,26 @@ export interface NanoEventMap {
     groupFolder: string;
     chunkIndex: number;
   };
+  'memory:compacted': {
+    groupFolder: string;
+    layer: 'short' | 'medium' | 'long';
+    contentLength: number;
+  };
+  'memory:profile-updated': {
+    groupFolder: string;
+    sections: string[];
+  };
+  'proactive:signal-detected': {
+    groupFolder: string;
+    signalType: string;
+    confidence: number;
+    suppressed: boolean;
+  };
+  'proactive:message-sent': {
+    groupFolder: string;
+    signalType: string;
+    message: string;
+  };
   'system:ready': Record<string, never>;
   'system:shutdown': Record<string, never>;
 }

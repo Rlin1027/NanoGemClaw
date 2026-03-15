@@ -76,6 +76,14 @@ export const MAIN_GROUP_FOLDER = 'main';
 export const ADMIN_USER_ID = process.env.ADMIN_USER_ID || '';
 export const ADMIN_PRIVATE_FOLDER = '_admin_private';
 
+/** Prefix for internal system tasks (hidden from user-facing APIs) */
+export const SYSTEM_TASK_PREFIX = '_system_';
+
+/** Check if a task is an internal system task */
+export function isSystemTask(groupFolder: string): boolean {
+  return groupFolder.startsWith(SYSTEM_TASK_PREFIX);
+}
+
 function safeParseInt(value: string | undefined, defaultValue: number): number {
   const parsed = parseInt(value || String(defaultValue), 10);
   return Number.isNaN(parsed) ? defaultValue : parsed;
@@ -270,6 +278,22 @@ export const HYBRID_SEARCH = {
   MAX_EMBEDDING_SCAN: 500,
   /** Minimum cosine similarity to include in results */
   MIN_SIMILARITY: 0.3,
+} as const;
+
+/**
+ * Memory Compounder configuration — temporal memory layers
+ */
+export const MEMORY_COMPOUNDER = {
+  /** Enable temporal memory compaction */
+  ENABLED: process.env.MEMORY_COMPOUNDER_ENABLED !== 'false',
+  /** Daily compaction hour (0-23, local time) */
+  DAILY_COMPACTION_HOUR: safeParseInt(process.env.DAILY_COMPACTION_HOUR, 3),
+  /** Weekly synthesis day (0=Sun, 1=Mon, ..., 6=Sat) */
+  WEEKLY_SYNTHESIS_DAY: safeParseInt(process.env.WEEKLY_SYNTHESIS_DAY, 0),
+  /** Weekly synthesis hour (0-23, local time) */
+  WEEKLY_SYNTHESIS_HOUR: safeParseInt(process.env.WEEKLY_SYNTHESIS_HOUR, 4),
+  /** Minimum messages before updating short-term memory */
+  MIN_MESSAGES_FOR_SHORT: 5,
 } as const;
 
 /**

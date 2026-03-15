@@ -43,11 +43,15 @@ export function getTasksForGroup(groupFolder: string): ScheduledTask[] {
   const db = getDatabase();
   return db
     .prepare(
-      'SELECT * FROM scheduled_tasks WHERE group_folder = ? ORDER BY created_at DESC',
+      "SELECT * FROM scheduled_tasks WHERE group_folder = ? AND group_folder NOT LIKE '_system_%' ORDER BY created_at DESC",
     )
     .all(groupFolder) as ScheduledTask[];
 }
 
+// NOTE: Intentionally includes system tasks (_system_* prefix) because this
+// function is consumed by the task scheduler which needs to process them.
+// User-facing queries should use getTasksForGroup() or getAllTasksPaginated()
+// which filter system tasks out.
 export function getAllTasks(): ScheduledTask[] {
   const db = getDatabase();
   return db
@@ -219,11 +223,13 @@ export function getAllTasksPaginated(
   const db = getDatabase();
   const rows = db
     .prepare(
-      'SELECT * FROM scheduled_tasks ORDER BY created_at DESC LIMIT ? OFFSET ?',
+      "SELECT * FROM scheduled_tasks WHERE group_folder NOT LIKE '_system_%' ORDER BY created_at DESC LIMIT ? OFFSET ?",
     )
     .all(limit, offset) as ScheduledTask[];
   const { total } = db
-    .prepare('SELECT COUNT(*) as total FROM scheduled_tasks')
+    .prepare(
+      "SELECT COUNT(*) as total FROM scheduled_tasks WHERE group_folder NOT LIKE '_system_%'",
+    )
     .get() as { total: number };
   return { rows, total };
 }
@@ -274,7 +280,7 @@ export function getTaskRunLogsWithDetails(
              st.prompt, st.group_folder, st.schedule_type
       FROM task_run_logs trl
       JOIN scheduled_tasks st ON trl.task_id = st.id
-      WHERE trl.run_at >= ? AND st.group_folder = ?
+      WHERE trl.run_at >= ? AND st.group_folder = ? AND st.group_folder NOT LIKE '_system_%'
       ORDER BY trl.run_at DESC
     `,
       )
@@ -294,7 +300,7 @@ export function getTaskRunLogsWithDetails(
            st.prompt, st.group_folder, st.schedule_type
     FROM task_run_logs trl
     JOIN scheduled_tasks st ON trl.task_id = st.id
-    WHERE trl.run_at >= ?
+    WHERE trl.run_at >= ? AND st.group_folder NOT LIKE '_system_%'
     ORDER BY trl.run_at DESC
   `,
     )
@@ -325,6 +331,7 @@ export function getTasksInDateRange(
       OR
       (schedule_type = 'once' AND next_run >= ? AND next_run <= ?)
     )
+    AND group_folder NOT LIKE '_system_%'
     ORDER BY created_at DESC
   `,
     )
@@ -337,7 +344,7 @@ export function getActiveTaskCountsBatch(): Map<string, number> {
     .prepare(
       `
     SELECT group_folder, COUNT(*) as cnt
-    FROM scheduled_tasks WHERE status = 'active'
+    FROM scheduled_tasks WHERE status = 'active' AND group_folder NOT LIKE '_system_%'
     GROUP BY group_folder
   `,
     )

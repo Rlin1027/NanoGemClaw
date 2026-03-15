@@ -17,6 +17,7 @@ import {
 import { MEMORY } from './config.js';
 import { logger } from './logger.js';
 import type { RegisteredGroup } from './types.js';
+import { getTemporalContext } from './db/temporal-memory.js';
 
 // ============================================================================
 // Types
@@ -216,31 +217,98 @@ export async function summarizeConversation(
   }
 }
 
+const CONTEXT_BUDGET = 4000;
+
 /**
- * Get the memory context for a group (facts + summary).
- * Facts are injected first for higher visibility in the prompt.
+ * Get the memory context for a group (temporal layers + facts + summary).
+ * Temporal layers are injected first for behavioral context, then facts, then summary.
+ * Combined output is capped at ~4000 chars; lower-priority sections are truncated first.
  */
 export function getMemoryContext(groupFolder: string): string | null {
   const summary = getMemorySummary(groupFolder);
   const facts = getFacts(groupFolder);
+  const temporalContext = getTemporalContext(groupFolder);
 
-  if (!summary && facts.length === 0) return null;
+  if (!summary && facts.length === 0 && !temporalContext) return null;
 
-  let context = '';
-
-  if (facts.length > 0) {
-    context += '[USER FACTS]\n';
-    context += facts.map((f) => `- ${f.key}: ${f.value}`).join('\n');
-    context += '\n[END FACTS]\n\n';
+  // Parse temporal context into short vs long sections for priority-aware truncation
+  // Priority (highest = kept last): long-term profile > facts > summary > short-term observations
+  let longTermSection = '';
+  let shortTermSection = '';
+  if (temporalContext) {
+    const longMatch = temporalContext.match(
+      /\[GROUP PROFILE\][\s\S]*?\[END GROUP PROFILE\]/,
+    );
+    if (longMatch) longTermSection = longMatch[0];
+    // Short-term is everything except the long-term profile block
+    shortTermSection = temporalContext.replace(longTermSection, '').trim();
   }
 
+  let factsSection = '';
+  if (facts.length > 0) {
+    factsSection =
+      '[USER FACTS]\n' +
+      facts.map((f) => `- ${f.key}: ${f.value}`).join('\n') +
+      '\n[END FACTS]';
+  }
+
+  let summarySection = '';
   if (summary) {
-    context += `[CONVERSATION HISTORY SUMMARY]
+    summarySection = `[CONVERSATION HISTORY SUMMARY]
 Last updated: ${summary.updated_at}
 Messages archived: ${summary.messages_archived}
 
 ${summary.summary}
 [END SUMMARY]`;
+  }
+
+  // Build full context, then truncate lower-priority sections if over budget
+  const parts: string[] = [];
+  if (longTermSection) parts.push(longTermSection);
+  if (factsSection) parts.push(factsSection);
+  if (summarySection) parts.push(summarySection);
+  if (shortTermSection) parts.push(shortTermSection);
+
+  let context = parts.filter(Boolean).join('\n\n');
+
+  if (context.length > CONTEXT_BUDGET) {
+    // Truncate short-term observations first
+    if (shortTermSection && context.length > CONTEXT_BUDGET) {
+      const excess = context.length - CONTEXT_BUDGET;
+      const trimmed = shortTermSection.slice(
+        0,
+        Math.max(0, shortTermSection.length - excess),
+      );
+      context = context
+        .replace(shortTermSection, trimmed)
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+    }
+    // Then truncate summary
+    if (summarySection && context.length > CONTEXT_BUDGET) {
+      const excess = context.length - CONTEXT_BUDGET;
+      const trimmed = summarySection.slice(
+        0,
+        Math.max(0, summarySection.length - excess),
+      );
+      context = context
+        .replace(summarySection, trimmed)
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+    }
+    // Then truncate facts
+    if (factsSection && context.length > CONTEXT_BUDGET) {
+      const excess = context.length - CONTEXT_BUDGET;
+      const trimmed = factsSection.slice(
+        0,
+        Math.max(0, factsSection.length - excess),
+      );
+      context = context
+        .replace(factsSection, trimmed)
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+    }
+    // Long-term profile is kept intact (highest priority)
   }
 
   return context || null;

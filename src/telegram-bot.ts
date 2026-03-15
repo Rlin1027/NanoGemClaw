@@ -572,6 +572,18 @@ export async function connectTelegram(): Promise<void> {
     registeredGroups: () => getRegisteredGroups(),
     getSessions: () => getSessions(),
   });
+
+  // Register Memory Compounder system tasks (daily compaction + weekly synthesis)
+  try {
+    const { registerCompactionTasks } =
+      await import('./compounder-scheduler.js');
+    registerCompactionTasks();
+  } catch (err) {
+    console.warn(
+      `[WARN] Memory Compounder registration failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
   startIpcWatcher();
   startMediaCleanupScheduler();
   const { startTaskCleanupScheduler } = await import('./task-tracker.js');

@@ -25,14 +25,97 @@ interface ExtractionPattern {
 }
 
 /**
- * Extraction patterns — add entries here to enable automatic fact extraction.
- * Currently empty (infrastructure reserved). Facts are captured via the
- * `remember_fact` Gemini tool instead.
- *
- * Example pattern:
- *   { pattern: /我叫([^\s,，。]{1,10})/u, key: 'user_name', valueGroup: 1, confidence: 0.9 }
+ * Extraction patterns for automatic fact capture.
+ * Supplements the `remember_fact` Gemini tool with regex-based extraction.
  */
-const PATTERNS: ExtractionPattern[] = [];
+const PATTERNS: ExtractionPattern[] = [
+  // Names (Chinese)
+  {
+    pattern: /我(?:的名字)?叫([^\s,，。!！?？]{1,10})/u,
+    key: 'user_name',
+    valueGroup: 1,
+    confidence: 0.85,
+  },
+  {
+    pattern: /我是([^\s,，。!！?？]{1,10})(?:啦|呀|喔)?$/u,
+    key: 'user_name',
+    valueGroup: 1,
+    confidence: 0.7,
+  },
+  // Names (English)
+  {
+    pattern: /(?:my name is|i'm|i am)\s+([A-Z][a-z]{1,15})/i,
+    key: 'user_name',
+    valueGroup: 1,
+    confidence: 0.85,
+  },
+  {
+    pattern: /(?:call me)\s+([A-Z][a-z]{1,15})/i,
+    key: 'user_name',
+    valueGroup: 1,
+    confidence: 0.8,
+  },
+  // Location
+  {
+    pattern: /我住(?:在)?([^\s,，。!！?？]{2,15})/u,
+    key: 'user_location',
+    valueGroup: 1,
+    confidence: 0.8,
+  },
+  {
+    pattern: /我在([^\s,，。!！?？]{2,10})(?:工作|上班|生活)/u,
+    key: 'user_location',
+    valueGroup: 1,
+    confidence: 0.75,
+  },
+  {
+    pattern: /i (?:live|work|am based) in\s+([A-Za-z\s]{2,20})/i,
+    key: 'user_location',
+    valueGroup: 1,
+    confidence: 0.8,
+  },
+  // Occupation
+  {
+    pattern: /我(?:的工作)?是(?:做)?([^\s,，。!！?？]{2,15})(?:的)?/u,
+    key: 'user_occupation',
+    valueGroup: 1,
+    confidence: 0.7,
+  },
+  {
+    pattern: /i(?:'m| am) (?:a |an )?([a-z\s]{3,25}?)(?:\s+at|\s+in|\.|,|$)/i,
+    key: 'user_occupation',
+    valueGroup: 1,
+    confidence: 0.65,
+  },
+  // Pets
+  {
+    pattern:
+      /我(?:養了?|有)(?:一[隻條])?([^\s,，。]{1,5}(?:狗|貓|兔|鳥|魚|龜|鼠|蛇))/u,
+    key: 'user_pet',
+    valueGroup: 1,
+    confidence: 0.85,
+  },
+  // Birthday
+  {
+    pattern: /我(?:的)?生日(?:是)?(\d{1,2}[月\/]\d{1,2})/u,
+    key: 'user_birthday',
+    valueGroup: 1,
+    confidence: 0.9,
+  },
+  {
+    pattern: /my birthday is\s+(\w+ \d{1,2}|\d{1,2}\/\d{1,2})/i,
+    key: 'user_birthday',
+    valueGroup: 1,
+    confidence: 0.9,
+  },
+  // Language preference
+  {
+    pattern: /(?:請|麻煩)?(?:用|以)([^\s,，。]{2,8}?)(?:回[答覆]|說|溝通)/u,
+    key: 'preferred_language',
+    valueGroup: 1,
+    confidence: 0.8,
+  },
+];
 
 // ============================================================================
 // Extraction

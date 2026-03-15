@@ -4,6 +4,7 @@ import path from 'path';
 
 import { ConcurrencyLimiter } from './concurrency-limiter.js';
 import {
+  isSystemTask,
   GROUPS_DIR,
   MAIN_GROUP_FOLDER,
   SCHEDULER,
@@ -63,6 +64,53 @@ async function runTask(
   cachedTasks?: ScheduledTask[],
 ): Promise<void> {
   const startTime = Date.now();
+
+  // System tasks: handle via compounder-scheduler (no Gemini, no group dir)
+  if (isSystemTask(task.group_folder)) {
+    try {
+      const { isCompactionTask, executeCompactionTask } =
+        await import('./compounder-scheduler.js');
+      if (isCompactionTask(task.id)) {
+        const result = await executeCompactionTask(
+          task.id,
+          deps.registeredGroups,
+        );
+        logTaskRun({
+          task_id: task.id,
+          run_at: new Date().toISOString(),
+          duration_ms: Date.now() - startTime,
+          status: 'success',
+          result,
+          error: null,
+        });
+        // Calculate next run for cron
+        if (task.schedule_type === 'cron') {
+          const interval = CronExpressionParser.parse(task.schedule_value, {
+            tz: TIMEZONE,
+          });
+          updateTaskAfterRun(task.id, interval.next().toISOString(), result);
+        }
+        logger.info(
+          { taskId: task.id, durationMs: Date.now() - startTime },
+          'System task completed',
+        );
+        return;
+      }
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      logTaskRun({
+        task_id: task.id,
+        run_at: new Date().toISOString(),
+        duration_ms: Date.now() - startTime,
+        status: 'error',
+        result: null,
+        error,
+      });
+      logger.error({ taskId: task.id, error }, 'System task failed');
+      return;
+    }
+  }
+
   const groupDir = path.join(GROUPS_DIR, task.group_folder);
   fs.mkdirSync(groupDir, { recursive: true });
 
