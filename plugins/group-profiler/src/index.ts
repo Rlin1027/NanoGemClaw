@@ -11,6 +11,8 @@
  * - Event Bus: subscribe to message:received, task:completed, memory:fact-stored
  */
 
+import path from 'path';
+import fs from 'fs';
 import type {
     NanoPlugin,
     PluginApi,
@@ -68,6 +70,17 @@ const MAX_BUFFER_SIZE = 200;
 const MAX_MOOD_HISTORY = 10;
 const ANALYSIS_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
 const EMOJI_RE = /[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u;
+
+interface PersistedGroupData {
+    version: 1;
+    signals: MessageSignal[];
+    moods: MoodSnapshot[];
+}
+
+const dirtyGroups = new Set<string>();
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+let signalsDir: string | null = null;
+const FLUSH_DELAY_MS = 5000;
 const CJK_RE = /[\u4E00-\u9FFF\u3400-\u4DBF]/;
 
 // Mood groups for shift detection
@@ -102,6 +115,7 @@ function recordMoodSnapshot(groupFolder: string, mood: string): string | null {
     const previousMood = history.length > 0 ? history[history.length - 1].mood : null;
     history.push({ mood, recordedAt: new Date().toISOString() });
     if (history.length > MAX_MOOD_HISTORY) history.shift();
+    schedulePersist(groupFolder);
 
     if (!previousMood || previousMood === mood) return null;
     return detectMoodShift(previousMood, mood);
@@ -132,6 +146,70 @@ function analyzeMessage(content: string, timestamp: string): MessageSignal {
     };
 }
 
+function loadPersistedSignals(dir: string): void {
+    let files: string[];
+    try {
+        files = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
+    } catch {
+        return; // Directory may not exist yet
+    }
+
+    for (const file of files) {
+        try {
+            const raw = fs.readFileSync(path.join(dir, file), 'utf-8');
+            const data = JSON.parse(raw) as PersistedGroupData;
+            if (data.version !== 1) continue;
+
+            const groupFolder = file.replace(/\.json$/, '');
+
+            if (Array.isArray(data.signals) && data.signals.length > 0) {
+                signalBuffers.set(groupFolder, data.signals.slice(-MAX_BUFFER_SIZE));
+            }
+            if (Array.isArray(data.moods) && data.moods.length > 0) {
+                moodHistory.set(groupFolder, data.moods.slice(-MAX_MOOD_HISTORY));
+            }
+        } catch {
+            // Skip corrupted files
+        }
+    }
+}
+
+function flushDirtyGroups(): void {
+    if (!signalsDir || dirtyGroups.size === 0) return;
+
+    for (const groupFolder of dirtyGroups) {
+        const signals = signalBuffers.get(groupFolder) ?? [];
+        const moods = moodHistory.get(groupFolder) ?? [];
+        const data: PersistedGroupData = {
+            version: 1,
+            signals,
+            moods,
+        };
+
+        const filePath = path.join(signalsDir, `${groupFolder}.json`);
+        const tmpPath = filePath + '.tmp';
+        try {
+            fs.writeFileSync(tmpPath, JSON.stringify(data), 'utf-8');
+            fs.renameSync(tmpPath, filePath);
+        } catch (err) {
+            // Log but don't crash — persistence is best-effort
+            if (pluginApiRef) {
+                pluginApiRef.logger.warn(`Failed to persist signals for ${groupFolder}: ${err instanceof Error ? err.message : String(err)}`);
+            }
+        }
+    }
+    dirtyGroups.clear();
+}
+
+function schedulePersist(groupFolder: string): void {
+    dirtyGroups.add(groupFolder);
+    if (flushTimer) return; // Already scheduled
+    flushTimer = setTimeout(() => {
+        flushTimer = null;
+        flushDirtyGroups();
+    }, FLUSH_DELAY_MS);
+}
+
 function addSignal(groupFolder: string, signal: MessageSignal): void {
     let buffer = signalBuffers.get(groupFolder);
     if (!buffer) {
@@ -143,6 +221,7 @@ function addSignal(groupFolder: string, signal: MessageSignal): void {
     if (buffer.length > MAX_BUFFER_SIZE) {
         buffer.shift();
     }
+    schedulePersist(groupFolder);
 }
 
 /**
@@ -391,6 +470,9 @@ const groupProfilerPlugin: NanoPlugin = {
 
     async init(api: PluginApi): Promise<void> {
         pluginApiRef = api;
+        signalsDir = path.join(api.dataDir, 'signals');
+        fs.mkdirSync(signalsDir, { recursive: true });
+        loadPersistedSignals(signalsDir);
         api.logger.info('Group Profiler plugin initialized');
     },
 
@@ -416,8 +498,16 @@ const groupProfilerPlugin: NanoPlugin = {
             clearInterval(analysisInterval);
             analysisInterval = null;
         }
+        // Flush any pending dirty data before clearing
+        if (flushTimer) {
+            clearTimeout(flushTimer);
+            flushTimer = null;
+        }
+        flushDirtyGroups();
         signalBuffers.clear();
         profileCache.clear();
+        moodHistory.clear();
+        signalsDir = null;
         pluginApiRef = null;
         api.logger.info('Group Profiler plugin stopped');
     },

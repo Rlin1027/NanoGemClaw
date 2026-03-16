@@ -88,6 +88,20 @@ export function initMemoryMetricsTable(): void {
 }
 
 // ============================================================================
+// Helpers
+// ============================================================================
+
+/** Word-boundary-aware match. Falls back to includes() for CJK characters. */
+function containsWord(word: string, text: string): boolean {
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // CJK characters don't have word boundaries — match directly
+  if (/[\u4E00-\u9FFF\u3400-\u4DBF]/.test(word)) {
+    return text.includes(word);
+  }
+  return new RegExp(`\\b${escaped}\\b`).test(text);
+}
+
+// ============================================================================
 // Recording Functions
 // ============================================================================
 
@@ -146,7 +160,7 @@ export function recordCompressionScore(
   const outputLower = outputContent.toLowerCase();
   let preserved = 0;
   for (const word of inputWords) {
-    if (outputLower.includes(word)) preserved++;
+    if (containsWord(word, outputLower)) preserved++;
   }
   const entityPreservationRate =
     inputWords.size > 0 ? preserved / inputWords.size : 1;

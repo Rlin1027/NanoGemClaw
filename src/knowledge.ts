@@ -397,56 +397,119 @@ export async function getRelevantKnowledge(
   return chunks.join('\n');
 }
 
+/**
+ * Min-heap for maintaining top-K results by score.
+ * The root is always the smallest score, allowing O(log K) replacement
+ * when a better candidate is found.
+ */
+class MinHeap {
+  private heap: Array<{ docId: number; score: number }> = [];
+  constructor(private maxSize: number) {}
+
+  get size(): number {
+    return this.heap.length;
+  }
+
+  peek(): { docId: number; score: number } | undefined {
+    return this.heap[0];
+  }
+
+  push(item: { docId: number; score: number }): void {
+    if (this.heap.length < this.maxSize) {
+      this.heap.push(item);
+      this.bubbleUp(this.heap.length - 1);
+    } else if (this.heap.length > 0 && item.score > this.heap[0].score) {
+      this.heap[0] = item;
+      this.sinkDown(0);
+    }
+  }
+
+  toSorted(): Array<{ docId: number; score: number }> {
+    return [...this.heap].sort((a, b) => b.score - a.score);
+  }
+
+  private bubbleUp(i: number): void {
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (this.heap[parent].score <= this.heap[i].score) break;
+      [this.heap[parent], this.heap[i]] = [this.heap[i], this.heap[parent]];
+      i = parent;
+    }
+  }
+
+  private sinkDown(i: number): void {
+    const n = this.heap.length;
+    while (true) {
+      let smallest = i;
+      const left = 2 * i + 1;
+      const right = 2 * i + 2;
+      if (left < n && this.heap[left].score < this.heap[smallest].score)
+        smallest = left;
+      if (right < n && this.heap[right].score < this.heap[smallest].score)
+        smallest = right;
+      if (smallest === i) break;
+      [this.heap[smallest], this.heap[i]] = [this.heap[i], this.heap[smallest]];
+      i = smallest;
+    }
+  }
+}
+
 async function searchByEmbedding(
   db: Database.Database,
   query: string,
   groupFolder: string,
   limit: number,
 ): Promise<Array<{ docId: number; score: number }>> {
-  const rows = db
-    .prepare(
-      `
+  const queryEmbedding = await embedText(query);
+  if (!queryEmbedding) return [];
+
+  const minSim = HYBRID_SEARCH.MIN_SIMILARITY;
+  const BATCH_SIZE = 100;
+  const docBestScores = new Map<number, number>();
+  const heap = new MinHeap(limit);
+  let offset = 0;
+
+  const stmt = db.prepare(`
     SELECT ke.doc_id, ke.embedding
     FROM knowledge_embeddings ke
     JOIN knowledge_docs d ON d.id = ke.doc_id
     WHERE d.group_folder = ?
-    LIMIT ?
-  `,
-    )
-    .all(groupFolder, HYBRID_SEARCH.MAX_EMBEDDING_SCAN) as Array<{
-    doc_id: number;
-    embedding: Buffer;
-  }>;
+    LIMIT ? OFFSET ?
+  `);
 
-  if (rows.length === 0) {
-    return [];
-  }
+  while (true) {
+    const rows = stmt.all(groupFolder, BATCH_SIZE, offset) as Array<{
+      doc_id: number;
+      embedding: Buffer;
+    }>;
+    if (rows.length === 0) break;
 
-  const queryEmbedding = await embedText(query);
-  if (!queryEmbedding) {
-    return [];
-  }
+    for (const row of rows) {
+      const emb = new Float32Array(
+        row.embedding.buffer,
+        row.embedding.byteOffset,
+        row.embedding.byteLength / 4,
+      );
+      const score = cosineSimilarityF32(queryEmbedding, emb);
+      if (score < minSim) continue;
 
-  const minSim = HYBRID_SEARCH.MIN_SIMILARITY;
-  const docScores = new Map<number, number>();
-  for (const row of rows) {
-    const emb = new Float32Array(
-      row.embedding.buffer,
-      row.embedding.byteOffset,
-      row.embedding.byteLength / 4,
-    );
-    const score = cosineSimilarityF32(queryEmbedding, emb);
-    if (score < minSim) continue;
-    const existing = docScores.get(row.doc_id) || 0;
-    if (score > existing) {
-      docScores.set(row.doc_id, score);
+      // Keep best score per doc (multiple chunks per doc)
+      const existing = docBestScores.get(row.doc_id) ?? 0;
+      if (score > existing) {
+        docBestScores.set(row.doc_id, score);
+      }
     }
+
+    offset += rows.length;
+    if (offset >= HYBRID_SEARCH.MAX_EMBEDDING_SCAN) break;
   }
 
-  return Array.from(docScores.entries())
-    .map(([docId, score]) => ({ docId, score }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit);
+  // Push best scores into heap for top-K selection
+  for (const [docId, score] of docBestScores) {
+    heap.push({ docId, score });
+  }
+
+  return heap.toSorted();
 }
 
 function mergeWithRRF(

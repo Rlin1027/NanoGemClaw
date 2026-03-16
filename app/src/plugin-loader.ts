@@ -33,6 +33,18 @@ const internalPlugins: (import('@nanogemclaw/plugin-api').NanoPlugin & { builtin
 // Module-level eventBus reference, set when plugins are loaded
 let moduleEventBus: import('@nanogemclaw/event-bus').EventBus | undefined;
 
+// Module-level references for persist operations
+let moduleManifestPath: string | undefined;
+let moduleDeps:
+  | {
+      getDatabase(): unknown;
+      sendMessage(chatJid: string, text: string): Promise<void>;
+      getGroups(): Record<string, import('@nanogemclaw/core').RegisteredGroup>;
+      eventBus?: import('@nanogemclaw/event-bus').EventBus;
+      dataDir: string;
+    }
+  | undefined;
+
 export function registerInternalPlugin(
   plugin: import('@nanogemclaw/plugin-api').NanoPlugin & { builtin: true },
 ): void {
@@ -225,6 +237,8 @@ export async function discoverAndLoadPlugins(
   options?: DiscoverAndLoadOptions,
 ): Promise<void> {
   moduleEventBus = deps.eventBus;
+  moduleManifestPath = manifestPath;
+  moduleDeps = deps;
 
   // Register MCP bridge plugin (only when plugins are actually being loaded)
   try {
@@ -291,6 +305,40 @@ export async function discoverAndLoadPlugins(
   }
 
   logger.info({ count: loadedPlugins.length }, 'Plugins loaded');
+}
+
+function persistPluginState(pluginId: string, enabled: boolean): void {
+  if (!moduleManifestPath) return;
+
+  let manifest: PluginManifest = { plugins: [] };
+  try {
+    if (fs.existsSync(moduleManifestPath)) {
+      manifest = JSON.parse(fs.readFileSync(moduleManifestPath, 'utf-8')) as PluginManifest;
+    }
+  } catch {
+    // If manifest is unreadable, start fresh
+  }
+
+  const idx = manifest.plugins.findIndex(p => {
+    const id = p.source.split('/').pop()?.replace(/^@nanogemclaw-plugin\//, '') ?? p.source;
+    return id === pluginId || p.source.includes(pluginId);
+  });
+
+  if (idx >= 0) {
+    manifest.plugins[idx].enabled = enabled;
+  } else {
+    // Auto-discovered plugin, add override entry
+    manifest.plugins.push({
+      source: pluginId,
+      enabled,
+      config: {},
+    });
+  }
+
+  // Atomic write: write to tmp, then rename
+  const tmpPath = moduleManifestPath + '.tmp';
+  fs.writeFileSync(tmpPath, JSON.stringify(manifest, null, 2), 'utf-8');
+  fs.renameSync(tmpPath, moduleManifestPath);
 }
 
 async function loadPlugin(
@@ -392,6 +440,62 @@ export async function stopPlugins(): Promise<void> {
       logger.error({ err, pluginId: loaded.plugin.id }, 'Plugin stop failed');
     }
   }
+}
+
+export async function disablePlugin(pluginId: string): Promise<boolean> {
+  const loaded = loadedPlugins.find(p => p.plugin.id === pluginId);
+  if (!loaded || !loaded.enabled) return false;
+
+  loaded.enabled = false;
+
+  // Stop the plugin gracefully
+  if (loaded.plugin.stop) {
+    try {
+      await loaded.plugin.stop(loaded.api);
+    } catch (err) {
+      logger.error({ err, pluginId }, 'Error stopping disabled plugin');
+    }
+  }
+
+  persistPluginState(pluginId, false);
+  logger.info({ pluginId }, 'Plugin disabled and persisted');
+  return true;
+}
+
+export async function enablePlugin(pluginId: string): Promise<boolean> {
+  const loaded = loadedPlugins.find(p => p.plugin.id === pluginId);
+  if (!loaded) return false;
+  if (loaded.enabled) return true; // Already enabled
+
+  loaded.enabled = true;
+
+  // Re-init and start the plugin
+  if (loaded.plugin.init) {
+    try {
+      const result = await loaded.plugin.init(loaded.api);
+      if (result === false) {
+        loaded.enabled = false;
+        logger.warn({ pluginId }, 'Plugin init returned false during enable');
+        return false;
+      }
+    } catch (err) {
+      loaded.enabled = false;
+      logger.error({ err, pluginId }, 'Plugin init failed during enable');
+      return false;
+    }
+  }
+
+  if (loaded.plugin.start) {
+    try {
+      await loaded.plugin.start(loaded.api);
+    } catch (err) {
+      logger.error({ err, pluginId }, 'Plugin start failed during enable');
+    }
+  }
+
+  persistPluginState(pluginId, true);
+  logger.info({ pluginId }, 'Plugin enabled and persisted');
+  return true;
 }
 
 // ============================================================================
