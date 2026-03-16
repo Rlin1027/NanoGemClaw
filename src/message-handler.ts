@@ -71,9 +71,24 @@ export async function processMessage(msg: Message): Promise<void> {
     group.folder === (await import('./config.js')).MAIN_GROUP_FOLDER;
 
   // Handle admin commands (main group or admin private chat)
-  const { isAdminGroup } = await import('./admin-auth.js');
+  const { isAdminGroup, isAdminUser } = await import('./admin-auth.js');
   const isAdminChat = isAdminGroup(group.folder);
   if ((isMainGroup || isAdminChat) && content.startsWith('/admin')) {
+    // Verify sender is the admin user — not just that the chat is an admin chat
+    const senderId = msg.from?.id?.toString() ?? '';
+    if (!isAdminUser(senderId)) {
+      await sendMessage(
+        chatId,
+        '⛔ 權限不足：僅管理員可執行此命令。',
+        threadIdNum,
+      );
+      logger.warn(
+        { chatId, senderId },
+        'Non-admin user attempted /admin command',
+      );
+      return;
+    }
+
     const parts = content.slice(7).trim().split(/\s+/);
     const adminCmd = parts[0] || 'help';
     const adminArgs = parts.slice(1);

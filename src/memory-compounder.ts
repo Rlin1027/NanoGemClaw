@@ -36,9 +36,9 @@ import type { RegisteredGroup } from './types.js';
 
 export const COMPOUNDER = {
   /** Flash model for daily compaction (cheap) */
-  FLASH_MODEL: 'gemini-3-flash-preview',
+  FLASH_MODEL: process.env.COMPOUNDER_FLASH_MODEL || 'gemini-3-flash-preview',
   /** Pro model for weekly deep synthesis */
-  PRO_MODEL: 'gemini-3-pro-preview',
+  PRO_MODEL: process.env.COMPOUNDER_PRO_MODEL || 'gemini-3-pro-preview',
   /** Maximum short-term content length (chars) */
   MAX_SHORT_CONTENT: 2000,
   /** Maximum medium-term content length (chars) */
@@ -204,7 +204,12 @@ Output in the group's primary language. Keep under ${COMPOUNDER.MAX_MEDIUM_CONTE
         compactedFrom: 'short',
       });
 
-      recordCompressionScore(group.folder, 'medium', shortTerm.content, content);
+      recordCompressionScore(
+        group.folder,
+        'medium',
+        shortTerm.content,
+        content,
+      );
 
       logger.info(
         { group: group.name, len: content.length },

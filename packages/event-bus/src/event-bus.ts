@@ -25,14 +25,16 @@ export interface EventBusOptions {
 
 export class EventBus {
   private emitter: EventEmitter;
-  private buffer: EventRecord[];
+  private ringBuffer: (EventRecord | null)[];
+  private writeIndex = 0;
+  private count = 0;
   private readonly bufferSize: number;
 
   constructor(options?: EventBusOptions) {
     this.emitter = new EventEmitter();
     this.bufferSize = options?.bufferSize ?? 100;
     this.emitter.setMaxListeners(options?.maxListeners ?? 50);
-    this.buffer = [];
+    this.ringBuffer = new Array(this.bufferSize).fill(null);
   }
 
   /**
@@ -40,11 +42,10 @@ export class EventBus {
    * Each handler runs in its own try/catch — one failure won't block others.
    */
   emit<K extends keyof NanoEventMap>(event: K, payload: NanoEventMap[K]): void {
-    // Ring buffer: drop oldest if full
-    if (this.buffer.length >= this.bufferSize) {
-      this.buffer.shift();
-    }
-    this.buffer.push({ event: event as string, payload, timestamp: Date.now() });
+    // O(1) circular buffer write — no shift() needed
+    this.ringBuffer[this.writeIndex] = { event: event as string, payload, timestamp: Date.now() };
+    this.writeIndex = (this.writeIndex + 1) % this.bufferSize;
+    if (this.count < this.bufferSize) this.count++;
 
     // Use rawListeners() to correctly handle once() wrappers
     const listeners = this.emitter.rawListeners(event as string);
@@ -110,14 +111,22 @@ export class EventBus {
     this.emitter.removeListener(event as string, handler);
   }
 
-  /** Get a copy of the event buffer. */
+  /** Get a copy of the event buffer in chronological order. */
   getBuffer(): ReadonlyArray<EventRecord> {
-    return [...this.buffer];
+    if (this.count === 0) return [];
+    const result: EventRecord[] = [];
+    const start = this.count < this.bufferSize ? 0 : this.writeIndex;
+    for (let i = 0; i < this.count; i++) {
+      const idx = (start + i) % this.bufferSize;
+      const record = this.ringBuffer[idx];
+      if (record) result.push(record);
+    }
+    return result;
   }
 
   /** Current number of events in the buffer. */
   getBufferSize(): number {
-    return this.buffer.length;
+    return this.count;
   }
 
   /** Number of listeners for a specific event. */
@@ -136,12 +145,16 @@ export class EventBus {
 
   /** Clear the event buffer without removing listeners. */
   clearBuffer(): void {
-    this.buffer = [];
+    this.ringBuffer = new Array(this.bufferSize).fill(null);
+    this.writeIndex = 0;
+    this.count = 0;
   }
 
   /** Remove all listeners and clear the buffer. */
   destroy(): void {
     this.emitter.removeAllListeners();
-    this.buffer = [];
+    this.ringBuffer = new Array(this.bufferSize).fill(null);
+    this.writeIndex = 0;
+    this.count = 0;
   }
 }

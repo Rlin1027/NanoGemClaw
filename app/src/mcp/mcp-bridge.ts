@@ -15,6 +15,52 @@ import type { McpServerConfig, McpConnectionState } from './mcp-types.js';
 // Dynamic import path for cache invalidation (avoids circular import at module load)
 const GEMINI_TOOLS_PATH = '../../../src/gemini-tools.js';
 
+/**
+ * Dangerous environment variable names that must never be passed to child processes.
+ * These can be exploited for arbitrary code execution or library injection.
+ */
+const BLOCKED_ENV_VARS = new Set([
+    'LD_PRELOAD',
+    'LD_LIBRARY_PATH',
+    'DYLD_INSERT_LIBRARIES',
+    'DYLD_LIBRARY_PATH',
+    'DYLD_FRAMEWORK_PATH',
+    'DYLD_FALLBACK_LIBRARY_PATH',
+    'NODE_OPTIONS',
+    'NODE_REPL_EXTERNAL_MODULE',
+    'BASH_ENV',
+    'ENV',
+    'CDPATH',
+    'PYTHONSTARTUP',
+    'PYTHONPATH',
+    'RUBYOPT',
+    'RUBYLIB',
+    'PERL5OPT',
+    'PERL5LIB',
+]);
+
+/** Filter environment variables, removing dangerous system-level entries. */
+function sanitizeEnv(env?: Record<string, string>): Record<string, string> | undefined {
+    if (!env || Object.keys(env).length === 0) return undefined;
+
+    const sanitized: Record<string, string> = {};
+    const blocked: string[] = [];
+
+    for (const [key, value] of Object.entries(env)) {
+        if (BLOCKED_ENV_VARS.has(key.toUpperCase())) {
+            blocked.push(key);
+        } else {
+            sanitized[key] = value;
+        }
+    }
+
+    if (blocked.length > 0) {
+        logger.warn({ blocked }, 'MCP env vars blocked by security filter');
+    }
+
+    return sanitized;
+}
+
 interface McpTool {
     name: string;
     description?: string;
@@ -141,7 +187,7 @@ export class McpBridge {
                 const transport = new StdioClientTransport({
                     command: this.config.command!,
                     args: this.config.args,
-                    env: this.config.env,
+                    env: sanitizeEnv(this.config.env),
                 });
 
                 // Connect with timeout
@@ -326,6 +372,48 @@ export class McpBridge {
                 success: false,
                 error: `MCP server '${this.config.id}' is not connected`,
             });
+        }
+
+        // Validate args against the tool's inputSchema (if available)
+        const toolDef = this.mcpTools.find((t) => t.name === toolName);
+        if (toolDef?.inputSchema) {
+            const schema = toolDef.inputSchema;
+            const required = Array.isArray(schema.required) ? schema.required as string[] : [];
+            for (const key of required) {
+                if (!(key in args)) {
+                    return JSON.stringify({
+                        success: false,
+                        error: `Missing required parameter: ${key}`,
+                    });
+                }
+            }
+            // Type-check declared properties
+            const props = schema.properties as Record<string, { type?: string }> | undefined;
+            if (props) {
+                for (const [key, value] of Object.entries(args)) {
+                    const propSchema = props[key];
+                    if (!propSchema) continue; // Allow extra properties (additionalProperties)
+                    const expectedType = propSchema.type;
+                    if (expectedType === 'string' && typeof value !== 'string') {
+                        return JSON.stringify({
+                            success: false,
+                            error: `Parameter '${key}' must be a string`,
+                        });
+                    }
+                    if ((expectedType === 'number' || expectedType === 'integer') && typeof value !== 'number') {
+                        return JSON.stringify({
+                            success: false,
+                            error: `Parameter '${key}' must be a number`,
+                        });
+                    }
+                    if (expectedType === 'boolean' && typeof value !== 'boolean') {
+                        return JSON.stringify({
+                            success: false,
+                            error: `Parameter '${key}' must be a boolean`,
+                        });
+                    }
+                }
+            }
         }
 
         try {

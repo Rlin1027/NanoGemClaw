@@ -59,7 +59,7 @@ registerInternalPlugin({
         if (moduleEventBus) {
           moduleEventBus.emit('security:injection-detected', {
             toolName: ctx.toolName,
-            patterns: scan.patterns,
+            patterns: scan.patterns ?? [],
             groupFolder: ctx.groupFolder,
             chatJid: ctx.chatJid,
           });
@@ -156,6 +156,53 @@ export async function loadPlugins(
 }
 
 // ============================================================================
+// Dependency-aware plugin ordering (best-effort topological sort)
+// ============================================================================
+
+/**
+ * Sort plugins so that dependencies load before dependents.
+ * Falls back to original order for plugins without dependsOn or on cycles.
+ */
+function topoSortPlugins<T extends { source: string; dependsOn?: string[] }>(
+  plugins: T[],
+): T[] {
+  // Build a map from plugin source basename (assumed to be the plugin ID) to entry
+  const byId = new Map<string, T>();
+  for (const p of plugins) {
+    // Use last path segment or full source as ID
+    const id = p.source.split('/').pop()?.replace(/^@nanogemclaw-plugin\//, '') ?? p.source;
+    byId.set(id, p);
+  }
+
+  const sorted: T[] = [];
+  const visited = new Set<string>();
+  const visiting = new Set<string>(); // cycle detection
+
+  function visit(plugin: T): void {
+    const id = plugin.source.split('/').pop()?.replace(/^@nanogemclaw-plugin\//, '') ?? plugin.source;
+    if (visited.has(id)) return;
+    if (visiting.has(id)) {
+      // Cycle detected — skip to break the cycle
+      logger.warn({ plugin: id }, 'Plugin dependency cycle detected, loading in original order');
+      return;
+    }
+    visiting.add(id);
+
+    for (const depId of plugin.dependsOn ?? []) {
+      const dep = byId.get(depId);
+      if (dep) visit(dep);
+    }
+
+    visiting.delete(id);
+    visited.add(id);
+    sorted.push(plugin);
+  }
+
+  for (const p of plugins) visit(p);
+  return sorted;
+}
+
+// ============================================================================
 // Discover and load plugins (manifest + auto-discovery)
 // ============================================================================
 
@@ -228,8 +275,11 @@ export async function discoverAndLoadPlugins(
   for (const p of merged) counts[p.origin]++;
   logger.info(counts, 'Plugin discovery complete');
 
-  // 5. Load each plugin
-  for (const entry of merged) {
+  // 5. Sort plugins by dependsOn (simple topological sort, best-effort)
+  const sorted = topoSortPlugins(merged);
+
+  // 6. Load each plugin
+  for (const entry of sorted) {
     if (!entry.enabled) {
       logger.debug(
         { source: entry.source, origin: entry.origin },

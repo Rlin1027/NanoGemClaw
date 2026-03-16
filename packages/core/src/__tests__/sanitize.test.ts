@@ -81,17 +81,17 @@ describe('scanForInjection', () => {
 
   // --- Size limit ---
 
-  it('returns skipped with size_limit reason for text > 50KB', () => {
+  it('returns suspicious with oversized_input for text > 50KB', () => {
     const bigText = 'a'.repeat(51 * 1024); // 51KB of ASCII
     const result = scanForInjection(bigText);
-    expect(result).toEqual({ status: 'skipped', reason: 'size_limit' });
+    expect(result).toEqual({ status: 'suspicious', reason: 'size_limit', patterns: ['oversized_input'] });
   });
 
-  it('does NOT skip text exactly at 50KB boundary', () => {
+  it('does NOT flag text exactly at 50KB boundary', () => {
     // 50KB = 51200 bytes; create exactly 50*1024 bytes
     const borderText = 'a'.repeat(50 * 1024);
     const result = scanForInjection(borderText);
-    // Should be clean (no injection patterns), not skipped
+    // Should be clean (no injection patterns), not flagged
     expect(result.status).toBe('clean');
   });
 

@@ -247,6 +247,8 @@ export class MemorizationService {
     groupFolder: string,
     chatJid: string,
   ): Promise<void> {
+    // Atomically check + set lock before any async work to prevent race conditions
+    // between concurrent callers (pollAllGroups + threshold-triggered fire-and-forget)
     if (this.isProcessing.get(groupFolder)) return;
     if (this.activeCount >= this.config.maxConcurrent) return;
     this.isProcessing.set(groupFolder, true);

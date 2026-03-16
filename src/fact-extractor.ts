@@ -142,7 +142,13 @@ export function extractFacts(text: string, groupFolder: string): void {
     if (value.length < 1) continue;
 
     try {
-      storeFactWithConflictCheck(groupFolder, key, value, 'extracted', confidence);
+      storeFactWithConflictCheck(
+        groupFolder,
+        key,
+        value,
+        'extracted',
+        confidence,
+      );
       extracted++;
     } catch (err) {
       logger.debug(

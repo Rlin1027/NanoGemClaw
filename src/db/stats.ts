@@ -98,18 +98,18 @@ export function getUsageTimeseries(
   const days = parseInt(period) || 7;
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
-  // Determine strftime format based on granularity
-  const GRANULARITY_FORMATS: Record<string, string> = {
-    hour: '%Y-%m-%d %H:00',
-    day: '%Y-%m-%d',
-  };
-  const fmt = GRANULARITY_FORMATS[granularity];
-  if (!fmt) {
+  // Use separate prepared queries per granularity to avoid string interpolation in SQL
+  const isHourly = granularity === 'hour';
+  if (granularity !== 'hour' && granularity !== 'day') {
     throw new Error(`Invalid granularity: ${granularity}`);
   }
 
+  const fmtExpr = isHourly
+    ? "strftime('%Y-%m-%d %H:00', timestamp)"
+    : "strftime('%Y-%m-%d', timestamp)";
+
   let query = `
-    SELECT strftime('${fmt}', timestamp) as bucket,
+    SELECT ${fmtExpr} as bucket,
            COUNT(*) as requests,
            COALESCE(SUM(prompt_tokens), 0) as prompt_tokens,
            COALESCE(SUM(response_tokens), 0) as response_tokens,
@@ -303,8 +303,16 @@ interface ErrorState {
 }
 
 const errorStates = new Map<string, ErrorState>();
+const MAX_ERROR_STATES = 500;
+const MAX_RATE_LIMIT_WINDOWS = 1000;
 
 export function recordError(groupFolder: string, error: string): ErrorState {
+  // Evict oldest entries if Map exceeds bound
+  if (errorStates.size >= MAX_ERROR_STATES && !errorStates.has(groupFolder)) {
+    const oldest = errorStates.keys().next().value;
+    if (oldest) errorStates.delete(oldest);
+  }
+
   const state = errorStates.get(groupFolder) || {
     consecutiveFailures: 0,
     lastAlertSent: null,
@@ -368,6 +376,11 @@ export function checkRateLimit(
 
   let window = rateLimitWindows.get(key);
   if (!window) {
+    // Evict oldest entries if Map exceeds bound
+    if (rateLimitWindows.size >= MAX_RATE_LIMIT_WINDOWS) {
+      const oldest = rateLimitWindows.keys().next().value;
+      if (oldest) rateLimitWindows.delete(oldest);
+    }
     window = { timestamps: [] };
     rateLimitWindows.set(key, window);
   }

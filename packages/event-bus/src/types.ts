@@ -92,6 +92,12 @@ export interface NanoEventMap {
     currentMood: string;
     shift: string;
   };
+  'security:injection-detected': {
+    toolName: string;
+    patterns: string[];
+    groupFolder: string;
+    chatJid: string;
+  };
   'system:ready': Record<string, never>;
   'system:shutdown': Record<string, never>;
 }

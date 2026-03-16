@@ -908,8 +908,25 @@ async function handleFunctionCalls(
   const results: FunctionCallResult[] = [];
 
   for (const call of calls) {
-    // Block tools that require explicit intent if user didn't ask for them
     const meta = getToolMetadata(call.name);
+
+    // Block admin-only tools outside admin context (defense-in-depth)
+    if (meta?.adminOnly && !context.isAdmin) {
+      logger.warn(
+        { tool: call.name, group: groupFolder },
+        'Blocked admin-only tool call from non-admin context',
+      );
+      results.push({
+        name: call.name,
+        response: {
+          success: false,
+          error: 'Permission denied: admin-only tool',
+        },
+      });
+      continue;
+    }
+
+    // Block tools that require explicit intent if user didn't ask for them
     if (
       meta?.requiresExplicitIntent &&
       userPrompt &&

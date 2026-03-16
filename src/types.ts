@@ -153,6 +153,8 @@ export interface ToolMetadata {
   requiresExplicitIntent: boolean;
   /** Safety classification for the tool */
   dangerLevel: 'safe' | 'moderate' | 'destructive';
+  /** true = tool requires admin context (defense-in-depth for admin-only declarations) */
+  adminOnly?: boolean;
 }
 
 // ============================================================================

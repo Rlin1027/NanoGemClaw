@@ -51,7 +51,7 @@ export function loadAdminUserId(): void {
 export function setAdminUserId(userId: string): void {
   adminUserId = userId;
   try {
-    fs.writeFileSync(ADMIN_FILE, userId, 'utf-8');
+    fs.writeFileSync(ADMIN_FILE, userId, { encoding: 'utf-8', mode: 0o600 });
     logger.info({ userId }, 'Admin user ID saved');
   } catch (err) {
     logger.warn({ err }, 'Failed to write admin user ID file');

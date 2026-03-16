@@ -153,13 +153,16 @@ export function getCrossGroupFacts(
   // a heuristic: get facts whose key starts with the sender's name or whose
   // value references the sender, from groups other than the current one.
   // More practically: get ALL facts from other groups and let caller filter.
+  // Limit cross-group facts to prevent unbounded result sets in multi-group deployments
+  const CROSS_GROUP_FACT_LIMIT = 200;
   const allOtherFacts = db
     .prepare(
       `SELECT * FROM facts
        WHERE group_folder != ?
-       ORDER BY updated_at DESC`,
+       ORDER BY updated_at DESC
+       LIMIT ?`,
     )
-    .all(excludeGroupFolder) as Fact[];
+    .all(excludeGroupFolder, CROSS_GROUP_FACT_LIMIT) as Fact[];
 
   // Deduplicate by key: most recent updated_at wins
   const deduped = new Map<string, Fact>();

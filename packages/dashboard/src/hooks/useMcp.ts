@@ -37,35 +37,46 @@ export function useMcp() {
 
     const servers = data ?? [];
 
+    const refetchingRef = useRef(false);
+    const safeRefetch = useCallback(async () => {
+        if (refetchingRef.current) return;
+        refetchingRef.current = true;
+        try {
+            await refetch();
+        } finally {
+            refetchingRef.current = false;
+        }
+    }, [refetch]);
+
     const addServer = useCallback(async (payload: AddMcpServerPayload) => {
         await apiFetch('/api/mcp/servers', {
             method: 'POST',
             body: JSON.stringify(payload),
         });
-        await refetch();
-    }, [refetch]);
+        await safeRefetch();
+    }, [safeRefetch]);
 
     const updateServer = useCallback(async (id: string, updates: Partial<AddMcpServerPayload>) => {
         await apiFetch(`/api/mcp/servers/${encodeURIComponent(id)}`, {
             method: 'PUT',
             body: JSON.stringify(updates),
         });
-        await refetch();
-    }, [refetch]);
+        await safeRefetch();
+    }, [safeRefetch]);
 
     const removeServer = useCallback(async (id: string) => {
         await apiFetch(`/api/mcp/servers/${encodeURIComponent(id)}`, {
             method: 'DELETE',
         });
-        await refetch();
-    }, [refetch]);
+        await safeRefetch();
+    }, [safeRefetch]);
 
     const reconnectServer = useCallback(async (id: string) => {
         await apiFetch(`/api/mcp/servers/${encodeURIComponent(id)}/reconnect`, {
             method: 'POST',
         });
-        await refetch();
-    }, [refetch]);
+        await safeRefetch();
+    }, [safeRefetch]);
 
     const updateToolPermission = useCallback(async (serverId: string, toolName: string, enabled: boolean) => {
         const server = (data ?? []).find(s => s.id === serverId);
@@ -77,24 +88,32 @@ export function useMcp() {
             method: 'PATCH',
             body: JSON.stringify({ allowedTools }),
         });
-        await refetch();
-    }, [data, refetch]);
+        await safeRefetch();
+    }, [data, safeRefetch]);
 
     // Polling every 5s for status updates
     const refetchRef = useRef(refetch);
     refetchRef.current = refetch;
+    const abortRef = useRef<AbortController | null>(null);
     useEffect(() => {
         const interval = setInterval(() => {
+            abortRef.current?.abort();
+            const controller = new AbortController();
+            abortRef.current = controller;
             refetchRef.current();
         }, 5000);
-        return () => clearInterval(interval);
+        return () => {
+            clearInterval(interval);
+            abortRef.current?.abort();
+            abortRef.current = null;
+        };
     }, []);
 
     return {
         servers,
         isLoading,
         error,
-        refetch,
+        refetch: safeRefetch,
         addServer,
         updateServer,
         removeServer,

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Activity, Shield, RefreshCw, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToolCalls, useToolCallStats, ToolCallFilters } from '../hooks/useToolCalls';
@@ -46,10 +46,17 @@ export function ToolCallsPage() {
         pageSize: PAGE_SIZE,
     });
     const [toolNameSearch, setToolNameSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+
+    useEffect(() => {
+        debounceRef.current = setTimeout(() => setDebouncedSearch(toolNameSearch), 300);
+        return () => clearTimeout(debounceRef.current);
+    }, [toolNameSearch]);
 
     const activeFilters: ToolCallFilters = {
         ...filters,
-        toolName: toolNameSearch.trim() || undefined,
+        toolName: debouncedSearch.trim() || undefined,
     };
 
     const { records, total, page, isLoading, refetch } = useToolCalls(activeFilters);
@@ -133,14 +140,30 @@ export function ToolCallsPage() {
                     <input
                         type="date"
                         value={filters.dateFrom ?? ''}
-                        onChange={e => setFilter('dateFrom', e.target.value || undefined)}
+                        onChange={e => {
+                            const newFrom = e.target.value || undefined;
+                            setFilters(prev => {
+                                const newTo = prev.dateTo && newFrom && prev.dateTo < newFrom
+                                    ? newFrom
+                                    : prev.dateTo;
+                                return { ...prev, dateFrom: newFrom, dateTo: newTo, page: 1 };
+                            });
+                        }}
                         className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200"
                     />
                     <span className="text-slate-600 text-xs">to</span>
                     <input
                         type="date"
                         value={filters.dateTo ?? ''}
-                        onChange={e => setFilter('dateTo', e.target.value || undefined)}
+                        onChange={e => {
+                            const newTo = e.target.value || undefined;
+                            setFilters(prev => {
+                                const correctedTo = prev.dateFrom && newTo && newTo < prev.dateFrom
+                                    ? prev.dateFrom
+                                    : newTo;
+                                return { ...prev, dateTo: correctedTo, page: 1 };
+                            });
+                        }}
                         className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200"
                     />
                 </div>

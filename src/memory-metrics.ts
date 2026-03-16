@@ -107,7 +107,11 @@ function recordMetric(
     ).run(groupFolder, metricType, value, metaStr, now);
   } catch (err) {
     logger.debug(
-      { groupFolder, metricType, err: err instanceof Error ? err.message : String(err) },
+      {
+        groupFolder,
+        metricType,
+        err: err instanceof Error ? err.message : String(err),
+      },
       'Failed to record memory metric',
     );
   }
@@ -144,7 +148,8 @@ export function recordCompressionScore(
   for (const word of inputWords) {
     if (outputLower.includes(word)) preserved++;
   }
-  const entityPreservationRate = inputWords.size > 0 ? preserved / inputWords.size : 1;
+  const entityPreservationRate =
+    inputWords.size > 0 ? preserved / inputWords.size : 1;
 
   // Quality score: penalize extreme ratios, reward high entity preservation
   const ratioScore =
@@ -154,7 +159,10 @@ export function recordCompressionScore(
         ? Math.max(0, 2 - compressionRatio) // expanded, penalize
         : 1 - Math.abs(compressionRatio - 0.5) * 0.8; // ideal range ~0.3–0.7
 
-  const qualityScore = Math.min(1, Math.max(0, ratioScore * 0.4 + entityPreservationRate * 0.6));
+  const qualityScore = Math.min(
+    1,
+    Math.max(0, ratioScore * 0.4 + entityPreservationRate * 0.6),
+  );
 
   const score: CompressionScore = {
     compressionRatio,
@@ -174,7 +182,12 @@ export function recordCompressionScore(
   });
 
   logger.debug(
-    { groupFolder, layer, qualityScore: qualityScore.toFixed(3), compressionRatio: compressionRatio.toFixed(3) },
+    {
+      groupFolder,
+      layer,
+      qualityScore: qualityScore.toFixed(3),
+      compressionRatio: compressionRatio.toFixed(3),
+    },
     'Compression quality scored',
   );
 
@@ -232,10 +245,15 @@ export function getMemoryMetrics(groupFolder: string): MemoryMetricsReport {
        WHERE group_folder = ? AND metric_type = 'compression_quality' AND created_at > ?
        ORDER BY created_at DESC LIMIT 50`,
     )
-    .all(groupFolder, since) as Array<{ value: number; metadata_json: string | null }>;
+    .all(groupFolder, since) as Array<{
+    value: number;
+    metadata_json: string | null;
+  }>;
 
   const compression: CompressionScore[] = compressionRows.map((row) => {
-    const meta = row.metadata_json ? (JSON.parse(row.metadata_json) as Record<string, unknown>) : {};
+    const meta = row.metadata_json
+      ? (JSON.parse(row.metadata_json) as Record<string, unknown>)
+      : {};
     return {
       qualityScore: row.value,
       layer: (meta['layer'] as string) || 'unknown',
@@ -280,7 +298,12 @@ export function getMemoryMetrics(groupFolder: string): MemoryMetricsReport {
 
   let contextUtilization: ContextUtilizationMetrics;
   if (utilizationRows.length === 0) {
-    contextUtilization = { avgUtilization: 0, maxUtilization: 0, minUtilization: 0, samples: 0 };
+    contextUtilization = {
+      avgUtilization: 0,
+      maxUtilization: 0,
+      minUtilization: 0,
+      samples: 0,
+    };
   } else {
     const vals = utilizationRows.map((r) => r.value);
     contextUtilization = {

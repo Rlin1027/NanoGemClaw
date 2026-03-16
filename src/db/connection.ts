@@ -314,6 +314,22 @@ export function initDatabase(): void {
       throw err;
     }
   }
+
+  if (currentVersion < 9) {
+    db.exec('BEGIN');
+    try {
+      // Migration v9: Composite indexes for tool_call_logs Dashboard queries
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_tool_calls_group_created ON tool_call_logs(group_folder, created_at);
+        CREATE INDEX IF NOT EXISTS idx_tool_calls_group_injection_created ON tool_call_logs(group_folder, injection_detected, created_at);
+      `);
+      db.exec('PRAGMA user_version = 9');
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+  }
 }
 
 /**

@@ -66,17 +66,22 @@ export async function rewriteQuery(
   }
 
   try {
-    const result = await Promise.race([
-      rewriteWithContext(prompt, conversationHistory),
-      new Promise<string>((_, reject) =>
-        setTimeout(
-          () => reject(new Error('Query rewrite timed out')),
-          QUERY_REWRITE.TIMEOUT_MS,
-        ),
-      ),
-    ]);
-    setCache(cacheKey, result);
-    return result;
+    const controller = new AbortController();
+    const timer = setTimeout(
+      () => controller.abort(),
+      QUERY_REWRITE.TIMEOUT_MS,
+    );
+    try {
+      const result = await rewriteWithContext(
+        prompt,
+        conversationHistory,
+        controller.signal,
+      );
+      setCache(cacheKey, result);
+      return result;
+    } finally {
+      clearTimeout(timer);
+    }
   } catch (err) {
     logger.debug(
       { err: err instanceof Error ? err.message : String(err) },
@@ -89,6 +94,7 @@ export async function rewriteQuery(
 async function rewriteWithContext(
   prompt: string,
   history: Array<{ role: string; text: string }>,
+  signal?: AbortSignal,
 ): Promise<string> {
   const recentHistory = history.slice(-QUERY_REWRITE.MAX_HISTORY);
   const contextLines = recentHistory.map((msg) => {
@@ -99,6 +105,9 @@ async function rewriteWithContext(
     contextLines.length > 0
       ? `Recent conversation:\n${contextLines.join('\n')}\n\n`
       : '';
+
+  // Check if already aborted before making API call
+  if (signal?.aborted) throw new Error('Query rewrite aborted');
 
   const response = await generate({
     model: QUERY_REWRITE.MODEL,
@@ -112,6 +121,9 @@ async function rewriteWithContext(
       },
     ],
   });
+
+  // Discard result if aborted during API call (prevents orphaned quota usage from being cached)
+  if (signal?.aborted) throw new Error('Query rewrite aborted');
 
   const text = (response.text || '').trim();
   if (!text || text === 'NONE') return '';

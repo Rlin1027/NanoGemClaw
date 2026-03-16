@@ -11,14 +11,14 @@ const INJECTION_PATTERNS: { name: string; pattern: RegExp }[] = [
 ];
 
 export interface ScanResult {
-  status: 'clean' | 'suspicious' | 'skipped';
+  status: 'clean' | 'suspicious';
   patterns?: string[];
   reason?: string;
 }
 
 export function scanForInjection(text: string): ScanResult {
   if (Buffer.byteLength(text, 'utf8') > INJECTION_SCAN_MAX_BYTES) {
-    return { status: 'skipped', reason: 'size_limit' };
+    return { status: 'suspicious', reason: 'size_limit', patterns: ['oversized_input'] };
   }
   const matched: string[] = [];
   for (const { name, pattern } of INJECTION_PATTERNS) {

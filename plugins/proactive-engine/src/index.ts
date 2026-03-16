@@ -439,13 +439,17 @@ async function detectCommitmentReminders(
         const now = Date.now();
         const commitments: CommitmentSignal[] = [];
 
+        // Limit input length to prevent ReDoS on adversarial content
+        const MAX_COMMITMENT_SCAN_LEN = 2000;
+
         for (const msg of recentMessages) {
             const mentionedAt = new Date(msg.timestamp);
+            const scanContent = msg.content.slice(0, MAX_COMMITMENT_SCAN_LEN);
             const allPatterns = [...COMMITMENT_PATTERNS_ZH, ...COMMITMENT_PATTERNS_EN];
 
             for (const pattern of allPatterns) {
                 pattern.lastIndex = 0;
-                const match = pattern.exec(msg.content);
+                const match = pattern.exec(scanContent);
                 if (!match) continue;
 
                 const commitmentText = (match[1] || match[0]).trim().slice(0, 80);

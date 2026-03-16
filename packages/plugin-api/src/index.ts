@@ -211,6 +211,8 @@ export interface PluginRegistryEntry {
   config: Record<string, unknown>;
   /** Whether this plugin is enabled */
   enabled: boolean;
+  /** Plugin IDs this plugin depends on (loaded first). Simple best-effort ordering. */
+  dependsOn?: string[];
 }
 
 export interface PluginManifest {

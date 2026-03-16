@@ -355,9 +355,14 @@ export function buildFunctionDeclarations(
       },
     ];
 
-    // Register metadata
+    // Register metadata — mark all admin tools with adminOnly flag
     for (const decl of adminDeclarations) {
-      if (decl._metadata) toolMetadataRegistry.set(decl.name, decl._metadata);
+      if (decl._metadata) {
+        toolMetadataRegistry.set(decl.name, {
+          ...decl._metadata,
+          adminOnly: true,
+        });
+      }
     }
     const cleanAdmin = adminDeclarations.map(({ _metadata, ...rest }) => rest);
     cachedAdminDeclarations = cleanAdmin;

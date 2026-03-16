@@ -474,16 +474,36 @@ function mergeWithRRF(
   const ftsMap = new Map(ftsResults.map((r) => [r.id, r]));
   const results: Array<{ id: number; title: string; content: string }> = [];
 
+  // Collect IDs not in FTS results, then batch-query (fixes N+1)
+  const missingIds = sortedIds.filter((id) => !ftsMap.has(id));
+  const missingMap = new Map<
+    number,
+    { id: number; title: string; content: string }
+  >();
+
+  if (missingIds.length > 0) {
+    const placeholders = missingIds.map(() => '?').join(',');
+    const rows = db
+      .prepare(
+        `SELECT id, title, content FROM knowledge_docs WHERE id IN (${placeholders})`,
+      )
+      .all(...missingIds) as Array<{
+      id: number;
+      title: string;
+      content: string;
+    }>;
+    for (const row of rows) {
+      missingMap.set(row.id, row);
+    }
+  }
+
   for (const docId of sortedIds) {
     const fromFts = ftsMap.get(docId);
     if (fromFts) {
       results.push(fromFts);
       continue;
     }
-
-    const doc = db
-      .prepare('SELECT id, title, content FROM knowledge_docs WHERE id = ?')
-      .get(docId) as { id: number; title: string; content: string } | undefined;
+    const doc = missingMap.get(docId);
     if (doc) {
       results.push(doc);
     }
@@ -500,6 +520,15 @@ export async function generateAndStoreEmbeddings(
 ): Promise<void> {
   const chunks = chunkText(content);
   if (chunks.length === 0) return;
+
+  const MAX_CHUNKS_PER_DOC = 200;
+  if (chunks.length > MAX_CHUNKS_PER_DOC) {
+    logger.warn(
+      { docId, total: chunks.length, limit: MAX_CHUNKS_PER_DOC },
+      'generateAndStoreEmbeddings: chunk count exceeds limit, truncating before embedBatch',
+    );
+    chunks.splice(MAX_CHUNKS_PER_DOC);
+  }
 
   const embeddings = await embedBatch(chunks.map((chunk) => chunk.text));
   const now = new Date().toISOString();
@@ -635,12 +664,7 @@ export function storeFactWithConflictCheck(
       `UPDATE facts
        SET source = ?, updated_at = ?
        WHERE group_folder = ? AND key = ?`,
-    ).run(
-      `superseded:${prevMeta}:${now}`,
-      now,
-      groupFolder,
-      key,
-    );
+    ).run(`superseded:${prevMeta}:${now}`, now, groupFolder, key);
 
     logger.debug(
       {

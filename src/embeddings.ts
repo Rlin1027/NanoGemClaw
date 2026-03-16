@@ -2,6 +2,8 @@ import { getGeminiClient } from './gemini-client.js';
 import { HYBRID_SEARCH } from './config.js';
 import { logger } from './logger.js';
 
+const MAX_CHUNKS_PER_DOC = 200;
+
 export function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length !== b.length || a.length === 0) return 0;
   let dot = 0;
@@ -81,6 +83,14 @@ export function chunkText(
     for (let i = 0; i < text.length; i += step) {
       chunks.push({ text: text.slice(i, i + maxChars), startOffset: i });
     }
+  }
+
+  if (chunks.length > MAX_CHUNKS_PER_DOC) {
+    logger.warn(
+      { total: chunks.length, limit: MAX_CHUNKS_PER_DOC },
+      'chunkText: chunk count exceeds MAX_CHUNKS_PER_DOC, truncating',
+    );
+    chunks.splice(MAX_CHUNKS_PER_DOC);
   }
 
   return chunks;

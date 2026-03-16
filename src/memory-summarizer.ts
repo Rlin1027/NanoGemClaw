@@ -17,7 +17,10 @@ import {
 import { MEMORY, CROSS_GROUP_MEMORY } from './config.js';
 import { logger } from './logger.js';
 import type { RegisteredGroup } from './types.js';
-import { getTemporalContext, getCrossGroupFacts } from './db/temporal-memory.js';
+import {
+  getTemporalContext,
+  getCrossGroupFacts,
+} from './db/temporal-memory.js';
 import { trackContextUtilization } from './memory-metrics.js';
 
 // ============================================================================
@@ -227,7 +230,10 @@ const CONTEXT_BUDGET = 4000;
  *
  * @param senderName - Optional sender name to include cross-group facts (if enabled)
  */
-export function getMemoryContext(groupFolder: string, senderName?: string): string | null {
+export function getMemoryContext(
+  groupFolder: string,
+  senderName?: string,
+): string | null {
   const summary = getMemorySummary(groupFolder);
   const facts = getFacts(groupFolder);
   const temporalContext = getTemporalContext(groupFolder);
@@ -239,7 +245,13 @@ export function getMemoryContext(groupFolder: string, senderName?: string): stri
     crossGroupFacts = raw.slice(0, CROSS_GROUP_MEMORY.MAX_FACTS);
   }
 
-  if (!summary && facts.length === 0 && !temporalContext && crossGroupFacts.length === 0) return null;
+  if (
+    !summary &&
+    facts.length === 0 &&
+    !temporalContext &&
+    crossGroupFacts.length === 0
+  )
+    return null;
 
   // Parse temporal context into short vs long sections for priority-aware truncation
   // Priority (highest = kept last): long-term profile > facts > summary > short-term observations
