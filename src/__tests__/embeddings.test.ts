@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.hoisted(() => {
   process.env.TELEGRAM_BOT_TOKEN = 'test-token-123';
@@ -20,9 +20,12 @@ vi.mock('../logger.js', () => ({
 import {
   blobToEmbedding,
   chunkText,
+  clearEmbeddingCache,
   cosineSimilarity,
+  embedText,
   embeddingToBlob,
 } from '../embeddings.js';
+import { getGeminiClient } from '../gemini-client.js';
 
 describe('embeddings', () => {
   describe('cosineSimilarity', () => {
@@ -99,5 +102,82 @@ describe('embeddings', () => {
       const blob = embeddingToBlob(new Array(768).fill(0.5));
       expect(blob.byteLength).toBe(768 * 4);
     });
+  });
+});
+
+describe('embedText cache', () => {
+  const mockEmbedContent = vi.fn();
+  const mockClient = { models: { embedContent: mockEmbedContent } };
+
+  beforeEach(() => {
+    clearEmbeddingCache();
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.mocked(getGeminiClient).mockResolvedValue(mockClient as never);
+    mockEmbedContent.mockResolvedValue({
+      embeddings: [{ values: [0.1, 0.2, 0.3] }],
+    });
+  });
+
+  it('returns cached embedding on second call without invoking API', async () => {
+    const result1 = await embedText('hello world');
+    const result2 = await embedText('hello world');
+
+    expect(result1).toEqual([0.1, 0.2, 0.3]);
+    expect(result2).toEqual([0.1, 0.2, 0.3]);
+    expect(mockEmbedContent).toHaveBeenCalledTimes(1);
+  });
+
+  it('is case-insensitive and trims whitespace for cache key', async () => {
+    await embedText('Hello World');
+    await embedText('  hello world  ');
+
+    expect(mockEmbedContent).toHaveBeenCalledTimes(1);
+  });
+
+  it('misses cache after TTL expiry and re-invokes API', async () => {
+    await embedText('test query');
+    expect(mockEmbedContent).toHaveBeenCalledTimes(1);
+
+    // Advance past 30-minute TTL
+    await vi.advanceTimersByTimeAsync(31 * 60 * 1000);
+
+    await embedText('test query');
+    expect(mockEmbedContent).toHaveBeenCalledTimes(2);
+  });
+
+  it('evicts oldest entry when cache exceeds QUERY_CACHE_MAX (200)', async () => {
+    // Fill cache with 200 distinct entries
+    for (let i = 0; i < 200; i++) {
+      mockEmbedContent.mockResolvedValueOnce({
+        embeddings: [{ values: [i, i, i] }],
+      });
+      await embedText(`entry ${i}`);
+    }
+
+    // "entry 0" is the oldest; adding one more should evict it
+    mockEmbedContent.mockResolvedValueOnce({
+      embeddings: [{ values: [999, 999, 999] }],
+    });
+    await embedText('entry 200');
+
+    // "entry 0" should be evicted — next call must hit the API again
+    mockEmbedContent.mockResolvedValueOnce({
+      embeddings: [{ values: [0, 0, 0] }],
+    });
+    await embedText('entry 0');
+
+    // Total API calls: 200 (fill) + 1 (entry 200) + 1 (re-fetch entry 0) = 202
+    expect(mockEmbedContent).toHaveBeenCalledTimes(202);
+  });
+
+  it('clearEmbeddingCache empties the cache', async () => {
+    await embedText('cached text');
+    expect(mockEmbedContent).toHaveBeenCalledTimes(1);
+
+    clearEmbeddingCache();
+
+    await embedText('cached text');
+    expect(mockEmbedContent).toHaveBeenCalledTimes(2);
   });
 });

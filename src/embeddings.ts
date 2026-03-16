@@ -99,7 +99,26 @@ export function chunkText(
 const EMBED_MAX_RETRIES = 3;
 const EMBED_BASE_DELAY_MS = 1000;
 
+// Module-level query embedding cache (LRU via Map insertion order)
+const queryCache = new Map<string, { embedding: number[]; ts: number }>();
+const QUERY_CACHE_MAX = 200;
+const QUERY_CACHE_TTL_MS = 30 * 60 * 1000; // 30 min
+
+export function clearEmbeddingCache(): void {
+  queryCache.clear();
+}
+
 export async function embedText(text: string): Promise<number[] | null> {
+  const cacheKey = text.trim().toLowerCase();
+
+  // Check cache hit (within TTL) — LRU refresh via delete + re-set
+  const cached = queryCache.get(cacheKey);
+  if (cached !== undefined && Date.now() - cached.ts < QUERY_CACHE_TTL_MS) {
+    queryCache.delete(cacheKey);
+    queryCache.set(cacheKey, cached);
+    return cached.embedding;
+  }
+
   const client = await getGeminiClient();
   if (!client) return null;
 
@@ -113,6 +132,16 @@ export async function embedText(text: string): Promise<number[] | null> {
       if (!values || values.length === 0) {
         throw new Error('Empty embedding returned');
       }
+
+      // Add to cache, evict oldest entry if over max
+      queryCache.set(cacheKey, { embedding: values, ts: Date.now() });
+      if (queryCache.size > QUERY_CACHE_MAX) {
+        const oldestKey = queryCache.keys().next().value;
+        if (oldestKey !== undefined) {
+          queryCache.delete(oldestKey);
+        }
+      }
+
       return values;
     } catch (err) {
       if (attempt === EMBED_MAX_RETRIES) {

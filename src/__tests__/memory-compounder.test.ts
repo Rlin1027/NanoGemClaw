@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   existsSync: vi.fn<any>(() => false),
   getEventBus: vi.fn<any>(() => ({ emit: vi.fn() })),
   invalidateCache: vi.fn<any>(),
+  recordCompressionScore: vi.fn<any>(() => ({ qualityScore: 0.8 })),
 }));
 
 vi.mock('../gemini-client.js', () => ({
@@ -54,6 +55,8 @@ vi.mock('../config.js', () => ({
     WEEKLY_SYNTHESIS_HOUR: 4,
     MIN_MESSAGES_FOR_SHORT: 5,
   },
+  COMPOUNDER_QUALITY_GATE: false,
+  COMPOUNDER_MIN_QUALITY: 0.5,
 }));
 
 vi.mock('fs', () => ({
@@ -71,6 +74,10 @@ vi.mock('@nanogemclaw/event-bus', () => ({
 
 vi.mock('../context-cache.js', () => ({
   invalidateCache: mocks.invalidateCache,
+}));
+
+vi.mock('../memory-metrics.js', () => ({
+  recordCompressionScore: mocks.recordCompressionScore,
 }));
 
 import {
@@ -300,6 +307,47 @@ describe('memory-compounder', () => {
     it('should return zeros for empty groups', async () => {
       const result = await runWeeklySynthesis([]);
       expect(result).toEqual({ updated: 0, errors: 0 });
+    });
+  });
+
+  describe('quality gate', () => {
+    it('should not retry when gate is disabled (default)', async () => {
+      // COMPOUNDER_QUALITY_GATE is false in config mock — no retry even with low score
+      mocks.getTemporalMemory
+        .mockReturnValueOnce({ content: 'short observations' })
+        .mockReturnValueOnce(null);
+      mocks.recordCompressionScore.mockReturnValue({ qualityScore: 0.3 });
+      await compactToMediumTerm(testGroup);
+      // generate called exactly once (no retry)
+      expect(mocks.generate).toHaveBeenCalledTimes(1);
+    });
+
+    it('recordCompressionScore is called with correct args in compactToMediumTerm', async () => {
+      mocks.getTemporalMemory
+        .mockReturnValueOnce({ content: 'short observations' })
+        .mockReturnValueOnce(null);
+      mocks.recordCompressionScore.mockReturnValue({ qualityScore: 0.8 });
+      await compactToMediumTerm(testGroup);
+      expect(mocks.recordCompressionScore).toHaveBeenCalledWith(
+        'main',
+        'medium',
+        'short observations',
+        'generated summary',
+      );
+    });
+
+    it('recordCompressionScore is called with correct args in synthesizeLongTerm', async () => {
+      mocks.getTemporalMemory
+        .mockReturnValueOnce({ content: 'medium patterns' })
+        .mockReturnValueOnce(null);
+      mocks.recordCompressionScore.mockReturnValue({ qualityScore: 0.8 });
+      await synthesizeLongTerm(testGroup);
+      expect(mocks.recordCompressionScore).toHaveBeenCalledWith(
+        'main',
+        'long',
+        'medium patterns',
+        'generated summary',
+      );
     });
   });
 });

@@ -255,6 +255,11 @@ function processExpiredObservationWindows(api: PluginApi): void {
 // Signal Detection
 // ============================================================================
 
+const INACTIVITY_THRESHOLDS = [
+    { hours: 48, confidence: 0.7, message: '已超過 48 小時沒有互動，一切還好嗎？' },
+    { hours: 24, confidence: 0.5, message: '似乎安靜了一段時間' },
+];
+
 function detectActivityAnomaly(groupFolder: string): DetectedSignal | null {
     const state = getOrCreateState(groupFolder);
     const history = state.dailyCounts.slice(0, 6); // Exclude today
@@ -267,15 +272,28 @@ function detectActivityAnomaly(groupFolder: string): DetectedSignal | null {
 
     if (dropRate < 0.5) return null; // Less than 50% drop
 
-    // Check if last message was more than 24h ago
+    // Check inactivity thresholds (longest first)
     if (state.lastMessageAt) {
         const hoursSinceLastMessage =
             (Date.now() - new Date(state.lastMessageAt).getTime()) / (60 * 60 * 1000);
-        if (hoursSinceLastMessage < 24) return null;
+
+        // Find the matching threshold (sorted longest-first)
+        for (const threshold of INACTIVITY_THRESHOLDS) {
+            if (hoursSinceLastMessage >= threshold.hours) {
+                const confidence = Math.min(0.95, threshold.confidence + dropRate * 0.2);
+                return {
+                    type: 'activity_anomaly',
+                    confidence,
+                    context: `Activity dropped ${Math.round(dropRate * 100)}% vs 7-day average, ${Math.round(hoursSinceLastMessage)}h since last message`,
+                    suggestedMessage: threshold.message,
+                };
+            }
+        }
+        return null; // Last message was within shortest threshold
     }
 
+    // No lastMessageAt — use drop rate alone
     const confidence = Math.min(0.95, 0.5 + dropRate * 0.3);
-
     return {
         type: 'activity_anomaly',
         confidence,
@@ -293,6 +311,35 @@ async function detectTaskDeadlines(
         const now = new Date();
         const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
 
+        // Check for overdue tasks first (higher priority)
+        const overdueTasks = db
+            .prepare(
+                `SELECT id, prompt, next_run FROM scheduled_tasks
+         WHERE group_folder = ? AND status = 'active'
+         AND schedule_type = 'once' AND next_run < ?`,
+            )
+            .all(groupFolder, now.toISOString()) as Array<{
+            id: string;
+            prompt: string;
+            next_run: string;
+        }>;
+
+        if (overdueTasks.length > 0) {
+            const task = overdueTasks[0];
+            const hoursOverdue = Math.max(
+                0,
+                (now.getTime() - new Date(task.next_run).getTime()) / (60 * 60 * 1000),
+            );
+
+            return {
+                type: 'task_deadline',
+                confidence: Math.min(0.95, 0.8 + Math.min(hoursOverdue, 24) / 24 * 0.15),
+                context: `Task "${task.prompt.slice(0, 50)}" is ${Math.round(hoursOverdue)}h overdue`,
+                suggestedMessage: `提醒：「${task.prompt.slice(0, 30)}」已經逾期了，需要我幫忙處理嗎？`,
+            };
+        }
+
+        // Then check for upcoming tasks
         const dueTasks = db
             .prepare(
                 `SELECT id, prompt, next_run FROM scheduled_tasks

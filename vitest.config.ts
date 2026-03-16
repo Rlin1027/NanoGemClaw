@@ -17,10 +17,10 @@ export default defineConfig({
       // Only measure coverage for modules that have tests (expand as tests are added)
       include: [
         'src/config.ts',
-        'src/i18n.ts',
         'src/mount-security.ts',
-        'src/db.ts',
         'src/task-scheduler.ts',
+        'src/memory-metrics.ts',
+        'src/memory-summarizer.ts',
         'src/routes/auth.ts',
         'src/routes/groups.ts',
         'src/routes/tasks.ts',

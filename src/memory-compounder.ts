@@ -17,7 +17,13 @@
 import fs from 'fs';
 import path from 'path';
 
-import { ASSISTANT_NAME, GROUPS_DIR, MEMORY_COMPOUNDER } from './config.js';
+import {
+  ASSISTANT_NAME,
+  GROUPS_DIR,
+  MEMORY_COMPOUNDER,
+  COMPOUNDER_QUALITY_GATE,
+  COMPOUNDER_MIN_QUALITY,
+} from './config.js';
 import {
   upsertTemporalMemory,
   getTemporalMemory,
@@ -143,6 +149,55 @@ Output in the group's primary language. Keep under ${COMPOUNDER.MAX_SHORT_CONTEN
 // ============================================================================
 
 /**
+ * Retry compression with emphasis on entity preservation.
+ * Used when quality gate detects low-quality output.
+ */
+async function compressWithEmphasis(
+  input: string,
+  layer: 'medium' | 'long',
+  groupName: string,
+): Promise<string | null> {
+  try {
+    const { generate, isGeminiClientAvailable } =
+      await import('./gemini-client.js');
+    if (!isGeminiClientAvailable()) return null;
+
+    const model =
+      layer === 'long' ? COMPOUNDER.PRO_MODEL : COMPOUNDER.FLASH_MODEL;
+    const maxContent =
+      layer === 'long'
+        ? COMPOUNDER.MAX_LONG_CONTENT
+        : COMPOUNDER.MAX_MEDIUM_CONTENT;
+
+    const prompt = `You are re-compressing a memory summary for "${groupName}".
+The previous compression lost important entities and details.
+
+Original content:
+${input}
+
+CRITICAL: Preserve ALL named entities (people, places, topics, dates).
+Preserve specific facts and numbers. Prioritize entity preservation over brevity.
+Keep under ${maxContent} characters. Output in the group's primary language.`;
+
+    const result = await withTimeout(
+      generate({
+        model,
+        contents: [{ role: 'user' as const, parts: [{ text: prompt }] }],
+      }),
+      COMPOUNDER.API_TIMEOUT_MS,
+    );
+
+    return result.text?.slice(0, maxContent) || null;
+  } catch (err) {
+    logger.debug(
+      { err: err instanceof Error ? err.message : String(err) },
+      'compressWithEmphasis failed',
+    );
+    return null;
+  }
+}
+
+/**
  * Compact short-term into medium-term (daily).
  * Identifies weekly patterns, recurring topics, behavioral trends.
  */
@@ -198,18 +253,50 @@ Output in the group's primary language. Keep under ${COMPOUNDER.MAX_MEDIUM_CONTE
     );
 
     if (result.text) {
-      const content = result.text.slice(0, COMPOUNDER.MAX_MEDIUM_CONTENT);
+      let content = result.text.slice(0, COMPOUNDER.MAX_MEDIUM_CONTENT);
       upsertTemporalMemory(group.folder, 'medium', content, {
         model: COMPOUNDER.FLASH_MODEL,
         compactedFrom: 'short',
       });
 
-      recordCompressionScore(
+      const score = recordCompressionScore(
         group.folder,
         'medium',
         shortTerm.content,
         content,
       );
+
+      // Quality gate: retry if quality is too low
+      if (
+        COMPOUNDER_QUALITY_GATE &&
+        score.qualityScore < COMPOUNDER_MIN_QUALITY
+      ) {
+        logger.warn(
+          { groupFolder: group.folder, score: score.qualityScore },
+          'Low compression quality, retrying with emphasis prompt',
+        );
+        const retryOutput = await compressWithEmphasis(
+          shortTerm.content,
+          'medium',
+          group.name,
+        );
+        if (retryOutput) {
+          const retryScore = recordCompressionScore(
+            group.folder,
+            'medium',
+            shortTerm.content,
+            retryOutput,
+          );
+          if (retryScore.qualityScore > score.qualityScore) {
+            content = retryOutput;
+            upsertTemporalMemory(group.folder, 'medium', content, {
+              model: COMPOUNDER.FLASH_MODEL,
+              compactedFrom: 'short',
+              retried: true,
+            });
+          }
+        }
+      }
 
       logger.info(
         { group: group.name, len: content.length },
@@ -292,13 +379,50 @@ Output in the group's primary language. Keep under ${COMPOUNDER.MAX_LONG_CONTENT
     );
 
     if (result.text) {
-      const content = result.text.slice(0, COMPOUNDER.MAX_LONG_CONTENT);
+      let content = result.text.slice(0, COMPOUNDER.MAX_LONG_CONTENT);
       upsertTemporalMemory(group.folder, 'long', content, {
         model: COMPOUNDER.PRO_MODEL,
         compactedFrom: 'medium',
       });
 
-      recordCompressionScore(group.folder, 'long', mediumTerm.content, content);
+      const score = recordCompressionScore(
+        group.folder,
+        'long',
+        mediumTerm.content,
+        content,
+      );
+
+      // Quality gate: retry if quality is too low
+      if (
+        COMPOUNDER_QUALITY_GATE &&
+        score.qualityScore < COMPOUNDER_MIN_QUALITY
+      ) {
+        logger.warn(
+          { groupFolder: group.folder, score: score.qualityScore },
+          'Low compression quality, retrying with emphasis prompt',
+        );
+        const retryOutput = await compressWithEmphasis(
+          mediumTerm.content,
+          'long',
+          group.name,
+        );
+        if (retryOutput) {
+          const retryScore = recordCompressionScore(
+            group.folder,
+            'long',
+            mediumTerm.content,
+            retryOutput,
+          );
+          if (retryScore.qualityScore > score.qualityScore) {
+            content = retryOutput;
+            upsertTemporalMemory(group.folder, 'long', content, {
+              model: COMPOUNDER.PRO_MODEL,
+              compactedFrom: 'medium',
+              retried: true,
+            });
+          }
+        }
+      }
 
       // Auto-update GEMINI.md with group profile
       await updateGeminiMdProfile(group.folder, content);

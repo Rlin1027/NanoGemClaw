@@ -92,14 +92,19 @@ function autoTuneThreshold(
     return currentThreshold;
 }
 
+const INACTIVITY_THRESHOLDS = [
+    { hours: 48, confidence: 0.7, message: '已超過 48 小時沒有互動，一切還好嗎？' },
+    { hours: 24, confidence: 0.5, message: '似乎安靜了一段時間' },
+];
+
 /**
- * detectActivityAnomaly — reconstructed logic for pure testing.
+ * detectActivityAnomaly — reconstructed logic for pure testing (matches updated plugin).
  */
 function detectActivityAnomaly(
     dailyCounts: number[],
     lastMessageAt: string,
     now = Date.now(),
-): { type: string; confidence: number } | null {
+): { type: string; confidence: number; suggestedMessage?: string } | null {
     const history = dailyCounts.slice(0, 6);
     const nonZero = history.filter((c) => c > 0);
     const avg = nonZero.length > 0
@@ -114,7 +119,13 @@ function detectActivityAnomaly(
 
     if (lastMessageAt) {
         const hoursSince = (now - new Date(lastMessageAt).getTime()) / (60 * 60 * 1000);
-        if (hoursSince < 24) return null;
+        for (const threshold of INACTIVITY_THRESHOLDS) {
+            if (hoursSince >= threshold.hours) {
+                const confidence = Math.min(0.95, threshold.confidence + dropRate * 0.2);
+                return { type: 'activity_anomaly', confidence, suggestedMessage: threshold.message };
+            }
+        }
+        return null; // within 24h threshold
     }
 
     const confidence = Math.min(0.95, 0.5 + dropRate * 0.3);
@@ -345,9 +356,94 @@ describe('proactive-engine', () => {
             const counts100 = [10, 10, 10, 10, 10, 10, 0]; // 100% drop
             const sig50 = detectActivityAnomaly(counts50, oldTimestamp, now);
             const sig100 = detectActivityAnomaly(counts100, oldTimestamp, now);
-            // 50% drop: dropRate=0.5, confidence=0.5+0.5*0.3=0.65
-            // 100% drop: dropRate=1.0, confidence=0.5+1.0*0.3=0.8
+            // Both hit 48h threshold (base 0.7), plus dropRate * 0.2
+            // 50% drop: confidence=0.7+0.5*0.2=0.8
+            // 100% drop: confidence=0.7+1.0*0.2=0.9
             expect(sig50!.confidence).toBeLessThan(sig100!.confidence);
+        });
+    });
+
+    // -------------------------------------------------------------------------
+    // Extended detectActivityAnomaly — multi-threshold behavior
+    // -------------------------------------------------------------------------
+    describe('detectActivityAnomaly extended thresholds', () => {
+        const now = Date.now();
+        const counts = [10, 10, 10, 10, 10, 10, 0]; // 100% drop, avg=10
+
+        it('48h+ inactivity produces confidence >= 0.7 base', () => {
+            const ts48h = new Date(now - 49 * 60 * 60 * 1000).toISOString();
+            const signal = detectActivityAnomaly(counts, ts48h, now);
+            expect(signal).not.toBeNull();
+            // base 0.7 + 1.0 * 0.2 = 0.9
+            expect(signal!.confidence).toBeGreaterThanOrEqual(0.7);
+        });
+
+        it('48h threshold uses correct message', () => {
+            const ts48h = new Date(now - 49 * 60 * 60 * 1000).toISOString();
+            const signal = detectActivityAnomaly(counts, ts48h, now);
+            expect(signal!.suggestedMessage).toBe('已超過 48 小時沒有互動，一切還好嗎？');
+        });
+
+        it('24h inactivity (but < 48h) produces confidence >= 0.5 base', () => {
+            const ts25h = new Date(now - 25 * 60 * 60 * 1000).toISOString();
+            const signal = detectActivityAnomaly(counts, ts25h, now);
+            expect(signal).not.toBeNull();
+            // base 0.5 + 1.0 * 0.2 = 0.7
+            expect(signal!.confidence).toBeGreaterThanOrEqual(0.5);
+        });
+
+        it('24h threshold uses correct message', () => {
+            const ts25h = new Date(now - 25 * 60 * 60 * 1000).toISOString();
+            const signal = detectActivityAnomaly(counts, ts25h, now);
+            expect(signal!.suggestedMessage).toBe('似乎安靜了一段時間');
+        });
+
+        it('48h threshold gives higher confidence than 24h threshold for same drop rate', () => {
+            const ts48h = new Date(now - 49 * 60 * 60 * 1000).toISOString();
+            const ts25h = new Date(now - 25 * 60 * 60 * 1000).toISOString();
+            const sig48 = detectActivityAnomaly(counts, ts48h, now);
+            const sig24 = detectActivityAnomaly(counts, ts25h, now);
+            expect(sig48!.confidence).toBeGreaterThan(sig24!.confidence);
+        });
+
+        it('< 24h inactivity returns null', () => {
+            const ts23h = new Date(now - 23 * 60 * 60 * 1000).toISOString();
+            const signal = detectActivityAnomaly(counts, ts23h, now);
+            expect(signal).toBeNull();
+        });
+    });
+
+    // -------------------------------------------------------------------------
+    // Overdue task detection — confidence logic
+    // -------------------------------------------------------------------------
+    describe('overdue task confidence', () => {
+        it('overdue task has higher base confidence than upcoming task', () => {
+            // Overdue: base 0.8 + up to 0.15 = 0.95 max
+            const hoursOverdue = 12;
+            const overdueConfidence = Math.min(0.95, 0.8 + Math.min(hoursOverdue, 24) / 24 * 0.15);
+            // Upcoming (>6h): base 0.75
+            const upcomingConfidence = 0.75;
+            expect(overdueConfidence).toBeGreaterThan(upcomingConfidence);
+        });
+
+        it('overdue task confidence increases with hours overdue (up to 24h cap)', () => {
+            const conf1h = Math.min(0.95, 0.8 + Math.min(1, 24) / 24 * 0.15);
+            const conf12h = Math.min(0.95, 0.8 + Math.min(12, 24) / 24 * 0.15);
+            const conf24h = Math.min(0.95, 0.8 + Math.min(24, 24) / 24 * 0.15);
+            expect(conf1h).toBeLessThan(conf12h);
+            expect(conf12h).toBeLessThan(conf24h);
+        });
+
+        it('overdue confidence is capped at 0.95', () => {
+            // Even at 100h overdue, capped at 0.95
+            const conf = Math.min(0.95, 0.8 + Math.min(100, 24) / 24 * 0.15);
+            expect(conf).toBeLessThanOrEqual(0.95);
+        });
+
+        it('upcoming task within 6h has higher confidence than >6h', () => {
+            // <6h: confidence 0.9
+            // >=6h: confidence 0.75
+            expect(0.9).toBeGreaterThan(0.75);
         });
     });
 

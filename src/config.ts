@@ -307,6 +307,16 @@ export const MEMORY_COMPOUNDER = {
 } as const;
 
 /**
+ * Compounder quality gate — retry low-quality compressions
+ * Default OFF: collect data first, enable when thresholds are calibrated
+ */
+export const COMPOUNDER_QUALITY_GATE =
+  process.env.COMPOUNDER_QUALITY_GATE === 'true';
+export const COMPOUNDER_MIN_QUALITY = parseFloat(
+  process.env.COMPOUNDER_MIN_QUALITY || '0.5',
+);
+
+/**
  * Fast Path configuration - Direct Gemini API calls with streaming
  */
 export const FAST_PATH = {
