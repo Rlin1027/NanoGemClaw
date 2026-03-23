@@ -53,6 +53,11 @@ vi.mock('../utils.js', () => ({
   saveJson: vi.fn(),
 }));
 
+// Mock event-bus
+vi.mock('@nanogemclaw/event-bus', () => ({
+  getEventBus: vi.fn(() => ({ emit: vi.fn() })),
+}));
+
 // Mock i18n module (both shim and new path)
 vi.mock('../i18n.js', () => ({
   setLanguage: vi.fn(),
@@ -71,6 +76,7 @@ import {
   saveState,
   registerGroup,
   getAvailableGroups,
+  migrateGroupChatId,
 } from '../group-manager.js';
 import {
   getRegisteredGroups,
@@ -346,6 +352,89 @@ describe('group-manager.ts', () => {
       const result = getAvailableGroups();
 
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('migrateGroupChatId', () => {
+    it('should transfer registration to new chatId', () => {
+      const group = {
+        name: 'Test Group',
+        folder: 'chat_-123',
+        persona: 'default',
+      };
+      const registeredGroups: Record<string, any> = { '-123': group };
+      vi.mocked(getRegisteredGroups).mockReturnValue(registeredGroups);
+
+      const result = migrateGroupChatId('-123', '-100123');
+
+      expect(result).toBe(true);
+      expect(registeredGroups['-100123']).toEqual(group);
+      expect(registeredGroups['-123']).toBeUndefined();
+      expect(saveJson).toHaveBeenCalledWith(
+        expect.stringContaining('registered_groups.json'),
+        registeredGroups,
+      );
+    });
+
+    it('should return false and no-op if old chatId is not registered', () => {
+      vi.mocked(getRegisteredGroups).mockReturnValue({});
+
+      const result = migrateGroupChatId('-999', '-100999');
+
+      expect(result).toBe(false);
+      expect(saveJson).not.toHaveBeenCalled();
+    });
+
+    it('should return false if new chatId is already registered', () => {
+      const oldGroup = { name: 'Old', folder: 'chat_-123', persona: 'default' };
+      const existingGroup = {
+        name: 'Existing',
+        folder: 'chat_-100123',
+        persona: 'default',
+      };
+      const registeredGroups = { '-123': oldGroup, '-100123': existingGroup };
+      vi.mocked(getRegisteredGroups).mockReturnValue(registeredGroups);
+
+      const result = migrateGroupChatId('-123', '-100123');
+
+      expect(result).toBe(false);
+      expect(registeredGroups['-123']).toEqual(oldGroup);
+      expect(registeredGroups['-100123']).toEqual(existingGroup);
+      expect(saveJson).not.toHaveBeenCalled();
+    });
+
+    it('should be idempotent when called twice with the same ids', () => {
+      const group = {
+        name: 'Test Group',
+        folder: 'chat_-123',
+        persona: 'default',
+      };
+      const registeredGroups: Record<string, any> = { '-123': group };
+      vi.mocked(getRegisteredGroups).mockReturnValue(registeredGroups);
+
+      migrateGroupChatId('-123', '-100123');
+      const result = migrateGroupChatId('-123', '-100123');
+
+      expect(result).toBe(false); // second call: oldChatId no longer registered
+    });
+
+    it('should preserve group folder and settings after migration', () => {
+      const group = {
+        name: 'My Group',
+        folder: 'chat_-456',
+        persona: 'assistant',
+        requireTrigger: true,
+        preferredPath: 'fast' as const,
+      };
+      const registeredGroups: Record<string, any> = { '-456': group };
+      vi.mocked(getRegisteredGroups).mockReturnValue(registeredGroups);
+
+      migrateGroupChatId('-456', '-100456');
+
+      expect(registeredGroups['-100456'].folder).toBe('chat_-456');
+      expect(registeredGroups['-100456'].persona).toBe('assistant');
+      expect(registeredGroups['-100456'].requireTrigger).toBe(true);
+      expect(registeredGroups['-100456'].preferredPath).toBe('fast');
     });
   });
 });

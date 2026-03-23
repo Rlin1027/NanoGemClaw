@@ -22,7 +22,12 @@ import {
   processMessage,
   startMediaCleanupScheduler,
 } from './message-handler.js';
-import { saveState, registerGroup, updateGroupName } from './group-manager.js';
+import {
+  saveState,
+  registerGroup,
+  updateGroupName,
+  migrateGroupChatId,
+} from './group-manager.js';
 import { startIpcWatcher } from './ipc-watcher.js';
 import { startSchedulerLoop } from './task-scheduler.js';
 import { formatError } from './utils.js';
@@ -96,6 +101,36 @@ export async function connectTelegram(): Promise<void> {
       saveState();
     } catch (err) {
       logger.error({ err, chatId }, 'Error processing consolidated message');
+    }
+  });
+
+  // Handle basic group → supergroup migration (chatId changes automatically).
+  // Telegram fires migrate_to_chat_id in the OLD group and migrate_from_chat_id
+  // in the NEW supergroup. Handling both ensures we catch the event regardless
+  // of which side the bot sees first.
+  bot.on(':migrate_to_chat_id', async (ctx) => {
+    const oldChatId = ctx.chat.id.toString();
+    const newChatId = ctx.message?.migrate_to_chat_id?.toString();
+    if (!newChatId) return;
+    const migrated = migrateGroupChatId(oldChatId, newChatId);
+    if (migrated) {
+      logger.info(
+        { oldChatId, newChatId },
+        'Registration transferred: basic group upgraded to supergroup',
+      );
+    }
+  });
+
+  bot.on(':migrate_from_chat_id', async (ctx) => {
+    const newChatId = ctx.chat.id.toString();
+    const oldChatId = ctx.message?.migrate_from_chat_id?.toString();
+    if (!oldChatId) return;
+    const migrated = migrateGroupChatId(oldChatId, newChatId);
+    if (migrated) {
+      logger.info(
+        { oldChatId, newChatId },
+        'Registration transferred: supergroup received migration event',
+      );
     }
   });
 
